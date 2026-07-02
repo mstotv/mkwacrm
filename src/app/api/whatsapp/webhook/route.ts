@@ -7,6 +7,7 @@ import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
+import { runAutoResponder } from '@/lib/whatsapp/auto-responder'
 import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
@@ -275,7 +276,8 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           // inserts that need it for NOT NULL FK compliance. Always
           // the admin who saved the WhatsApp config.
           config.user_id,
-          decryptedAccessToken
+          decryptedAccessToken,
+          phoneNumberId
         )
       }
     }
@@ -509,7 +511,8 @@ async function processMessage(
   // (contacts, conversations). Always the admin who saved the
   // WhatsApp config; the choice is arbitrary post-017 but stable.
   configOwnerUserId: string,
-  accessToken: string
+  accessToken: string,
+  phoneNumberId: string
 ) {
   const senderPhone = normalizePhone(message.from)
   const contactName = contact.profile.name
@@ -713,6 +716,19 @@ async function processMessage(
       },
     }).catch((err) => console.error('[automations] dispatch failed:', err))
   }
+
+  // Run Auto Responder (Keywords & AI response logic)
+  runAutoResponder({
+    accountId,
+    contactId: contactRecord.id,
+    conversationId: conversation.id,
+    messageText: inboundText,
+    senderPhone,
+    phoneNumberId,
+    accessToken,
+    configOwnerUserId,
+    parentMessageId: message.id,
+  }).catch((err) => console.error('[AutoResponder] execution failed:', err))
 }
 
 async function parseMessageContent(

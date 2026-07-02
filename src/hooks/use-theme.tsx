@@ -16,33 +16,31 @@ import {
   type ThemeId,
 } from "@/lib/themes";
 
+export type ColorMode = "dark" | "light";
+const MODE_KEY = "wacrm.colorMode";
+const DEFAULT_MODE: ColorMode = "dark";
+
 /**
  * ThemeProvider — wraps the whole app, owns the active theme state.
  *
- * The boot script in `src/app/layout.tsx` has already applied
- * `document.documentElement.dataset.theme` before React hydrates, so
- * by the time this Provider mounts the page is already painted in
- * the right colors. We just have to read what's there and keep it
- * in sync going forward.
- *
- * Persistence is localStorage only (device-scoped). A future
- * follow-up could mirror to `profiles.preferences` for cross-device
- * sync, but a per-device choice is also defensible — your phone may
- * deserve a different theme than your laptop.
+ * It manages:
+ * 1. data-theme attribute on <html> (violet, emerald, cobalt, amber, rose)
+ * 2. data-mode attribute on <html> (dark, light)
+ * 3. className classList ('dark' vs 'light') on <html> for Tailwind's variant detection.
  */
 
 interface ThemeContextValue {
   theme: ThemeId;
   setTheme: (next: ThemeId) => void;
+  colorMode: ColorMode;
+  setColorMode: (mode: ColorMode) => void;
+  toggleColorMode: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function readInitialTheme(): ThemeId {
   if (typeof window === "undefined") return DEFAULT_THEME;
-  // Whatever the boot script applied is the truth. Fall back to
-  // localStorage / default if for some reason the attribute is missing
-  // (e.g. someone bypassed the boot script in a custom layout).
   const fromAttr = document.documentElement.dataset.theme;
   if (isThemeId(fromAttr)) return fromAttr;
   try {
@@ -54,8 +52,35 @@ function readInitialTheme(): ThemeId {
   return DEFAULT_THEME;
 }
 
+function readInitialMode(): ColorMode {
+  if (typeof window === "undefined") return DEFAULT_MODE;
+  const fromAttr = document.documentElement.dataset.mode as ColorMode;
+  if (fromAttr === "light" || fromAttr === "dark") return fromAttr;
+  try {
+    const stored = localStorage.getItem(MODE_KEY) as ColorMode;
+    if (stored === "light" || stored === "dark") return stored;
+  } catch {}
+  return DEFAULT_MODE;
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeId>(readInitialTheme);
+  const [colorMode, setColorModeState] = useState<ColorMode>(readInitialMode);
+
+  const applyColorModeToDom = useCallback((mode: ColorMode) => {
+    if (typeof document === "undefined") return;
+    const htmlEl = document.documentElement;
+    htmlEl.dataset.mode = mode;
+    
+    // Toggle standard tailwind class names
+    if (mode === "dark") {
+      htmlEl.classList.add("dark");
+      htmlEl.classList.remove("light");
+    } else {
+      htmlEl.classList.add("light");
+      htmlEl.classList.remove("dark");
+    }
+  }, []);
 
   const setTheme = useCallback((next: ThemeId) => {
     setThemeState(next);
@@ -64,28 +89,57 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
     try {
       localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      // Same private-browsing edge case as above; the in-memory state
-      // still updates so the current tab works for the session.
-    }
+    } catch {}
   }, []);
 
-  // Sync from other tabs — if you change your theme in tab A, tab B
-  // catches up without a refresh.
+  const setColorMode = useCallback((mode: ColorMode) => {
+    setColorModeState(mode);
+    applyColorModeToDom(mode);
+    try {
+      localStorage.setItem(MODE_KEY, mode);
+    } catch {}
+  }, [applyColorModeToDom]);
+
+  const toggleColorMode = useCallback(() => {
+    setColorModeState((prev) => {
+      const next: ColorMode = prev === "dark" ? "light" : "dark";
+      applyColorModeToDom(next);
+      try {
+        localStorage.setItem(MODE_KEY, next);
+      } catch {}
+      return next;
+    });
+  }, [applyColorModeToDom]);
+
+  // Apply initial theme and mode attributes and classes on mount/state check
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.theme = theme;
+      applyColorModeToDom(colorMode);
+    }
+  }, [theme, colorMode, applyColorModeToDom]);
+
+  // Sync theme changes from other tabs
   useEffect(() => {
     function onStorage(e: StorageEvent) {
-      if (e.key !== STORAGE_KEY) return;
-      if (isThemeId(e.newValue) && e.newValue !== theme) {
+      if (e.key === STORAGE_KEY && isThemeId(e.newValue) && e.newValue !== theme) {
         setThemeState(e.newValue);
         document.documentElement.dataset.theme = e.newValue;
+      }
+      if (e.key === MODE_KEY) {
+        const mode = e.newValue as ColorMode;
+        if ((mode === "dark" || mode === "light") && mode !== colorMode) {
+          setColorModeState(mode);
+          applyColorModeToDom(mode);
+        }
       }
     }
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, [theme]);
+  }, [theme, colorMode, applyColorModeToDom]);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, colorMode, setColorMode, toggleColorMode }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -94,12 +148,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);
   if (!ctx) {
-    // Fallback for components rendered outside the provider — return a
-    // no-op setter so callers don't crash. The boot script still
-    // applied the right CSS attribute, so visually the page is fine.
     return {
       theme: DEFAULT_THEME,
       setTheme: () => {},
+      colorMode: DEFAULT_MODE,
+      setColorMode: () => {},
+      toggleColorMode: () => {},
     };
   }
   return ctx;

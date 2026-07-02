@@ -49,24 +49,7 @@
 }
 
 /* ============================================================
- * COLOR THEMES
- *
- * 5 dark themes sharing structure, swapping only the primary
- * accent (and a tiny hue rotation on the slate base). Switched
- * at runtime by setting `document.documentElement.dataset.theme`
- * — see ThemeProvider + the inline boot script in layout.tsx.
- *
- * `:root` mirrors Violet so default visitors render correctly
- * before JS runs. `[data-theme="violet"]` is included for the
- * explicit-select path (settings UI sets it after a pick).
- *
- * The three `--primary-*` extras (hover / soft / soft-2) are
- * new — used for hovered primary buttons and tinted-primary
- * surfaces (sidebar active pill, validation badges). Components
- * that don't use them remain backward-compatible.
- *
- * Token shapes come straight from the design handoff at
- * project/Color Themes.html — change one, change the other.
+ * DARK MODE THEMES (default)
  * ============================================================ */
 
 :root,
@@ -255,6 +238,236 @@ html[data-theme="rose"] {
   --sidebar-border: oklch(0.28 0.012 15);
   --sidebar-ring: oklch(0.645 0.22 16);
 }
+
+/* ============================================================
+ * LIGHT MODE OVERRIDES
+ *
+ * Applied when html[data-mode="light"] is set.
+ * Overrides CSS theme tokens AND the hardcoded slate-* colors
+ * used throughout the components.
+ * ============================================================ */
+
+html[data-mode="light"],
+html[data-mode="light"][data-theme="violet"] {
+  color-scheme: light;
+  --background: oklch(0.98 0.003 260);
+  --foreground: oklch(0.14 0.02 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.14 0.02 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.14 0.02 260);
+  --primary: oklch(0.5 0.24 293);
+  --primary-foreground: oklch(0.985 0 0);
+  --primary-hover: oklch(0.44 0.26 293);
+  --primary-soft: oklch(0.526 0.247 293 / 0.1);
+  --primary-soft-2: oklch(0.526 0.247 293 / 0.18);
+  --secondary: oklch(0.93 0.005 260);
+  --secondary-foreground: oklch(0.2 0.02 260);
+  --muted: oklch(0.93 0.005 260);
+  --muted-foreground: oklch(0.46 0.01 260);
+  --accent: oklch(0.93 0.005 260);
+  --accent-foreground: oklch(0.14 0.02 260);
+  --destructive: oklch(0.55 0.24 27);
+  --border: oklch(0.87 0.006 260);
+  --input: oklch(0.9 0.005 260);
+  --ring: oklch(0.5 0.24 293);
+  --sidebar: oklch(0.95 0.004 260);
+  --sidebar-foreground: oklch(0.14 0.02 260);
+  --sidebar-primary: oklch(0.5 0.24 293);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.89 0.006 260);
+  --sidebar-accent-foreground: oklch(0.14 0.02 260);
+  --sidebar-border: oklch(0.87 0.006 260);
+  --sidebar-ring: oklch(0.5 0.24 293);
+}
+
+html[data-mode="light"][data-theme="emerald"] {
+  color-scheme: light;
+  --background: oklch(0.98 0.003 170);
+  --foreground: oklch(0.14 0.02 170);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.14 0.02 170);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.14 0.02 170);
+  --primary: oklch(0.48 0.17 162);
+  --primary-foreground: oklch(0.985 0 0);
+  --primary-hover: oklch(0.42 0.18 162);
+  --primary-soft: oklch(0.62 0.16 162 / 0.1);
+  --primary-soft-2: oklch(0.62 0.16 162 / 0.18);
+  --secondary: oklch(0.93 0.005 170);
+  --secondary-foreground: oklch(0.2 0.02 170);
+  --muted: oklch(0.93 0.005 170);
+  --muted-foreground: oklch(0.46 0.01 170);
+  --accent: oklch(0.93 0.005 170);
+  --accent-foreground: oklch(0.14 0.02 170);
+  --destructive: oklch(0.55 0.24 27);
+  --border: oklch(0.87 0.006 170);
+  --input: oklch(0.9 0.005 170);
+  --ring: oklch(0.48 0.17 162);
+  --sidebar: oklch(0.95 0.004 170);
+  --sidebar-foreground: oklch(0.14 0.02 170);
+  --sidebar-primary: oklch(0.48 0.17 162);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.89 0.006 170);
+  --sidebar-accent-foreground: oklch(0.14 0.02 170);
+  --sidebar-border: oklch(0.87 0.006 170);
+  --sidebar-ring: oklch(0.48 0.17 162);
+}
+
+html[data-mode="light"][data-theme="cobalt"] {
+  color-scheme: light;
+  --background: oklch(0.98 0.005 252);
+  --foreground: oklch(0.14 0.02 252);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.14 0.02 252);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.14 0.02 252);
+  --primary: oklch(0.48 0.21 254);
+  --primary-foreground: oklch(0.985 0 0);
+  --primary-hover: oklch(0.42 0.22 254);
+  --primary-soft: oklch(0.585 0.2 254 / 0.1);
+  --primary-soft-2: oklch(0.585 0.2 254 / 0.18);
+  --secondary: oklch(0.93 0.006 252);
+  --secondary-foreground: oklch(0.2 0.02 252);
+  --muted: oklch(0.93 0.006 252);
+  --muted-foreground: oklch(0.46 0.012 252);
+  --accent: oklch(0.93 0.006 252);
+  --accent-foreground: oklch(0.14 0.02 252);
+  --destructive: oklch(0.55 0.24 27);
+  --border: oklch(0.87 0.007 252);
+  --input: oklch(0.9 0.006 252);
+  --ring: oklch(0.48 0.21 254);
+  --sidebar: oklch(0.95 0.005 252);
+  --sidebar-foreground: oklch(0.14 0.02 252);
+  --sidebar-primary: oklch(0.48 0.21 254);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.89 0.007 252);
+  --sidebar-accent-foreground: oklch(0.14 0.02 252);
+  --sidebar-border: oklch(0.87 0.007 252);
+  --sidebar-ring: oklch(0.48 0.21 254);
+}
+
+html[data-mode="light"][data-theme="amber"] {
+  color-scheme: light;
+  --background: oklch(0.99 0.005 65);
+  --foreground: oklch(0.14 0.025 65);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.14 0.025 65);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.14 0.025 65);
+  --primary: oklch(0.58 0.17 65);
+  --primary-foreground: oklch(0.985 0 0);
+  --primary-hover: oklch(0.52 0.18 65);
+  --primary-soft: oklch(0.745 0.16 65 / 0.1);
+  --primary-soft-2: oklch(0.745 0.16 65 / 0.18);
+  --secondary: oklch(0.93 0.008 65);
+  --secondary-foreground: oklch(0.2 0.025 65);
+  --muted: oklch(0.93 0.008 65);
+  --muted-foreground: oklch(0.48 0.01 65);
+  --accent: oklch(0.93 0.008 65);
+  --accent-foreground: oklch(0.14 0.025 65);
+  --destructive: oklch(0.55 0.24 27);
+  --border: oklch(0.87 0.009 65);
+  --input: oklch(0.9 0.008 65);
+  --ring: oklch(0.58 0.17 65);
+  --sidebar: oklch(0.96 0.006 65);
+  --sidebar-foreground: oklch(0.14 0.025 65);
+  --sidebar-primary: oklch(0.58 0.17 65);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.90 0.009 65);
+  --sidebar-accent-foreground: oklch(0.14 0.025 65);
+  --sidebar-border: oklch(0.87 0.009 65);
+  --sidebar-ring: oklch(0.58 0.17 65);
+}
+
+html[data-mode="light"][data-theme="rose"] {
+  color-scheme: light;
+  --background: oklch(0.99 0.004 15);
+  --foreground: oklch(0.14 0.025 15);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.14 0.025 15);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.14 0.025 15);
+  --primary: oklch(0.52 0.22 16);
+  --primary-foreground: oklch(0.985 0 0);
+  --primary-hover: oklch(0.46 0.23 16);
+  --primary-soft: oklch(0.645 0.22 16 / 0.1);
+  --primary-soft-2: oklch(0.645 0.22 16 / 0.18);
+  --secondary: oklch(0.93 0.007 15);
+  --secondary-foreground: oklch(0.2 0.025 15);
+  --muted: oklch(0.93 0.007 15);
+  --muted-foreground: oklch(0.48 0.01 15);
+  --accent: oklch(0.93 0.007 15);
+  --accent-foreground: oklch(0.14 0.025 15);
+  --destructive: oklch(0.55 0.24 27);
+  --border: oklch(0.87 0.008 15);
+  --input: oklch(0.9 0.007 15);
+  --ring: oklch(0.52 0.22 16);
+  --sidebar: oklch(0.96 0.005 15);
+  --sidebar-foreground: oklch(0.14 0.025 15);
+  --sidebar-primary: oklch(0.52 0.22 16);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.90 0.008 15);
+  --sidebar-accent-foreground: oklch(0.14 0.025 15);
+  --sidebar-border: oklch(0.87 0.008 15);
+  --sidebar-ring: oklch(0.52 0.22 16);
+}
+
+/* ============================================================
+ * LIGHT MODE — Override hardcoded slate-* Tailwind colors
+ *
+ * Components use bg-slate-900, border-slate-800, text-slate-400 etc.
+ * In light mode we remap these via CSS so they appear as light grays
+ * without changing every component file.
+ * ============================================================ */
+html[data-mode="light"] {
+  /* Remap slate palette for light mode via custom properties */
+  --tw-light-slate-950: #f8f9fb;
+  --tw-light-slate-900: #f1f3f7;
+  --tw-light-slate-850: #eaecf2;
+  --tw-light-slate-800: #e2e5ee;
+  --tw-light-slate-700: #c8ccd8;
+  --tw-light-slate-600: #9ea4b8;
+  --tw-light-slate-500: #737a94;
+  --tw-light-slate-400: #555c74;
+  --tw-light-slate-300: #3d4460;
+  --tw-light-slate-200: #2a3050;
+  --tw-light-slate-100: #1a2040;
+}
+
+/* Override Tailwind's slate colors in light mode */
+html[data-mode="light"] .bg-slate-950 { background-color: var(--tw-light-slate-950) !important; }
+html[data-mode="light"] .bg-slate-900 { background-color: var(--tw-light-slate-900) !important; }
+html[data-mode="light"] .bg-slate-800 { background-color: var(--tw-light-slate-800) !important; }
+html[data-mode="light"] .bg-slate-700 { background-color: var(--tw-light-slate-700) !important; }
+html[data-mode="light"] .bg-slate-600 { background-color: var(--tw-light-slate-600) !important; }
+
+html[data-mode="light"] .border-slate-900 { border-color: var(--tw-light-slate-900) !important; }
+html[data-mode="light"] .border-slate-800 { border-color: var(--tw-light-slate-800) !important; }
+html[data-mode="light"] .border-slate-700 { border-color: var(--tw-light-slate-700) !important; }
+html[data-mode="light"] .border-slate-600 { border-color: var(--tw-light-slate-600) !important; }
+
+html[data-mode="light"] .text-slate-400 { color: var(--tw-light-slate-400) !important; }
+html[data-mode="light"] .text-slate-500 { color: var(--tw-light-slate-500) !important; }
+html[data-mode="light"] .text-slate-300 { color: var(--tw-light-slate-300) !important; }
+html[data-mode="light"] .text-white { color: var(--tw-light-slate-200) !important; }
+
+html[data-mode="light"] .hover\:bg-slate-800:hover { background-color: var(--tw-light-slate-800) !important; }
+html[data-mode="light"] .hover\:bg-slate-700:hover { background-color: var(--tw-light-slate-700) !important; }
+
+/* Sidebar in light mode */
+html[data-mode="light"] aside { background-color: var(--tw-light-slate-900) !important; border-color: var(--tw-light-slate-800) !important; }
+html[data-mode="light"] aside .border-b { border-color: var(--tw-light-slate-800) !important; }
+html[data-mode="light"] aside .border-t { border-color: var(--tw-light-slate-800) !important; }
+html[data-mode="light"] aside .my-4 { border-color: var(--tw-light-slate-800) !important; }
+
+/* Input / form elements */
+html[data-mode="light"] .bg-slate-900\/40 { background-color: rgba(241, 243, 247, 0.6) !important; }
+html[data-mode="light"] .bg-slate-900\/60 { background-color: rgba(241, 243, 247, 0.8) !important; }
+html[data-mode="light"] .bg-slate-900\/30 { background-color: rgba(241, 243, 247, 0.4) !important; }
+
+/* Make body background correct */
+html[data-mode="light"] body { background-color: var(--background); color: var(--foreground); }
 
 @layer base {
   * {

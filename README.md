@@ -1,4 +1,4 @@
-# wacrm — CRM Template for WhatsApp
+# wacrm — MitaKurd for WhatsApp Auto
 
 > Self-hostable CRM template for WhatsApp® — shared inbox, contacts,
 > sales pipelines, broadcasts, and no-code automations. Fork it, brand

@@ -4,7 +4,10 @@ import Script from "next/script";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { ThemeProvider } from "@/hooks/use-theme";
+import { LanguageProvider } from "@/hooks/use-language";
 import { DEFAULT_THEME, STORAGE_KEY, THEME_IDS } from "@/lib/themes";
+
+const MODE_STORAGE_KEY = "wacrm.colorMode";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -37,25 +40,41 @@ export const viewport: Viewport = {
 };
 
 // Inline boot script — runs before React hydrates so the user's
-// chosen theme is on the <html> element before first paint. Without
-// this every page load flashes the default Violet for a frame before
-// the React tree mounts and applies the picked theme.
-//
-// Kept dependency-free (no imports, no JSX) — must be a string the
-// browser can run as a single <script>. Knowledge of valid theme IDs
-// is sourced from the THEME_IDS constant so adding a theme doesn't
-// silently break the boot path.
+// chosen theme and language/RTL dir are on the <html> element before first paint.
 const THEME_BOOT_SCRIPT = `
 (function(){
   try {
     var STORAGE_KEY = ${JSON.stringify(STORAGE_KEY)};
+    var MODE_KEY = ${JSON.stringify("wacrm.colorMode")};
     var DEFAULT = ${JSON.stringify(DEFAULT_THEME)};
     var ALLOWED = ${JSON.stringify(THEME_IDS)};
-    var saved = localStorage.getItem(STORAGE_KEY);
-    var theme = ALLOWED.indexOf(saved) !== -1 ? saved : DEFAULT;
+    var savedTheme = localStorage.getItem(STORAGE_KEY);
+    var theme = ALLOWED.indexOf(savedTheme) !== -1 ? savedTheme : DEFAULT;
     document.documentElement.dataset.theme = theme;
+
+    // Restore color mode (dark / light) and apply class list
+    var savedMode = localStorage.getItem(MODE_KEY);
+    var mode = (savedMode === 'light' || savedMode === 'dark') ? savedMode : 'dark';
+    document.documentElement.dataset.mode = mode;
+    if (mode === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.add('light');
+      document.documentElement.classList.remove('dark');
+    }
+    
+    // Initial language and RTL detection
+    var savedLang = localStorage.getItem('app_language') || 'ar';
+    document.documentElement.lang = savedLang;
+    document.documentElement.dir = savedLang === 'ar' ? 'rtl' : 'ltr';
   } catch (_e) {
     document.documentElement.dataset.theme = ${JSON.stringify(DEFAULT_THEME)};
+    document.documentElement.dataset.mode = 'dark';
+    document.documentElement.classList.add('dark');
+    document.documentElement.classList.remove('light');
+    document.documentElement.lang = 'ar';
+    document.documentElement.dir = 'rtl';
   }
 })();
 `;
@@ -67,15 +86,10 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="ar"
+      dir="rtl"
       data-theme={DEFAULT_THEME}
       className={`${inter.variable} h-full antialiased`}
-      // The `theme-boot` script below rewrites `data-theme` on <html>
-      // from localStorage before React hydrates, so for any non-default
-      // theme the client DOM intentionally differs from the server-
-      // rendered `DEFAULT_THEME`. suppressHydrationWarning silences the
-      // expected mismatch — it only applies to this element's own
-      // attributes, so genuine mismatches in children still surface.
       suppressHydrationWarning
     >
       <head>
@@ -86,21 +100,24 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full bg-background text-foreground font-sans">
-        <ThemeProvider>
-          {children}
-          <Toaster
-            theme="dark"
-            position="top-right"
-            toastOptions={{
-              style: {
-                background: "rgb(30 41 59)",
-                border: "1px solid rgb(51 65 85)",
-                color: "white",
-              },
-            }}
-          />
-        </ThemeProvider>
+        <LanguageProvider>
+          <ThemeProvider>
+            {children}
+            <Toaster
+              theme="dark"
+              position="top-right"
+              toastOptions={{
+                style: {
+                  background: "rgb(30 41 59)",
+                  border: "1px solid rgb(51 65 85)",
+                  color: "white",
+                },
+              }}
+            />
+          </ThemeProvider>
+        </LanguageProvider>
       </body>
     </html>
   );
 }
+

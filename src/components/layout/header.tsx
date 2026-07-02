@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import { useLanguage } from "@/hooks/use-language";
+import { LogOut, Menu, Settings as SettingsIcon, User, Languages, Globe } from "lucide-react";
 import {
   Avatar,
   AvatarFallback,
@@ -18,21 +19,21 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const pageTitles: Record<string, string> = {
-  "/dashboard": "Dashboard",
-  "/inbox": "Inbox",
-  "/contacts": "Contacts",
-  "/pipelines": "Pipelines",
-  "/broadcasts": "Broadcasts",
-  "/automations": "Automations",
-  "/settings": "Settings",
+  "/dashboard": "nav.dashboard",
+  "/inbox": "nav.inbox",
+  "/contacts": "nav.contacts",
+  "/pipelines": "nav.pipelines",
+  "/broadcasts": "nav.broadcasts",
+  "/automations": "nav.automations",
+  "/settings": "nav.settings",
 };
 
-function getPageTitle(pathname: string): string {
-  if (pageTitles[pathname]) return pageTitles[pathname];
+function getPageTitle(pathname: string, t: (key: string, def: string) => string): string {
+  if (pageTitles[pathname]) return t(pageTitles[pathname], pathname);
   const match = Object.entries(pageTitles).find(([path]) =>
     pathname.startsWith(path),
   );
-  return match ? match[1] : "Dashboard";
+  return match ? t(match[1], pathname) : t("nav.dashboard", "Dashboard");
 }
 
 interface HeaderProps {
@@ -44,12 +45,17 @@ interface HeaderProps {
 export function Header({ onOpenSidebar }: HeaderProps) {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
-  const title = getPageTitle(pathname);
+  const { language, setLanguage, t } = useLanguage();
+  const title = getPageTitle(pathname, t);
 
   const initial =
     profile?.full_name?.charAt(0)?.toUpperCase() ??
     profile?.email?.charAt(0)?.toUpperCase() ??
     "U";
+
+  const toggleLanguage = () => {
+    setLanguage(language === 'ar' ? 'en' : 'ar');
+  };
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-800 bg-slate-950 px-4 lg:px-6">
@@ -68,72 +74,91 @@ export function Header({ onOpenSidebar }: HeaderProps) {
         </h1>
       </div>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-slate-800/70 focus:bg-slate-800/70 focus:outline-none data-popup-open:bg-slate-800/70 sm:gap-3 sm:pl-1 sm:pr-3"
-          aria-label="Open account menu"
+      <div className="flex items-center gap-2 sm:gap-4">
+        {/* Elegant Language Switcher Button */}
+        <button
+          type="button"
+          onClick={toggleLanguage}
+          title={t("settings.chooseLanguage")}
+          className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition duration-150"
         >
-          <Avatar className="size-8">
-            {profile?.avatar_url ? (
-              <AvatarImage
-                src={profile.avatar_url}
-                alt={profile.full_name ?? "Avatar"}
-              />
-            ) : null}
-            <AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
-              {initial}
-            </AvatarFallback>
-          </Avatar>
-          <span className="hidden text-sm font-medium text-white sm:inline">
-            {profile?.full_name ?? "User"}
+          <Globe className="h-3.5 w-3.5 text-violet-400" />
+          <span className="font-medium hidden sm:inline">
+            {language === 'ar' ? 'English' : 'العربية'}
           </span>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          sideOffset={6}
-          className="min-w-56 bg-slate-900 text-slate-100 ring-slate-700"
-        >
-          <div className="px-2 py-1.5">
-            <p className="truncate text-sm font-medium text-white">
+          <span className="font-medium sm:hidden">
+            {language === 'ar' ? 'EN' : 'AR'}
+          </span>
+        </button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-slate-800/70 focus:bg-slate-800/70 focus:outline-none data-popup-open:bg-slate-800/70 sm:gap-3 sm:pl-1 sm:pr-3"
+            aria-label="Open account menu"
+          >
+            <Avatar className="size-8">
+              {profile?.avatar_url ? (
+                <AvatarImage
+                  src={profile.avatar_url}
+                  alt={profile.full_name ?? "Avatar"}
+                />
+              ) : null}
+              <AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
+                {initial}
+              </AvatarFallback>
+            </Avatar>
+            <span className="hidden text-sm font-medium text-white sm:inline">
               {profile?.full_name ?? "User"}
-            </p>
-            <p className="truncate text-xs text-slate-400">
-              {profile?.email ?? ""}
-            </p>
-          </div>
-          <DropdownMenuSeparator className="bg-slate-800" />
-          <DropdownMenuItem
-            render={
-              <Link
-                href="/settings?tab=profile"
-                className="text-slate-200 focus:bg-slate-800 focus:text-white"
-              />
-            }
+            </span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            sideOffset={6}
+            className="min-w-56 bg-slate-900 text-slate-100 ring-slate-700"
           >
-            <User className="size-4" />
-            Profile
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            render={
-              <Link
-                href="/settings?tab=whatsapp"
-                className="text-slate-200 focus:bg-slate-800 focus:text-white"
-              />
-            }
-          >
-            <SettingsIcon className="size-4" />
-            Settings
-          </DropdownMenuItem>
-          <DropdownMenuSeparator className="bg-slate-800" />
-          <DropdownMenuItem
-            onClick={signOut}
-            className="text-slate-200 focus:bg-slate-800 focus:text-white"
-          >
-            <LogOut className="size-4" />
-            Sign out
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            <div className="px-2 py-1.5">
+              <p className="truncate text-sm font-medium text-white">
+                {profile?.full_name ?? "User"}
+              </p>
+              <p className="truncate text-xs text-slate-400">
+                {profile?.email ?? ""}
+              </p>
+            </div>
+            <DropdownMenuSeparator className="bg-slate-800" />
+            <DropdownMenuItem
+              render={
+                <Link
+                  href="/settings?tab=profile"
+                  className="text-slate-200 focus:bg-slate-800 focus:text-white"
+                />
+              }
+            >
+              <User className="size-4" />
+              {t("nav.profile")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              render={
+                <Link
+                  href="/settings?tab=whatsapp"
+                  className="text-slate-200 focus:bg-slate-800 focus:text-white"
+                />
+              }
+            >
+              <SettingsIcon className="size-4" />
+              {t("nav.settings")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-slate-800" />
+            <DropdownMenuItem
+              onClick={signOut}
+              className="text-slate-200 focus:bg-slate-800 focus:text-white"
+            >
+              <LogOut className="size-4" />
+              {t("nav.signOut")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </header>
   );
 }
+

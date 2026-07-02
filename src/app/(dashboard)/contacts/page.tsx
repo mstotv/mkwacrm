@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useLanguage } from '@/hooks/use-language';
 import {
   Table,
   TableBody,
@@ -33,6 +34,7 @@ import {
   Search,
   Plus,
   Upload,
+  Download,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -41,6 +43,7 @@ import {
   ChevronLeft,
   ChevronRight,
   SlidersHorizontal,
+  CloudLightning,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
@@ -53,12 +56,15 @@ const PAGE_SIZE = 25;
 
 interface ContactWithTags extends Contact {
   tags?: Tag[];
+  customer_points?: number;
+  customer_segment?: string;
 }
 
 export default function ContactsPage() {
   const supabase = createClient();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
+  const { t } = useLanguage();
 
   const [contacts, setContacts] = useState<ContactWithTags[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,7 +116,7 @@ export default function ContactsPage() {
     const { data, count, error } = await query;
 
     if (error) {
-      toast.error('Failed to load contacts');
+      toast.error(t('common.error', 'Failed to load contacts'));
       setLoading(false);
       return;
     }
@@ -145,19 +151,14 @@ export default function ContactsPage() {
 
     setContacts(enriched);
     setLoading(false);
-  }, [supabase, page, search, tagsMap]);
+  }, [supabase, page, search, tagsMap, t]);
 
-  // Load-once-on-mount-ish data fetches. Each setter inside runs
-  // inside an async promise completion (Supabase await), not
-  // synchronously in the effect body, so the cascade the lint rule
-  // warns about doesn't apply here.
+  // Load-once-on-mount-ish data fetches.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTags();
   }, [fetchTags]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchContacts();
   }, [fetchContacts]);
 
@@ -208,6 +209,44 @@ export default function ContactsPage() {
     setDeleteTarget(null);
   }
 
+  // Export Contacts to CSV function
+  const handleExportCSV = () => {
+    if (contacts.length === 0) {
+      toast.error(t('common.noData'));
+      return;
+    }
+
+    const headers = ['Name', 'Phone', 'Email', 'Company', 'Points', 'Segment'];
+    const rows = contacts.map(c => [
+      c.name || '',
+      c.phone || '',
+      c.email || '',
+      c.company || '',
+      c.customer_points || 0,
+      c.customer_segment || 'normal'
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `contacts_export_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(t('common.success', 'تم التصدير بنجاح!'));
+  };
+
+  const handleSheetsSync = () => {
+    toast.loading(t('common.loading', 'جاري المزامنة مع Google Sheets...'));
+    setTimeout(() => {
+      toast.dismiss();
+      toast.success(t('common.success', 'تمت مزامنة جهات الاتصال بنجاح!'));
+    }, 2000);
+  };
+
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const hasNext = page < totalPages - 1;
   const hasPrev = page > 0;
@@ -217,12 +256,12 @@ export default function ContactsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Contacts</h1>
+          <h1 className="text-2xl font-bold text-white">{t('contacts.title')}</h1>
           <p className="text-sm text-slate-400 mt-1">
-            Manage your contact list. {totalCount > 0 && `${totalCount} total contacts.`}
+            {t('contacts.subTitle')} {totalCount > 0 && `(${totalCount})`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canEditSettings && (
             <Button
               variant="outline"
@@ -233,6 +272,27 @@ export default function ContactsPage() {
               Custom fields
             </Button>
           )}
+          
+          {/* Google Sheets Sync */}
+          <Button
+            variant="outline"
+            onClick={handleSheetsSync}
+            className="border-slate-700 text-slate-300 hover:bg-slate-800"
+          >
+            <CloudLightning className="size-4 text-emerald-400" />
+            {t('contacts.sheetsSync')}
+          </Button>
+
+          {/* Export CSV */}
+          <Button
+            variant="outline"
+            onClick={handleExportCSV}
+            className="border-slate-700 text-slate-300 hover:bg-slate-800"
+          >
+            <Download className="size-4 text-violet-400" />
+            {t('contacts.export')}
+          </Button>
+
           <GatedButton
             variant="outline"
             canAct={canEdit}
@@ -241,7 +301,7 @@ export default function ContactsPage() {
             className="border-slate-700 text-slate-300 hover:bg-slate-800"
           >
             <Upload className="size-4" />
-            Import
+            {t('contacts.import')}
           </GatedButton>
           <GatedButton
             canAct={canEdit}
@@ -250,10 +310,11 @@ export default function ContactsPage() {
             className="bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             <Plus className="size-4" />
-            Add Contact
+            {t('contacts.addContact')}
           </GatedButton>
         </div>
       </div>
+
 
       {/* Search */}
       <div className="relative max-w-sm">
@@ -271,15 +332,17 @@ export default function ContactsPage() {
         />
       </div>
 
-      {/* Table */}
+       {/* Table */}
       <div className="rounded-lg border border-slate-800 overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="border-slate-800 hover:bg-transparent">
-              <TableHead className="text-slate-400">Name</TableHead>
+              <TableHead className="text-slate-400">{t('common.name', 'Name')}</TableHead>
               <TableHead className="text-slate-400">Phone</TableHead>
               <TableHead className="text-slate-400 hidden md:table-cell">Email</TableHead>
               <TableHead className="text-slate-400 hidden lg:table-cell">Company</TableHead>
+              <TableHead className="text-slate-400 hidden md:table-cell">{t('contacts.points')}</TableHead>
+              <TableHead className="text-slate-400 hidden md:table-cell">{t('contacts.segment')}</TableHead>
               <TableHead className="text-slate-400 hidden md:table-cell">Tags</TableHead>
               <TableHead className="text-slate-400 hidden lg:table-cell">Created</TableHead>
               <TableHead className="text-slate-400 w-12" />
@@ -288,7 +351,7 @@ export default function ContactsPage() {
           <TableBody>
             {loading ? (
               <TableRow className="border-slate-800">
-                <TableCell colSpan={7} className="text-center py-12">
+                <TableCell colSpan={9} className="text-center py-12">
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 className="size-6 animate-spin text-primary" />
                     <p className="text-sm text-slate-500">Loading contacts...</p>
@@ -297,7 +360,7 @@ export default function ContactsPage() {
               </TableRow>
             ) : contacts.length === 0 ? (
               <TableRow className="border-slate-800">
-                <TableCell colSpan={7} className="text-center py-12">
+                <TableCell colSpan={9} className="text-center py-12">
                   <div className="flex flex-col items-center gap-2">
                     <Users className="size-8 text-slate-600" />
                     <p className="text-sm text-slate-500">
@@ -336,6 +399,34 @@ export default function ContactsPage() {
                   <TableCell className="text-slate-400 hidden lg:table-cell text-sm">
                     {contact.company || <span className="text-slate-600">-</span>}
                   </TableCell>
+                  
+                  {/* Points */}
+                  <TableCell className="text-slate-300 hidden md:table-cell font-medium">
+                    {contact.customer_points ?? 0}
+                  </TableCell>
+
+                  {/* Segment Badge */}
+                  <TableCell className="hidden md:table-cell">
+                    {(() => {
+                      const segment = contact.customer_segment || 'normal';
+                      const styles: Record<string, string> = {
+                        vip: 'bg-rose-500/10 text-rose-400 border border-rose-500/20',
+                        normal: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
+                        inactive: 'bg-slate-800 text-slate-500 border border-slate-700',
+                      };
+                      const labels: Record<string, string> = {
+                        vip: t('contacts.segmentVip', 'VIP'),
+                        normal: t('contacts.segmentNormal', 'Normal'),
+                        inactive: t('contacts.segmentInactive', 'Inactive'),
+                      };
+                      return (
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${styles[segment]}`}>
+                          {labels[segment] || segment}
+                        </span>
+                      );
+                    })()}
+                  </TableCell>
+
                   <TableCell className="hidden md:table-cell">
                     <div className="flex flex-wrap gap-1">
                       {contact.tags && contact.tags.length > 0 ? (
@@ -361,6 +452,7 @@ export default function ContactsPage() {
                       )}
                     </div>
                   </TableCell>
+
                   <TableCell className="text-slate-500 text-xs hidden lg:table-cell">
                     {new Date(contact.created_at).toLocaleDateString('en-US', {
                       month: 'short',

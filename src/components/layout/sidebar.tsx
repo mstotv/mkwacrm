@@ -6,15 +6,18 @@ import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
+import { useLanguage } from "@/hooks/use-language";
 import {
   Crown,
   GitBranch,
   LayoutDashboard,
   LogOut,
   MessageSquare,
+  Moon,
   Radio,
   Settings,
   Shield,
+  Sun,
   User,
   UserCog,
   Users,
@@ -22,7 +25,9 @@ import {
   Workflow,
   X,
   Zap,
+  LifeBuoy,
 } from "lucide-react";
+import { useTheme } from "@/hooks/use-theme";
 import type { AccountRole } from "@/lib/auth/roles";
 
 // Per-role chip metadata used in the sidebar's account strip + the
@@ -94,6 +99,7 @@ const navItems: NavItem[] = [
   { href: "/broadcasts", label: "Broadcasts", icon: Radio },
   { href: "/automations", label: "Automations", icon: Zap },
   { href: "/flows", label: "Flows", icon: Workflow, beta: true },
+  { href: "/support", label: "Support", icon: LifeBuoy },
 ];
 
 const bottomNavItems = [
@@ -110,6 +116,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const totalUnread = useTotalUnread();
+  const { t } = useLanguage();
+  const { colorMode, toggleColorMode } = useTheme();
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -183,7 +191,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               <MessageSquare className="h-4 w-4" />
             </div>
             <span className="text-sm font-semibold text-white">
-              CRM Template for WhatsApp
+              MitaKurd for WhatsApp Auto
             </span>
           </Link>
           <button
@@ -207,6 +215,12 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               const showUnreadDot =
                 item.href === "/inbox" && totalUnread > 0 && !isActive;
 
+              // Translate labels
+              const getTranslatedLabel = (label: string) => {
+                const key = label.toLowerCase();
+                return t(`nav.${key}`, label);
+              };
+
               return (
                 <li key={item.href}>
                   <Link
@@ -220,11 +234,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     )}
                   >
                     <item.icon className="h-4 w-4" />
-                    <span className="flex-1">{item.label}</span>
+                    <span className="flex-1">{getTranslatedLabel(item.label)}</span>
                     {item.beta && (
                       <span
                         aria-label="Beta feature"
-                        className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
+                        className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300 animate-pulse"
                       >
                         Beta
                       </span>
@@ -247,6 +261,21 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <div className="my-4 border-t border-slate-800" />
 
           <ul className="flex flex-col gap-1">
+            {/* Super Admin Console Button */}
+            {(profile?.platform_role === "super_admin" || profile?.platform_role === "assistant_admin") && (
+              <li>
+                <Link
+                  href="/admin"
+                  className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all text-violet-400 hover:bg-violet-950/30 hover:text-violet-300 border border-violet-800/20 bg-violet-950/10 lg:py-2"
+                >
+                  <Crown className="h-4 w-4 text-violet-400 animate-pulse" />
+                  <span className="flex-1">
+                    {profile?.platform_role === "assistant_admin" ? "لوحة المساعد" : t("nav.adminConsole")}
+                  </span>
+                </Link>
+              </li>
+            )}
+
             {bottomNavItems.map((item) => {
               const isActive = pathname.startsWith(item.href);
               return (
@@ -261,13 +290,42 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     )}
                   >
                     <item.icon className="h-4 w-4" />
-                    {item.label}
+                    {t("nav.settings")}
                   </Link>
                 </li>
               );
             })}
           </ul>
+
+          {/* Dark / Light mode quick toggle */}
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={toggleColorMode}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-slate-400 hover:bg-slate-800 hover:text-white lg:py-2"
+              aria-label={colorMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {colorMode === 'dark' ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+              <span className="flex-1">
+                {colorMode === 'dark' ? t('nav.lightMode', 'وضع فاتح') : t('nav.darkMode', 'وضع داكن')}
+              </span>
+              <span className={`h-5 w-9 rounded-full transition-colors relative ${
+                colorMode === 'dark' ? 'bg-slate-700' : 'bg-primary/30'
+              }`}>
+                <span className={`absolute top-0.5 h-4 w-4 rounded-full transition-transform shadow ${
+                  colorMode === 'dark'
+                    ? 'left-0.5 bg-slate-400'
+                    : 'left-[18px] bg-primary'
+                }`} />
+              </span>
+            </button>
+          </div>
         </nav>
+
 
         {/* User section */}
         <div className="shrink-0 border-t border-slate-800 p-3">

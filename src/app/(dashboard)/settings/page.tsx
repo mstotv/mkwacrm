@@ -10,9 +10,12 @@ import {
   UsersRound,
   Coins,
   SlidersHorizontal,
+  CreditCard,
+  Brain,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useCan } from '@/hooks/use-can';
+import { useLanguage } from '@/hooks/use-language';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { TemplateManager } from '@/components/settings/template-manager';
 import { TagManager } from '@/components/settings/tag-manager';
@@ -23,6 +26,8 @@ import { AppearancePanel } from '@/components/settings/appearance-panel';
 import { MembersTab } from '@/components/settings/members-tab';
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { CustomFieldsSettings } from '@/components/settings/custom-fields-settings';
+import { BillingPanel } from '@/components/settings/billing-panel';
+import { AIPanel } from '@/components/settings/ai-panel';
 
 const TAB_VALUES = [
   'profile',
@@ -33,6 +38,8 @@ const TAB_VALUES = [
   'deals',
   'appearance',
   'members',
+  'billing',
+  'ai',
 ] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 
@@ -43,6 +50,7 @@ function isTabValue(v: string | null): v is TabValue {
 export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useLanguage();
 
   // Custom-field definitions are account-wide config, so editing them is
   // admin+ only — mirror the gate on the Contacts page. The `custom_fields`
@@ -69,28 +77,27 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
+        <h1 className="text-2xl font-bold text-white">{t('settings.title')}</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Manage your profile, WhatsApp® integration, message templates, and
-          tags.
+          {t('settings.subTitle')}
         </p>
       </div>
 
       <Tabs value={tab} onValueChange={(v) => onChange(v as TabValue)}>
-        <TabsList className="border border-slate-700 bg-slate-900">
+        <TabsList className="border border-slate-700 bg-slate-900 flex-wrap h-auto gap-1 p-1">
           <TabsTrigger
             value="profile"
             className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
           >
             <User className="size-4" />
-            Profile
+            {t('settings.profileTab')}
           </TabsTrigger>
           <TabsTrigger
             value="whatsapp"
             className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
           >
             <Settings className="size-4" />
-            WhatsApp Config
+            {t('settings.whatsappTab')}
           </TabsTrigger>
           <TabsTrigger
             value="templates"
@@ -136,6 +143,20 @@ export default function SettingsPage() {
             <UsersRound className="size-4" />
             Members
           </TabsTrigger>
+          <TabsTrigger
+            value="billing"
+            className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
+          >
+            <CreditCard className="size-4" />
+            {t('settings.billingTab')}
+          </TabsTrigger>
+          <TabsTrigger
+            value="ai"
+            className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
+          >
+            <Brain className="size-4" />
+            {t('settings.aiTab')}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="space-y-6">
@@ -173,7 +194,17 @@ export default function SettingsPage() {
         <TabsContent value="members">
           <MembersTab />
         </TabsContent>
+
+        <TabsContent value="billing">
+          <BillingPanel />
+        </TabsContent>
+
+        <TabsContent value="ai">
+          <AIPanel />
+        </TabsContent>
       </Tabs>
     </div>
   );
 }
+
+

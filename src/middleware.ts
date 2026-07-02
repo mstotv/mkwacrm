@@ -28,9 +28,7 @@ export async function middleware(request: NextRequest) {
   // Auth pages - redirect to dashboard if already logged in.
   // Exception: when an invite token is in the query string we
   // send the already-signed-in user to /join/<token> instead so
-  // they can accept the invitation in one click. Without this,
-  // a forwarded invite link to someone who's already signed in
-  // would silently drop them on /dashboard.
+  // they can accept the invitation in one click.
   if (user && (
     request.nextUrl.pathname === '/login' ||
     request.nextUrl.pathname === '/signup' ||
@@ -52,12 +50,49 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Protected pages - redirect to login if not authenticated
-  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/settings']
-  if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
+  // Protected dashboard pages - redirect to login if not authenticated
+  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/settings', '/support']
+  
+  let profileData: any = null
+  let isBlocked = false
+
+  if (user) {
+    const { data } = await supabase
+      .from('profiles')
+      .select('platform_role, account:accounts(is_blocked)')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (data) {
+      profileData = data
+      isBlocked = (data.account as any)?.is_blocked ?? false
+    }
+  }
+
+  if (!user && (protectedPaths.some(path => request.nextUrl.pathname.startsWith(path)) || request.nextUrl.pathname.startsWith('/admin'))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
+  }
+
+  // Tenancy Block check
+  if (user && isBlocked) {
+    const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path)) || 
+                        request.nextUrl.pathname.startsWith('/admin')
+    if (isProtected) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/blocked'
+      return NextResponse.redirect(url)
+    }
+  }
+
+  // Admin routes - require super_admin or assistant_admin platform_role
+  if (request.nextUrl.pathname.startsWith('/admin')) {
+    const platformRole = profileData?.platform_role
+    if (platformRole !== 'super_admin' && platformRole !== 'assistant_admin') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
   }
 
   // API routes that need auth (not webhooks)
