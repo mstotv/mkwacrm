@@ -50,4 +50,8 @@ export const templateStatusConfig: Record<
     label: 'Pending Deletion',
     classes: 'bg-slate-700/30 text-slate-500 border-slate-700/40',
   },
+  PENDING_REVIEW: {
+    label: 'Pending Review',
+    classes: 'bg-indigo-600/20 text-indigo-400 border-indigo-600/30',
+  },
 };

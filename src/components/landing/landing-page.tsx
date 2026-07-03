@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { useSiteSettings } from '@/hooks/use-site-settings'
 import {
   MessageSquare,
   Bot,
@@ -300,6 +301,7 @@ const featureIcons = [Bot, MessageSquare, Users, Zap, Globe, Shield]
 
 /* ================================================================ */
 export default function LandingPage() {
+  const { settings } = useSiteSettings()
   const [lang, setLang] = useState<Lang>('en')
   const [isYearly, setIsYearly] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -331,6 +333,7 @@ export default function LandingPage() {
     const supabase = createClient()
     async function loadLandingData() {
       try {
+        // Load landing page settings from DB
         const { data: settings } = await supabase
           .from('landing_page_settings')
           .select('*')
@@ -338,12 +341,12 @@ export default function LandingPage() {
           .maybeSingle()
         if (settings) setDbSettings(settings)
 
-        const { data: plans } = await supabase
-          .from('subscription_plans')
-          .select('*')
-          .eq('is_active', true)
-          .order('price_monthly', { ascending: true })
-        if (plans) setDbPlans(plans)
+        // Load plans from public API (includes library features, no cache)
+        const plansRes = await fetch('/api/public/plans', { cache: 'no-store' })
+        if (plansRes.ok) {
+          const { plans } = await plansRes.json()
+          if (plans) setDbPlans(plans)
+        }
       } catch (err) {
         console.error('Error loading landing page data:', err)
       }
@@ -380,7 +383,7 @@ export default function LandingPage() {
           price: `$${p.price_monthly}`,
           priceYearly: `$${p.price_yearly}`,
           period: lang === 'ar' ? '/شهر' : '/mo',
-          desc: lang === 'ar' ? `خطة اشتراك ${p.display_name}` : `${p.display_name} subscription plan.`,
+          desc: p.description || (lang === 'ar' ? `خطة اشتراك ${p.display_name}` : `${p.display_name} subscription plan.`),
           popular: p.name === 'pro',
           features: pFeatures,
         }
@@ -1010,7 +1013,12 @@ export default function LandingPage() {
 
       {/* ====== NAVBAR ====== */}
       <nav className={`ld-nav ${scrolled ? 'scrolled' : ''}`}>
-        <a href="#" className="ld-nav-logo">WaCRM</a>
+        <a href="#" className="ld-nav-logo" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {settings.logo_url && (
+            <img src={settings.logo_url} alt="Logo" style={{ height: '2rem', objectFit: 'contain', borderRadius: '0.375rem' }} />
+          )}
+          <span>{settings.site_name}</span>
+        </a>
         <div className="ld-nav-links">
           <a href="#features">{t.nav.features}</a>
           <a href="#pricing">{t.nav.pricing}</a>
@@ -1132,7 +1140,12 @@ export default function LandingPage() {
       <footer className="ld-footer">
         <div className="ld-footer-grid">
           <div className="ld-footer-brand">
-            <h3>WaCRM</h3>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              {settings.logo_url && (
+                <img src={settings.logo_url} alt="Logo" style={{ height: '1.5rem', objectFit: 'contain', borderRadius: '0.25rem' }} />
+              )}
+              <span>{settings.site_name}</span>
+            </h3>
             <p>{t.footer.desc}</p>
           </div>
           <div className="ld-footer-col">
@@ -1154,7 +1167,7 @@ export default function LandingPage() {
           </div>
         </div>
         <div className="ld-footer-bottom">
-          {t.footer.copyright}
+          {t.footer.copyright.replace('WaCRM', settings.site_name)}
         </div>
       </footer>
     </div>

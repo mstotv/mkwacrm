@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
+import { formatEvolutionTemplate, getEvolutionTemplateMedia } from '@/lib/whatsapp/evolution-formatter'
 import { createClient } from '@/lib/supabase/server'
 import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
-import { sendEvolutionTextMessage } from '@/lib/whatsapp/evolution-api'
+import { sendEvolutionTextMessage, sendEvolutionMediaMessage } from '@/lib/whatsapp/evolution-api'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
 import {
@@ -232,12 +233,29 @@ export async function POST(request: Request) {
 
     const attempt = async (phone: string): Promise<string> => {
       if (config.connection_type === 'evolution') {
+        let mediaSentId: string | null = null;
+        if (message_type === 'template' && templateRow) {
+          const media = getEvolutionTemplateMedia(templateRow, template_message_params);
+          if (media) {
+            try {
+              const mediaResult = await sendEvolutionMediaMessage(
+                config.phone_number_id,
+                accessToken,
+                phone,
+                media.url,
+                media.type,
+                config.evolution_api_url
+              );
+              mediaSentId = mediaResult.messageId;
+            } catch (err) {
+              console.error('Failed to send template header media via Evolution:', err);
+            }
+          }
+        }
+
         let bodyText = content_text || '';
         if (message_type === 'template' && templateRow) {
-          bodyText = templateRow.body_text || '';
-          if (template_message_params?.body?.text) {
-            bodyText = template_message_params.body.text;
-          }
+          bodyText = formatEvolutionTemplate(templateRow, template_message_params, template_params);
         }
         const result = await sendEvolutionTextMessage(
           config.phone_number_id,
@@ -246,7 +264,7 @@ export async function POST(request: Request) {
           bodyText,
           config.evolution_api_url
         );
-        return result.messageId;
+        return mediaSentId || result.messageId;
       }
 
       if (message_type === 'template') {

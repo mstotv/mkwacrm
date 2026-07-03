@@ -28,7 +28,7 @@ import { buildMetaTemplatePayload } from '@/lib/whatsapp/template-components'
  * already-submitted templates.
  */
 
-const EDITABLE_STATUSES = new Set(['APPROVED', 'REJECTED', 'PAUSED'])
+const EDITABLE_STATUSES = new Set(['APPROVED', 'REJECTED', 'PAUSED', 'PENDING_REVIEW'])
 
 // uuid v4 plus the looser shape Postgres gen_random_uuid emits.
 // We don't need exhaustive RFC parsing — just enough to reject
@@ -98,7 +98,19 @@ export async function PATCH(
       return NextResponse.json({ error: 'Template not found.' }, { status: 404 })
     }
 
-    if (!existing.meta_template_id) {
+    const { data: config, error: configError } = await supabase
+      .from('whatsapp_config')
+      .select('*')
+      .eq('account_id', accountId)
+      .maybeSingle()
+
+    if (configError) {
+      return NextResponse.json({ error: configError.message }, { status: 500 })
+    }
+
+    const isEvolution = config?.connection_type === 'evolution'
+
+    if (!isEvolution && !existing.meta_template_id) {
       return NextResponse.json(
         {
           error:
@@ -111,7 +123,7 @@ export async function PATCH(
     if (!EDITABLE_STATUSES.has(existing.status)) {
       return NextResponse.json(
         {
-          error: `Templates in status ${existing.status} cannot be edited. Allowed: APPROVED, REJECTED, PAUSED.`,
+          error: `Templates in status ${existing.status} cannot be edited. Allowed: APPROVED, REJECTED, PAUSED, PENDING_REVIEW.`,
         },
         { status: 400 },
       )
@@ -137,14 +149,18 @@ export async function PATCH(
     }
 
     const metaPayload = buildMetaTemplatePayload(payload)
+    let targetStatus = 'PENDING'
 
-    if (!isDryRun()) {
-      const { data: config, error: configError } = await supabase
-        .from('whatsapp_config')
-        .select('*')
-        .eq('account_id', accountId)
-        .single()
-      if (configError || !config) {
+    if (isEvolution) {
+      const { data: landingSettings } = await supabase
+        .from('landing_page_settings')
+        .select('require_template_review')
+        .eq('id', 'd0000000-0000-0000-0000-000000000001')
+        .maybeSingle()
+      const requireReview = landingSettings?.require_template_review ?? false
+      targetStatus = requireReview ? 'PENDING_REVIEW' : 'APPROVED'
+    } else if (!isDryRun()) {
+      if (!config) {
         return NextResponse.json(
           { error: 'WhatsApp not configured.' },
           { status: 400 },
@@ -153,7 +169,7 @@ export async function PATCH(
       const accessToken = decrypt(config.access_token)
       try {
         await editMessageTemplate({
-          metaTemplateId: existing.meta_template_id,
+          metaTemplateId: existing.meta_template_id!,
           accessToken,
           components: metaPayload.components,
         })
@@ -170,7 +186,7 @@ export async function PATCH(
       }
     }
 
-    // Meta accepted the edit — status flips back to PENDING for review.
+    // Update row
     const { data: row, error: updErr } = await supabase
       .from('message_templates')
       .update({
@@ -183,7 +199,7 @@ export async function PATCH(
         footer_text: payload.footer_text ?? null,
         buttons: payload.buttons ?? null,
         sample_values: payload.sample_values ?? null,
-        status: 'PENDING',
+        status: targetStatus,
         submission_error: null,
         rejection_reason: null,
         last_submitted_at: new Date().toISOString(),

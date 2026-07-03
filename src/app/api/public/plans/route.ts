@@ -1,0 +1,114 @@
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+/**
+ * GET /api/public/plans
+ *
+ * Public endpoint (no auth required) that returns all active subscription plans
+ * with their assigned features from the centralized feature library.
+ *
+ * Used by the landing page pricing section for live display.
+ * Returns Cache-Control: no-store so admin changes appear instantly.
+ */
+export async function GET() {
+  try {
+    // Use service role or anon key for public read
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+    // Fetch active plans ordered by sort_order then price
+    const { data: plans, error: plansError } = await supabase
+      .from('subscription_plans')
+      .select('id, name, display_name, description, price_monthly, price_yearly, sort_order, limits, features_ar, features_en')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('price_monthly', { ascending: true });
+
+    if (plansError) {
+      console.error('Error fetching plans:', plansError);
+      return NextResponse.json({ error: 'Failed to fetch plans' }, { status: 500 });
+    }
+
+    // Fetch all feature assignments with feature details
+    const { data: assignments, error: assignError } = await supabase
+      .from('plan_feature_assignments')
+      .select('plan_id, feature:plan_features_library(id, name_ar, name_en, sort_order)');
+
+    if (assignError) {
+      console.error('Error fetching feature assignments:', assignError);
+      // Fallback: return plans without library features (use legacy JSON arrays)
+      const fallbackPlans = (plans || []).map((plan: any) => ({
+        id: plan.id,
+        name: plan.name,
+        display_name: plan.display_name,
+        description: plan.description,
+        price_monthly: plan.price_monthly,
+        price_yearly: plan.price_yearly,
+        sort_order: plan.sort_order,
+        limits: plan.limits,
+        features_ar: plan.features_ar || [],
+        features_en: plan.features_en || [],
+      }));
+
+      return NextResponse.json({ plans: fallbackPlans }, {
+        status: 200,
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
+
+    // Group feature assignments by plan_id
+    const featuresByPlan: Record<string, { name_ar: string; name_en: string; sort_order: number }[]> = {};
+    for (const assignment of (assignments || [])) {
+      const planId = assignment.plan_id;
+      const feature = assignment.feature as any;
+      if (!feature) continue;
+
+      if (!featuresByPlan[planId]) {
+        featuresByPlan[planId] = [];
+      }
+      featuresByPlan[planId].push({
+        name_ar: feature.name_ar,
+        name_en: feature.name_en,
+        sort_order: feature.sort_order ?? 0,
+      });
+    }
+
+    // Sort features within each plan by sort_order
+    for (const planId of Object.keys(featuresByPlan)) {
+      featuresByPlan[planId].sort((a, b) => a.sort_order - b.sort_order);
+    }
+
+    // Merge plans with their features
+    const enrichedPlans = (plans || []).map((plan: any) => {
+      const libraryFeatures = featuresByPlan[plan.id] || [];
+      const hasLibraryFeatures = libraryFeatures.length > 0;
+
+      return {
+        id: plan.id,
+        name: plan.name,
+        display_name: plan.display_name,
+        description: plan.description,
+        price_monthly: plan.price_monthly,
+        price_yearly: plan.price_yearly,
+        sort_order: plan.sort_order,
+        limits: plan.limits,
+        // Prefer library features; fallback to legacy JSON arrays
+        features_ar: hasLibraryFeatures
+          ? libraryFeatures.map(f => f.name_ar)
+          : (plan.features_ar || []),
+        features_en: hasLibraryFeatures
+          ? libraryFeatures.map(f => f.name_en)
+          : (plan.features_en || []),
+      };
+    });
+
+    return NextResponse.json({ plans: enrichedPlans }, {
+      status: 200,
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  } catch (err) {
+    console.error('Public plans API error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

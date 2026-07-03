@@ -138,6 +138,9 @@ export function TemplateManager() {
   const [templateToDelete, setTemplateToDelete] =
     useState<MessageTemplate | null>(null);
 
+  const [connectionType, setConnectionType] = useState<'meta' | 'evolution'>('meta');
+  const [requireReview, setRequireReview] = useState(false);
+
   // Body variable indices — `[1, 2, 3]` for "{{1}} {{2}} {{3}}". We
   // re-run the extractor on every render to keep the sample-value rows
   // in sync with what the user typed.
@@ -171,8 +174,41 @@ export function TemplateManager() {
       return;
     }
     fetchTemplates(user.id);
+    fetchIntegrationConfig(user.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id]);
+
+  async function fetchIntegrationConfig(userId: string) {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('account_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (profile?.account_id) {
+        const { data: config } = await supabase
+          .from('whatsapp_config')
+          .select('connection_type')
+          .eq('account_id', profile.account_id)
+          .maybeSingle();
+        if (config) {
+          setConnectionType((config.connection_type as 'meta' | 'evolution') || 'meta');
+        }
+      }
+
+      const { data: pageSettings } = await supabase
+        .from('landing_page_settings')
+        .select('require_template_review')
+        .eq('id', 'd0000000-0000-0000-0000-000000000001')
+        .maybeSingle();
+      if (pageSettings) {
+        setRequireReview(!!pageSettings.require_template_review);
+      }
+    } catch (err) {
+      console.error('Failed to load integration config:', err);
+    }
+  }
 
   async function fetchTemplates(userId: string) {
     try {
@@ -268,15 +304,26 @@ export function TemplateManager() {
       // Refresh first, then close — re-opening the dialog
       // immediately should not show a stale list.
       if (user) await fetchTemplates(user.id);
-      toast.success(
-        data.dry_run
-          ? isEdit
-            ? 'Template updated (dry-run — no Meta call)'
-            : 'Template saved (dry-run — no Meta call)'
-          : isEdit
-            ? 'Edit submitted — Meta typically reviews within 24 hours.'
-            : 'Submitted to Meta — typical review time is 24 hours. Status updates automatically.',
-      );
+      
+      if (connectionType === 'evolution') {
+        toast.success(
+          isEdit
+            ? 'Template updated successfully.'
+            : requireReview
+              ? 'Submitted for internal review. Status will update once approved.'
+              : 'Template saved and activated successfully.'
+        );
+      } else {
+        toast.success(
+          data.dry_run
+            ? isEdit
+              ? 'Template updated (dry-run — no Meta call)'
+              : 'Template saved (dry-run — no Meta call)'
+            : isEdit
+              ? 'Edit submitted — Meta typically reviews within 24 hours.'
+              : 'Submitted to Meta — typical review time is 24 hours. Status updates automatically.',
+        );
+      }
       setDialogOpen(false);
       setForm(emptyForm);
       setEditingId(null);
@@ -545,12 +592,12 @@ export function TemplateManager() {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0 ml-2">
-                    {statusKey === 'APPROVED' && (
+                    {(statusKey === 'APPROVED' || (connectionType === 'evolution' && statusKey === 'PENDING_REVIEW')) && (
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => openEdit(template)}
-                        title="Editing triggers Meta re-review — status flips to PENDING."
+                        title={connectionType === 'evolution' ? 'Edit template' : 'Editing triggers Meta re-review — status flips to PENDING.'}
                         aria-label="Edit template"
                         className="text-slate-300 hover:text-primary hover:bg-primary/10 h-8 px-2"
                       >
@@ -563,12 +610,12 @@ export function TemplateManager() {
                         variant="ghost"
                         size="sm"
                         onClick={() => openEdit(template)}
-                        title="Edit the template and resubmit to Meta for review."
-                        aria-label="Edit and resubmit template"
+                        title={connectionType === 'evolution' ? 'Edit template' : 'Edit the template and resubmit to Meta for review.'}
+                        aria-label={connectionType === 'evolution' ? 'Edit template' : 'Edit and resubmit template'}
                         className="text-slate-300 hover:text-primary hover:bg-primary/10 h-8 px-2"
                       >
                         <RotateCcw className="size-3.5" />
-                        Resubmit
+                        {connectionType === 'evolution' ? 'Edit' : 'Resubmit'}
                       </Button>
                     )}
                     <Button
@@ -1012,7 +1059,13 @@ export function TemplateManager() {
                   {editingId ? 'Saving…' : 'Submitting…'}
                 </>
               ) : editingId ? (
-                'Save & Resubmit'
+                connectionType === 'evolution'
+                  ? 'Save Template'
+                  : 'Save & Resubmit'
+              ) : connectionType === 'evolution' ? (
+                requireReview
+                  ? 'Submit for Review'
+                  : 'Save Template'
               ) : (
                 'Submit for Approval'
               )}

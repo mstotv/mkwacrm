@@ -1,3 +1,4 @@
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const { Client } = require('pg');
 
 const regions = [
@@ -9,21 +10,23 @@ const regions = [
 
 async function test() {
   for (const region of regions) {
-    const connectionString = `postgresql://postgres.fadogxelpjdstacymngd:dUs6xa4BFyF%3Fr3Q@aws-0-${region}.pooler.supabase.com:6543/postgres`;
+    const connectionString = `postgresql://postgres.fadogxelpjdstacymngd:dUs6xa4BFyF%3Fr3Q@aws-0-${region}.pooler.supabase.com:6543/postgres?sslmode=require`;
     const client = new Client({
-      connectionString,
-      ssl: { rejectUnauthorized: false }
+      connectionString
     });
     try {
       await client.connect();
-      console.log(`SUCCESS connected to ${region} pooler!`);
+      console.log(`\n🎉 SUCCESS! Connected to ${region} pooler!`);
       const res = await client.query("SELECT NOW()");
       console.log("Result:", res.rows[0]);
       await client.end();
       return;
     } catch (e) {
       if (!e.message.includes('tenant/user') && !e.message.includes('ENOTFOUND')) {
-        console.log(`Region ${region} failed with:`, e.message);
+        console.log(`Region ${region} error:`, e.message);
+      } else {
+        // Log that it failed with tenant not found to be sure it's active
+        console.log(`Region ${region}: tenant not found`);
       }
       try { await client.end(); } catch {}
     }

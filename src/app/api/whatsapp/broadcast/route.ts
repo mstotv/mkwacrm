@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
+import { sendEvolutionTextMessage, sendEvolutionMediaMessage } from '@/lib/whatsapp/evolution-api'
+import { formatEvolutionTemplate, getEvolutionTemplateMedia } from '@/lib/whatsapp/evolution-formatter'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard'
@@ -200,17 +202,51 @@ export async function POST(request: Request) {
 
       for (const variant of variants) {
         try {
-          const result = await sendTemplateMessage({
-            phoneNumberId: config.phone_number_id,
-            accessToken,
-            to: variant,
-            templateName: template_name,
-            language: template_language || 'en_US',
-            template: templateRow ?? undefined,
-            messageParams: recipient.messageParams,
-            params: recipient.params ?? [],
-          })
-          sentMessageId = result.messageId
+          if (config.connection_type === 'evolution') {
+            let mediaSentId: string | null = null;
+            if (templateRow) {
+              const media = getEvolutionTemplateMedia(templateRow, recipient.messageParams);
+              if (media) {
+                try {
+                  const mediaResult = await sendEvolutionMediaMessage(
+                    config.phone_number_id,
+                    accessToken,
+                    variant,
+                    media.url,
+                    media.type,
+                    config.evolution_api_url
+                  );
+                  mediaSentId = mediaResult.messageId;
+                } catch (err) {
+                  console.error('Failed to send template header media via Evolution (broadcast):', err);
+                }
+              }
+            }
+
+            const bodyText = templateRow 
+              ? formatEvolutionTemplate(templateRow, recipient.messageParams, recipient.params)
+              : (recipient.params && recipient.params.length > 0 ? recipient.params.join(' ') : '');
+            const result = await sendEvolutionTextMessage(
+              config.phone_number_id,
+              accessToken,
+              variant,
+              bodyText,
+              config.evolution_api_url
+            );
+            sentMessageId = mediaSentId || result.messageId;
+          } else {
+            const result = await sendTemplateMessage({
+              phoneNumberId: config.phone_number_id,
+              accessToken,
+              to: variant,
+              templateName: template_name,
+              language: template_language || 'en_US',
+              template: templateRow ?? undefined,
+              messageParams: recipient.messageParams,
+              params: recipient.params ?? [],
+            })
+            sentMessageId = result.messageId
+          }
           lastError = null
           break
         } catch (error) {

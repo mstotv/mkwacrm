@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Viewport } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
 import { Toaster } from "sonner";
@@ -6,33 +6,49 @@ import "./globals.css";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { LanguageProvider } from "@/hooks/use-language";
 import { DEFAULT_THEME, STORAGE_KEY, THEME_IDS } from "@/lib/themes";
+import { createClient } from "@/lib/supabase/server";
+import { SiteSettingsProvider } from "@/hooks/use-site-settings";
+import { ImpersonationBanner } from "@/components/auth/impersonation-banner";
 
 const MODE_STORAGE_KEY = "wacrm.colorMode";
+
 
 const inter = Inter({
   variable: "--font-sans",
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "wacrm",
-    template: "%s — wacrm",
-  },
-  description: "Self-hostable CRM template for WhatsApp.",
-  robots: {
-    index: false,
-    follow: false,
-  },
-  icons: {
-    icon: [{ url: "/icon" }],
-  },
-  formatDetection: {
-    email: false,
-    address: false,
-    telephone: false,
-  },
-};
+export async function generateMetadata() {
+  const defaultSettings = { site_name: 'WaCRM' };
+  let settings = defaultSettings;
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.from('site_settings').select('site_name').maybeSingle();
+    if (data) {
+      settings = data;
+    }
+  } catch (e) {}
+
+  return {
+    title: {
+      default: settings.site_name,
+      template: `%s — ${settings.site_name}`,
+    },
+    description: "Self-hostable CRM template for WhatsApp.",
+    robots: {
+      index: false,
+      follow: false,
+    },
+    icons: {
+      icon: [{ url: "/icon" }],
+    },
+    formatDetection: {
+      email: false,
+      address: false,
+      telephone: false,
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#020617",
@@ -79,11 +95,30 @@ const THEME_BOOT_SCRIPT = `
 })();
 `;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const defaultSettings = {
+    site_name: 'WaCRM',
+    logo_url: '',
+    primary_color: '#8B5CF6',
+    secondary_color: '#1e293b',
+    accent_color: '#0f172a'
+  };
+
+  let settings = defaultSettings;
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.from('site_settings').select('*').maybeSingle();
+    if (data) {
+      settings = data;
+    }
+  } catch (e) {
+    console.error("Failed to load site settings:", e);
+  }
+
   return (
     <html
       lang="ar"
@@ -98,11 +133,24 @@ export default function RootLayout({
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }}
         />
+        {/* Inject dynamic colors */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          :root {
+            --primary: ${settings.primary_color} !important;
+            --primary-hover: ${settings.primary_color}cc !important;
+            --ring: ${settings.primary_color} !important;
+            ${settings.secondary_color ? `--secondary: ${settings.secondary_color} !important;` : ''}
+            ${settings.accent_color ? `--accent: ${settings.accent_color} !important;` : ''}
+          }
+        `}} />
       </head>
       <body className="min-h-full bg-background text-foreground font-sans">
         <LanguageProvider>
           <ThemeProvider>
-            {children}
+            <SiteSettingsProvider initialSettings={settings}>
+              <ImpersonationBanner />
+              {children}
+            </SiteSettingsProvider>
             <Toaster
               theme="dark"
               position="top-right"
@@ -120,4 +168,5 @@ export default function RootLayout({
     </html>
   );
 }
+
 

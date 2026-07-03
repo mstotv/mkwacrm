@@ -172,7 +172,7 @@ export default function AdminDashboardPage() {
         <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
           <h2 className="font-semibold text-white">آخر الحسابات المسجّلة</h2>
           <a
-            href="/admin/accounts"
+            href="/admin/users"
             className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300"
           >
             عرض الكل <ArrowUpRight className="h-3.5 w-3.5" />

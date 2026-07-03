@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useLanguage } from "@/hooks/use-language";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 import {
   Crown,
   GitBranch,
@@ -115,6 +116,7 @@ interface SidebarProps {
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
+  const { settings } = useSiteSettings();
   const totalUnread = useTotalUnread();
   const { t } = useLanguage();
   const { colorMode, toggleColorMode } = useTheme();
@@ -186,12 +188,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-800 px-4">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <MessageSquare className="h-4 w-4" />
-            </div>
-            <span className="text-sm font-semibold text-white">
-              MitaKurd for WhatsApp Auto
+          <Link href="/dashboard" className="flex items-center gap-2 max-w-[80%]">
+            {settings.logo_url ? (
+              <img src={settings.logo_url} alt="Logo" className="h-8 w-8 object-contain rounded-lg shrink-0" />
+            ) : (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <MessageSquare className="h-4 w-4" />
+              </div>
+            )}
+            <span className="text-sm font-semibold text-white truncate">
+              {settings.site_name}
             </span>
           </Link>
           <button

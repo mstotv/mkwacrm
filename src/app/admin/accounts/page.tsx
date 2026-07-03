@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   Loader2,
   Trash2,
+  Crown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -388,12 +389,18 @@ export default function AdminAccountsPage() {
                   <td className="px-6 py-4">
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
-                        account.platform_role === 'assistant_admin'
+                        account.platform_role === 'super_admin'
+                          ? 'bg-violet-500/10 text-violet-400 border-violet-500/20'
+                          : account.platform_role === 'assistant_admin'
                           ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                           : 'bg-slate-800 text-slate-400 border-slate-700'
                       }`}
                     >
-                      {account.platform_role === 'assistant_admin' ? 'مساعد أدمن' : 'مستخدم'}
+                      {account.platform_role === 'super_admin'
+                        ? 'سوبر أدمن'
+                        : account.platform_role === 'assistant_admin'
+                        ? 'مساعد أدمن'
+                        : 'مستخدم'}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -408,25 +415,31 @@ export default function AdminAccountsPage() {
                       </button>
 
                       {/* Toggle Assistant status */}
-                      <button
-                        onClick={() => handleTogglePlatformRole(account)}
-                        className={`rounded-lg p-1.5 transition ${
-                          account.platform_role === 'assistant_admin'
-                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                            : 'bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-white'
-                        }`}
-                        title={
-                          account.platform_role === 'assistant_admin'
-                            ? 'إلغاء كمساعد أدمن'
-                            : 'ترقية كمساعد أدمن (للرد على التذاكر)'
-                        }
-                      >
-                        {account.platform_role === 'assistant_admin' ? (
-                          <ShieldAlert className="h-3.5 w-3.5" />
-                        ) : (
-                          <ShieldCheck className="h-3.5 w-3.5" />
-                        )}
-                      </button>
+                      {account.platform_role !== 'super_admin' ? (
+                        <button
+                          onClick={() => handleTogglePlatformRole(account)}
+                          className={`rounded-lg p-1.5 transition ${
+                            account.platform_role === 'assistant_admin'
+                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                              : 'bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-white'
+                          }`}
+                          title={
+                            account.platform_role === 'assistant_admin'
+                              ? 'إلغاء كمساعد أدمن'
+                              : 'ترقية كمساعد أدمن (للرد على التذاكر)'
+                          }
+                        >
+                          {account.platform_role === 'assistant_admin' ? (
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                          ) : (
+                            <ShieldCheck className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      ) : (
+                        <div className="w-8 h-8 flex items-center justify-center text-violet-400 bg-violet-950/20 border border-violet-800/30 rounded-lg" title="سوبر أدمن">
+                          <Crown className="w-3.5 h-3.5" />
+                        </div>
+                      )}
 
                       {/* Block/Unblock toggle */}
                       <button

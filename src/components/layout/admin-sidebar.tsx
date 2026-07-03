@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { useSiteSettings } from '@/hooks/use-site-settings';
 import {
   LayoutDashboard,
   Users,
@@ -12,13 +13,15 @@ import {
   ChevronRight,
   Zap,
   LifeBuoy,
+  FileText,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/admin', label: 'لوحة التحكم', icon: LayoutDashboard, exact: true },
-  { href: '/admin/accounts', label: 'الحسابات', icon: Users },
+  { href: '/admin/users', label: 'إدارة المستخدمين', icon: Users },
   { href: '/admin/subscriptions', label: 'الاشتراكات', icon: CreditCard },
   { href: '/admin/tickets', label: 'تذاكر الدعم الفني', icon: LifeBuoy },
+  { href: '/admin/pending-templates', label: 'القوالب المعلقة', icon: FileText },
   { href: '/admin/analytics', label: 'الإحصائيات', icon: BarChart3 },
   { href: '/admin/settings', label: 'إعدادات المنصة', icon: Settings },
 ];
@@ -26,6 +29,7 @@ const NAV_ITEMS = [
 export function AdminSidebar() {
   const pathname = usePathname();
   const { profile } = useAuth();
+  const { settings } = useSiteSettings();
 
   const role = profile?.platform_role;
 
@@ -41,11 +45,15 @@ export function AdminSidebar() {
     <aside className="flex h-full w-64 flex-col border-r border-slate-800 bg-slate-950">
       {/* Logo */}
       <div className="flex items-center gap-3 border-b border-slate-800 px-6 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg">
-          <Zap className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <p className="text-sm font-bold text-white">MitaKurd</p>
+        {settings.logo_url ? (
+          <img src={settings.logo_url} alt="Logo" className="h-9 w-9 object-contain rounded-xl shrink-0" />
+        ) : (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg">
+            <Zap className="h-5 w-5 text-white" />
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-white truncate">{settings.site_name}</p>
           <p className="text-xs text-violet-400">
             {role === 'super_admin' ? 'Super Admin' : 'Assistant Admin'}
           </p>

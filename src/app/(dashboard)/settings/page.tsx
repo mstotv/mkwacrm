@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Settings,
@@ -47,30 +48,32 @@ function isTabValue(v: string | null): v is TabValue {
   return !!v && (TAB_VALUES as readonly string[]).includes(v);
 }
 
-export default function SettingsPage() {
+function SettingsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useLanguage();
-
-  // Custom-field definitions are account-wide config, so editing them is
-  // admin+ only — mirror the gate on the Contacts page. The `custom_fields`
-  // RLS rejects non-admin writes regardless.
   const canEditSettings = useCan('edit-settings');
 
-  // The URL is the single source of truth for the active tab — no
-  // local state, no sync effect. A previous revision duplicated this
-  // into `useState` + a sync effect, which tripped React 19's
-  // set-state-in-effect rule and was also redundant.
   const queryTab = searchParams.get('tab');
-  // Deep-linking to the admin-only tab as a non-admin falls back to profile
-  // rather than landing on a tab with no trigger or content.
   const resolved: TabValue = isTabValue(queryTab) ? queryTab : 'profile';
-  const tab: TabValue =
-    resolved === 'custom-fields' && !canEditSettings ? 'profile' : resolved;
+  
+  // Controlled tab state for instant UI changes
+  const [tab, setTab] = useState<TabValue>(() => {
+    return resolved === 'custom-fields' && !canEditSettings ? 'profile' : resolved;
+  });
+
+  // Synchronize state when queryTab changes (deep link, back button, etc)
+  useEffect(() => {
+    const nextTab = isTabValue(queryTab) ? queryTab : 'profile';
+    const validatedTab = nextTab === 'custom-fields' && !canEditSettings ? 'profile' : nextTab;
+    setTab(validatedTab);
+  }, [queryTab, canEditSettings]);
 
   const onChange = (next: TabValue) => {
+    const validatedTab = next === 'custom-fields' && !canEditSettings ? 'profile' : next;
+    setTab(validatedTab);
     const params = new URLSearchParams(searchParams.toString());
-    params.set('tab', next);
+    params.set('tab', validatedTab);
     router.replace(`/settings?${params.toString()}`, { scroll: false });
   };
 
@@ -207,4 +210,17 @@ export default function SettingsPage() {
   );
 }
 
-
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center bg-slate-950">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm text-slate-400">Loading settings...</p>
+        </div>
+      </div>
+    }>
+      <SettingsPageInner />
+    </Suspense>
+  );
+}

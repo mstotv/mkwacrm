@@ -143,8 +143,8 @@ export async function POST(request: Request) {
       process.env.WHATSAPP_TEMPLATES_DRY_RUN === 'true' ||
       process.env.WHATSAPP_TEMPLATES_DRY_RUN === '1'
 
-    let metaTemplateId: string
-    let metaStatus: string
+    let metaTemplateId: string | null = null
+    let metaStatus: string = 'PENDING'
 
     if (dryRun) {
       metaTemplateId = `dry-run-${crypto.randomUUID()}`
@@ -154,76 +154,92 @@ export async function POST(request: Request) {
         .from('whatsapp_config')
         .select('*')
         .eq('account_id', accountId)
-        .single()
-      if (configError || !config) {
-        return NextResponse.json(
-          {
-            error:
-              'WhatsApp not configured. Connect your WhatsApp Business account in Settings first.',
-          },
-          { status: 400 },
-        )
+        .maybeSingle()
+
+      if (configError) {
+        return NextResponse.json({ error: configError.message }, { status: 500 })
       }
-      if (!config.waba_id) {
+
+      if (!config) {
         return NextResponse.json(
           {
             error:
-              'WABA (WhatsApp Business Account) ID missing. Re-connect your account in Settings.',
+              'WhatsApp not configured. Connect your WhatsApp integration in Settings first.',
           },
           { status: 400 },
         )
       }
 
-      const accessToken = decrypt(config.access_token)
-      try {
-        const meta = await submitMessageTemplate({
-          wabaId: config.waba_id,
-          accessToken,
-          payload: metaPayload,
-        })
-        metaTemplateId = meta.id
-        metaStatus = meta.status
-      } catch (e) {
-        const message = e instanceof Error ? e.message : 'Meta submit failed.'
-        // Persist the failure so the user can retry; row stays DRAFT
-        // until they fix and re-submit.
-        await upsertTemplateRow(
-          supabase,
-          buildUpsertRow(accountId, user.id, payload, {
-            status: 'DRAFT',
-            metaTemplateId: null,
-            submissionError: message,
-          }),
-        )
-        const isRateLimit = /\b429\b/.test(message)
-        return NextResponse.json(
-          {
-            error: isRateLimit
-              ? 'Meta rate limit hit (100 template creates per hour). Try again later.'
-              : message,
-          },
-          { status: isRateLimit ? 429 : 502 },
-        )
+      if (config.connection_type === 'evolution') {
+        const { data: landingSettings } = await supabase
+          .from('landing_page_settings')
+          .select('require_template_review')
+          .eq('id', 'd0000000-0000-0000-0000-000000000001')
+          .maybeSingle()
+        const requireReview = landingSettings?.require_template_review ?? false
+        metaStatus = requireReview ? 'PENDING_REVIEW' : 'APPROVED'
+        metaTemplateId = null
+      } else {
+        if (!config.waba_id) {
+          return NextResponse.json(
+            {
+              error:
+                'WABA (WhatsApp Business Account) ID missing. Re-connect your account in Settings.',
+            },
+            { status: 400 },
+          )
+        }
+
+        const metaPayload = buildMetaTemplatePayload(payload)
+        const accessToken = decrypt(config.access_token)
+        try {
+          const meta = await submitMessageTemplate({
+            wabaId: config.waba_id,
+            accessToken,
+            payload: metaPayload,
+          })
+          metaTemplateId = meta.id
+          metaStatus = meta.status
+        } catch (e) {
+          const message = e instanceof Error ? e.message : 'Meta submit failed.'
+          await upsertTemplateRow(
+            supabase,
+            buildUpsertRow(accountId, user.id, payload, {
+              status: 'DRAFT',
+              metaTemplateId: null,
+              submissionError: message,
+            }),
+          )
+          const isRateLimit = /\b429\b/.test(message)
+          return NextResponse.json(
+            {
+              error: isRateLimit
+                ? 'Meta rate limit hit (100 template creates per hour). Try again later.'
+                : message,
+            },
+            { status: isRateLimit ? 429 : 502 },
+          )
+        }
       }
     }
+
+    const resolvedStatus = (metaStatus === 'PENDING_REVIEW' || metaStatus === 'APPROVED') 
+      ? metaStatus 
+      : normalizeStatus(metaStatus);
 
     const { data: row, error: upsertErr } = await upsertTemplateRow(
       supabase,
       buildUpsertRow(accountId, user.id, payload, {
-        status: normalizeStatus(metaStatus),
+        status: resolvedStatus,
         metaTemplateId,
         submissionError: null,
       }),
     )
 
     if (upsertErr) {
-      // The submit succeeded on Meta's side but we failed to persist
-      // locally. That's a data-drift state — surface the meta_template_id
-      // so the user can recover via "Sync from Meta".
       return NextResponse.json(
         {
-          error: `Submitted to Meta but failed to save locally: ${upsertErr.message}. Run "Sync from Meta" to recover.`,
-          meta_template_id: metaTemplateId,
+          error: `Failed to save template locally: ${upsertErr.message}.`,
         },
         { status: 500 },
       )

@@ -333,6 +333,12 @@ export function ProfileForm() {
             </dl>
           </div>
 
+          {/* TODO: Add Telegram Account Association section here for existing email users:
+              - Retrieve current profile's telegram_id.
+              - If telegram_id is present: show "Linked to Telegram (username)" and an "Unlink Account" button.
+              - If telegram_id is null: show Telegram Login Widget to verify signature and update profile's telegram_id and telegram_username. */}
+
+
           {!profile && (
             <p className="flex items-center gap-2 text-sm text-slate-400">
               <CircleAlert className="size-4" />

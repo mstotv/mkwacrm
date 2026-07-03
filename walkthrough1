@@ -1,0 +1,62 @@
+# 🚀 تقرير إنجاز متطلبات نظام قوالب رسائل Evolution API | Walkthrough Report
+
+لقد تم بنجاح بناء وتفعيل نظام قوالب الرسائل (Message Templates) ليعمل بالكامل مع **Evolution API** دون شروط WABA ID أو الاتصال بميتا، مع الحفاظ على التوافق التام والتفرع الشرطي لمن لديهم حسابات Meta Cloud API.
+
+---
+
+## 🛠️ دليل تطبيق هجرة قاعدة البيانات (مهم جداً) | Database Migration
+ملف هجرة قاعدة البيانات الجديد موجود في:
+[supabase/migrations/028_whatsapp_internal_templates.sql](file:///c:/Users/Mustafa/Desktop/wacrm/supabase/migrations/028_whatsapp_internal_templates.sql)
+
+يرجى نسخه وتطبيقه يدوياً في **SQL Editor** داخل **Supabase Dashboard** الخاص بمشروعك لتحديث القيود وحقول الإعدادات بنجاح.
+
+---
+
+## 💎 الميزات والحلول التي تم تنفيذها بالتفصيل | Implemented Features
+
+### 1. إزالة شرط التحقق من WABA ID وقبول التخزين المحلي
+- تم تعديل مساري الإرسال والتعديل (`submit` و `[id]`) بحيث يتم التحقق من نوع الاتصال (`connection_type`) للعميل.
+- إذا كان الاتصال هو `evolution`، يتم تخطي متطلبات Meta تماماً (مثل `waba_id` والتوكنات)، وتخزين القالب فوراً في قاعدة البيانات المحلية.
+
+### 2. نظام مراجعة داخلي وحالة معلقة اختيارية (Internal Review System)
+- تم إدراج حالة جديدة للقوالب في قاعدة البيانات والـ TypeScript باسم `PENDING_REVIEW` (قيد المراجعة الإدارية).
+- تم تحديث ملف عرض الحالات [template-status.ts](file:///c:/Users/Mustafa/Desktop/wacrm/src/lib/template-status.ts) لعرضها بشارة بلون بنفسجي مميز (Pending Review).
+
+### 3. زر الحفظ الديناميكي وبوابة التحكم في الرقابة
+- **إعدادات المنصة الإدارية (`/admin/settings`)**: تمت إضافة خيار **"طلب الموافقة الإدارية على قوالب الرسائل"** لمدير المنصة.
+- **سلوك واجهة المستخدم**:
+  - إذا كان العميل يربط عبر **Meta**: يظل الزر "Submit for Approval" والحالة تذهب لـ Meta للمراجعة.
+  - إذا كان العميل يربط عبر **Evolution API**:
+    - **في حال تفعيل الرقابة**: يتحول نص الزر إلى **"Submit for Review"** وتذهب لـ `PENDING_REVIEW`.
+    - **في حال إيقاف الرقابة**: يتحول نص الزر إلى **"Save Template"** وتصبح الحالة `APPROVED` (نشطة) فوراً بعد الحفظ.
+
+### 4. لوحة مراجعة القوالب المعلقة للمشرفين (Pending Templates Page)
+- تم إنشاء صفحة جديدة بالكامل في لوحة تحكم المشرفين تحت الرابط `/admin/pending-templates` لعرض كافة القوالب المعلقة للمراجعة مع تفاصيل العميل واسم الحساب.
+- تتيح اللوحة للمشرفين:
+  1. **الموافقة وتفعيل القالب (Approve)**: تحويل حالته لـ `APPROVED` ليدخل فوراً فيBroadcast والـ Automations.
+  2. **رفض القالب (Reject)**: مع كتابة سبب الرفض ليعود كمسودة للمستخدم مع إظهار سبب الرفض.
+- تم ربط الصفحة في القائمة الجانبية للمشرفين [admin-sidebar.tsx](file:///c:/Users/Mustafa/Desktop/wacrm/src/components/layout/admin-sidebar.tsx) تحت اسم "القوالب المعلقة".
+
+### 5. استبدال المتغيرات ودعم الأزرار البديلة (Buttons Fallback Formatting)
+- تم تصميم مكتبة معالجة وصياغة ذكية خاصة بـ Evolution في [evolution-formatter.ts](file:///c:/Users/Mustafa/Desktop/wacrm/src/lib/whatsapp/evolution-formatter.ts).
+- عند إرسال قالب بث (Broadcast) أو رسالة مجردة عبر Evolution، يتم تلقائياً استبدال المتغيرات مثل `{{1}}` و `{{2}}` بقيمها الفعلية المخصصة لكل مستلم.
+- **تنسيق الأزرار والهيدر التفاعلي**: نظراً لأن واتساب يمنع إظهار الأزرار التفاعلية لحسابات البوت العادية (Baileys/Web)، فقد تم تحويلها برمجياً إلى صيغة نصية ذكية ومحسنة تظهر داخل جسم الرسالة لضمان وصولها بنسبة 100%:
+  - الهيدر النصي يوضع بخط عريض، وإذا كان صورة أو فيديو يدرج الرابط بوضوح.
+  - الأزرار ترتب مرقمة في الأسفل مع إيموجي مميز (↩️ للرد السريع، 🔗 للروابط مع استبدال متغيرات الرابط، 📞 للاتصال، 📋 لنسخ الكود).
+
+---
+
+## 📁 قائمة الملفات المعدلة والمضافة | Code Summary
+1. [028_whatsapp_internal_templates.sql](file:///c:/Users/Mustafa/Desktop/wacrm/supabase/migrations/028_whatsapp_internal_templates.sql): ملف هجرة القيود وقاعدة البيانات.
+2. [evolution-formatter.ts](file:///c:/Users/Mustafa/Desktop/wacrm/src/lib/whatsapp/evolution-formatter.ts): منسق الرسائل البديل واستبدال المتغيرات لـ Evolution.
+3. [route.ts (submit API)](file:///c:/Users/Mustafa/Desktop/wacrm/src/app/api/whatsapp/templates/submit/route.ts): تفرع حفظ القوالب ديناميكياً لـ Evolution.
+4. [route.ts (individual template API)](file:///c:/Users/Mustafa/Desktop/wacrm/src/app/api/whatsapp/templates/%5Bid%5D/route.ts): دعم تعديل وحذف قوالب Evolution محلياً.
+5. [route.ts (admin review API)](file:///c:/Users/Mustafa/Desktop/wacrm/src/app/api/admin/templates/%5Bid%5D/review/route.ts): مسار الموافقة والرفض للمشرفين.
+6. [route.ts (send API)](file:///c:/Users/Mustafa/Desktop/wacrm/src/app/api/whatsapp/send/route.ts): دعم دمج المتغيرات عند الإرسال المباشر.
+7. [route.ts (broadcast API)](file:///c:/Users/Mustafa/Desktop/wacrm/src/app/api/whatsapp/broadcast/route.ts): دعم دمج المتغيرات عند البث الجماعي.
+8. [template-manager.tsx](file:///c:/Users/Mustafa/Desktop/wacrm/src/components/settings/template-manager.tsx): تحديث واجهة إدارة القوالب وتغيير الأزرار والتعديل محلياً.
+9. [page.tsx (admin settings)](file:///c:/Users/Mustafa/Desktop/wacrm/src/app/admin/settings/page.tsx): إضافة خيار تفعيل الرقابة الإدارية في إعدادات المنصة.
+10. [page.tsx (admin review view)](file:///c:/Users/Mustafa/Desktop/wacrm/src/app/admin/pending-templates/page.tsx): واجهة مراجعة القوالب المعلقة للمشرفين.
+11. [admin-sidebar.tsx](file:///c:/Users/Mustafa/Desktop/wacrm/src/components/layout/admin-sidebar.tsx): إضافة خيار "القوالب المعلقة" في القائمة الجانبية.
+12. [types/index.ts](file:///c:/Users/Mustafa/Desktop/wacrm/src/types/index.ts): إدراج حالة `PENDING_REVIEW` الجديدة.
+13. [template-status.ts](file:///c:/Users/Mustafa/Desktop/wacrm/src/lib/template-status.ts): إدراج إعدادات اللون والاسم لشارة `PENDING_REVIEW`.

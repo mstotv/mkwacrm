@@ -325,18 +325,17 @@ export default function AdminSubscriptionsPage() {
           {plans.map((plan) => (
             <div
               key={plan.id}
-              className={`relative rounded-2xl border p-6 flex flex-col justify-between transition ${
-                plan.name === 'pro'
+              className={`relative rounded-2xl border p-6 flex flex-col justify-between transition ${plan.name === 'pro'
                   ? 'border-violet-500/50 bg-gradient-to-b from-violet-900/10 to-slate-900/90 shadow-xl'
                   : 'border-slate-800 bg-slate-900/40'
-              } ${!plan.is_active ? 'opacity-50' : ''}`}
+                } ${!plan.is_active ? 'opacity-50' : ''}`}
             >
               {plan.name === 'pro' && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-violet-600 px-3 py-0.5 text-xs font-bold text-white shadow-md">
                   الأكثر شعبية
                 </div>
               )}
-              
+
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-bold text-white">{plan.display_name}</h3>
@@ -393,11 +392,10 @@ export default function AdminSubscriptionsPage() {
                 </button>
                 <button
                   onClick={() => handleToggleActive(plan)}
-                  className={`flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                    plan.is_active
+                  className={`flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${plan.is_active
                       ? 'bg-emerald-600/10 text-emerald-400 border border-emerald-600/20'
                       : 'bg-red-600/10 text-red-500 border border-red-600/20'
-                  }`}
+                    }`}
                   title={plan.is_active ? 'تعطيل الخطة' : 'تفعيل الخطة'}
                 >
                   <Check className="h-3.5 w-3.5" />
@@ -466,7 +464,7 @@ export default function AdminSubscriptionsPage() {
             <h3 className="text-lg font-bold mb-4">
               {editingPlan ? `تعديل باقة: ${editingPlan.display_name}` : 'إضافة باقة اشتراك SaaS جديدة'}
             </h3>
-            
+
             <form onSubmit={handleSavePlan} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -522,7 +520,7 @@ export default function AdminSubscriptionsPage() {
               {/* Plan limits */}
               <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4 space-y-3">
                 <h4 className="text-xs font-bold text-violet-400 uppercase tracking-wide">حدود الاستخدام للخطة (-1 يعني غير محدود)</h4>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">عدد جهات الاتصال (Contacts Limit)</label>

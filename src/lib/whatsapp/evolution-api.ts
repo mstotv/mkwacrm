@@ -295,14 +295,60 @@ export async function sendEvolutionTextMessage(
     },
     body: JSON.stringify({
       number: cleanNumber,
+      text,
       options: { delay: 500, presence: 'composing', linkPreview: false },
-      textMessage: { text },
     }),
   });
 
   const data = await response.json();
   if (!response.ok) {
     throw new Error(extractMessage(data.message || data.error) || 'Failed to send Evolution message');
+  }
+
+  return { messageId: data.key?.id || data.messageId || `evo-${Date.now()}` };
+}
+
+export async function sendEvolutionMediaMessage(
+  instanceName: string,
+  token: string,
+  to: string,
+  mediaUrl: string,
+  mediaType: 'image' | 'video' | 'document',
+  customUrl?: string | null,
+  caption?: string
+): Promise<{ messageId: string }> {
+  const url = `${getApiUrl(customUrl)}/message/sendMedia/${instanceName}`;
+  const authKey = resolveApiKey(token);
+  const cleanNumber = to.replace(/[^\d]/g, '');
+
+  const payload: any = {
+    number: cleanNumber,
+    mediatype: mediaType,
+    media: mediaUrl,
+  };
+
+  if (caption) {
+    payload.caption = caption;
+  }
+
+  if (mediaType === 'document') {
+    const urlParts = mediaUrl.split('/');
+    const fileName = urlParts[urlParts.length - 1]?.split('?')[0] || 'document.pdf';
+    payload.fileName = fileName;
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': authKey,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(extractMessage(data.message || data.error) || 'Failed to send Evolution media');
   }
 
   return { messageId: data.key?.id || data.messageId || `evo-${Date.now()}` };
