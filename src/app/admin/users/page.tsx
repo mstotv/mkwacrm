@@ -129,8 +129,7 @@ export default function AdminUsersPage() {
 
       // Login as target user via OTP magiclink verify
       const { error: loginError } = await supabase.auth.verifyOtp({
-        email: resData.email,
-        token: resData.token_hash,
+        token_hash: resData.token_hash,
         type: 'magiclink'
       });
 

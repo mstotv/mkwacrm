@@ -37,8 +37,12 @@ export function TelegramLoginWidget({
     // Remove any previous widget instances
     containerRef.current.innerHTML = '';
 
-    // Standardize bot username by removing the leading @ if present
-    const cleanBotUsername = botUsername.replace(/^@/, '');
+    // Standardize bot username by trimming spaces, removing quotes, and the leading @ if present
+    const cleanBotUsername = botUsername
+      .trim()
+      .replace(/^['"]|['"]$/g, '')
+      .replace(/^@/, '')
+      .trim();
 
     // Set callback in global scope
     const callbackName = `onTelegramAuth_${Math.random().toString(36).substring(2, 9)}`;

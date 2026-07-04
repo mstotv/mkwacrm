@@ -67,8 +67,7 @@ function SignupPageInner() {
 
       // Complete Supabase OTP Magiclink verification
       const { error: verifyError } = await supabase.auth.verifyOtp({
-        email: resData.email,
-        token: resData.token_hash,
+        token_hash: resData.token_hash,
         type: 'magiclink'
       });
 
