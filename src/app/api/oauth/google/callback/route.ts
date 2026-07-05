@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getGoogleSheetsConfig, saveGoogleSheetsConfig } from '@/lib/whatsapp/google-sheets'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url)
