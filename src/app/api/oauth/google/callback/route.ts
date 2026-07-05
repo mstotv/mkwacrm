@@ -18,7 +18,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Google OAuth credentials missing' }, { status: 500 })
     }
 
-    const redirectUri = `${url.protocol}//${url.host}/api/oauth/google/callback`
+    const redirectUri = `${process.env.NEXT_PUBLIC_SITE_URL}/api/oauth/google/callback`
 
     // Exchange code for tokens
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {

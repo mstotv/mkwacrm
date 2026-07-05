@@ -14,8 +14,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'GOOGLE_CLIENT_ID is not configured in server environment' }, { status: 500 })
     }
 
-    const url = new URL(request.url)
-    const redirectUri = `${url.protocol}//${url.host}/api/oauth/google/callback`
+    const redirectUri = `${process.env.NEXT_PUBLIC_SITE_URL}/api/oauth/google/callback`
 
     const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` + 
       new URLSearchParams({
