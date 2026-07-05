@@ -18,14 +18,16 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata() {
-  const defaultSettings = { site_name: 'WaCRM' };
+  const defaultSettings = { site_name: 'WaCRM', logo_url: '' };
   let settings = defaultSettings;
   try {
     const supabase = await createClient();
-    const { data } = await supabase.from('site_settings').select('site_name').maybeSingle();
+    const { data } = await supabase.from('site_settings').select('site_name, logo_url').maybeSingle();
     if (data) {
-      settings = data;
+      settings = data as any;
     }
   } catch (e) {}
 
@@ -40,7 +42,7 @@ export async function generateMetadata() {
       follow: false,
     },
     icons: {
-      icon: [{ url: "/icon" }],
+      icon: [{ url: settings.logo_url || "/icon" }],
     },
     formatDetection: {
       email: false,

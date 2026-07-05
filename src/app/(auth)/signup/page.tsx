@@ -192,7 +192,7 @@ function SignupPageInner() {
           <CardDescription className="text-slate-400">
             {inviteToken
               ? "Verify your email, then accept the invitation to join your team."
-              : "Get started with MitaKurd for WhatsApp Auto"}
+              : `Get started with ${settings.site_name} for WhatsApp Auto`}
           </CardDescription>
         </CardHeader>
         <CardContent>
