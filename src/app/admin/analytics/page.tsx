@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useTheme } from '@/hooks/use-theme';
 import {
   BarChart,
   Bar,
@@ -38,6 +39,8 @@ interface AnalyticsData {
 }
 
 export default function AdminAnalyticsPage() {
+  const { colorMode } = useTheme();
+  const isDark = colorMode === 'dark';
   const [data, setData] = useState<AnalyticsData>({
     totalAccounts: 0,
     activePaidSub: 0,
@@ -218,11 +221,11 @@ export default function AdminAnalyticsPage() {
   }
 
   return (
-    <div className="p-8 space-y-8 text-white">
+    <div className="p-8 space-y-8 text-slate-900 dark:text-white">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">التحليلات وإحصائيات SaaS</h1>
-        <p className="mt-1 text-sm text-slate-400">تقارير نمو المنصة، المشتركين، واستخدام البث والرسائل</p>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">تقارير نمو المنصة، المشتركين، واستخدام البث والرسائل</p>
       </div>
 
       {/* KPI Cards Grid */}
@@ -237,8 +240,8 @@ export default function AdminAnalyticsPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{kpi.label}</p>
-                  <p className="mt-2 text-2xl font-extrabold text-white">{kpi.value}</p>
-                  <p className="mt-1 text-[10px] text-slate-400">{kpi.desc}</p>
+                  <p className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white">{kpi.value}</p>
+                  <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">{kpi.desc}</p>
                 </div>
                 <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${kpi.color}`}>
                   <Icon className="h-4.5 w-4.5" />
@@ -254,7 +257,7 @@ export default function AdminAnalyticsPage() {
         {/* Growth line chart */}
         <div className="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
           <div>
-            <h3 className="text-sm font-bold flex items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-violet-400" /> نمو الحسابات المسجلة
             </h3>
             <p className="text-xs text-slate-500 mt-1">تراكم الحسابات الجديدة شهرياً</p>
@@ -263,11 +266,15 @@ export default function AdminAnalyticsPage() {
           <div className="h-80 w-full text-xs">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={data.monthlyGrowth}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="month" stroke="#64748b" />
-                <YAxis stroke="#64748b" />
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#1e293b' : '#e2e8f0'} />
+                <XAxis dataKey="month" stroke={isDark ? '#64748b' : '#94a3b8'} />
+                <YAxis stroke={isDark ? '#64748b' : '#94a3b8'} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc' }}
+                  contentStyle={
+                    isDark
+                      ? { backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc' }
+                      : { backgroundColor: '#ffffff', borderColor: '#e2e8f0', color: '#0f172a' }
+                  }
                 />
                 <Line
                   type="monotone"
@@ -284,7 +291,7 @@ export default function AdminAnalyticsPage() {
         {/* Plan Breakdown Pie Chart */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
           <div>
-            <h3 className="text-sm font-bold">توزيع باقات الاشتراكات</h3>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">توزيع باقات الاشتراكات</h3>
             <p className="text-xs text-slate-500 mt-1">نسبة الحسابات المشتركة بكل خطة</p>
           </div>
 
@@ -306,7 +313,11 @@ export default function AdminAnalyticsPage() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc' }}
+                    contentStyle={
+                      isDark
+                        ? { backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc' }
+                        : { backgroundColor: '#ffffff', borderColor: '#e2e8f0', color: '#0f172a' }
+                    }
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -332,7 +343,7 @@ export default function AdminAnalyticsPage() {
       {/* Usage statistics chart bar */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-4">
         <div>
-          <h3 className="text-sm font-bold flex items-center gap-2">مقارنة النشاط</h3>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">مقارنة النشاط</h3>
           <p className="text-xs text-slate-500 mt-1">النشاط العام للرسائل وجهات الاتصال</p>
         </div>
 
@@ -344,11 +355,15 @@ export default function AdminAnalyticsPage() {
                 { name: 'الرسائل المرسلة والمستقبلة', count: data.totalMessages },
               ]}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="name" stroke="#64748b" />
-              <YAxis stroke="#64748b" />
+              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#1e293b' : '#e2e8f0'} />
+              <XAxis dataKey="name" stroke={isDark ? '#64748b' : '#94a3b8'} />
+              <YAxis stroke={isDark ? '#64748b' : '#94a3b8'} />
               <Tooltip
-                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc' }}
+                contentStyle={
+                  isDark
+                    ? { backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc' }
+                    : { backgroundColor: '#ffffff', borderColor: '#e2e8f0', color: '#0f172a' }
+                }
               />
               <Bar dataKey="count" fill="#3b82f6" radius={[8, 8, 0, 0]}>
                 <Cell fill="#a78bfa" />

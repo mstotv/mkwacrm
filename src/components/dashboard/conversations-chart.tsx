@@ -6,6 +6,7 @@ import type { ConversationsSeriesPoint } from '@/lib/dashboard/types'
 import { EmptyState } from './empty-state'
 import { Skeleton } from './skeleton'
 import { cn } from '@/lib/utils'
+import { useTheme } from '@/hooks/use-theme'
 
 type RangeDays = 7 | 30 | 90
 
@@ -49,7 +50,7 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
     <section className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900">
       <header className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
         <div>
-          <h2 className="text-sm font-semibold text-white">Conversations Over Time</h2>
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Conversations Over Time</h2>
           <p className="mt-0.5 text-xs text-slate-500">Daily message volume by direction</p>
         </div>
         <div className="flex items-center gap-1 rounded-lg bg-slate-800/60 p-1">
@@ -61,8 +62,8 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
               className={cn(
                 'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
                 range === r
-                  ? 'bg-slate-700 text-white'
-                  : 'text-slate-400 hover:text-white',
+                  ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white',
               )}
             >
               {r} days
@@ -106,6 +107,8 @@ function LineSvg({
   maxY: number
   ticks: number[]
 }) {
+  const { colorMode } = useTheme()
+  const isDark = colorMode === 'dark'
   // Hover state: both the snapped index AND the tooltip's pixel
   // offset inside the wrapper div. They're stored together so the
   // tooltip positions against the chart's actual rendered pixels,
@@ -207,7 +210,7 @@ function LineSvg({
                 x2={VB_W - PADDING.right}
                 y1={y}
                 y2={y}
-                stroke="rgb(30 41 59)"
+                className="stroke-slate-200 dark:stroke-slate-800"
                 strokeDasharray="3 3"
               />
               <text
@@ -265,7 +268,7 @@ function LineSvg({
               x2={hoverX}
               y1={PADDING.top}
               y2={PADDING.top + chartH}
-              stroke="rgb(71 85 105)"
+              className="stroke-slate-300 dark:stroke-slate-600"
               strokeDasharray="3 3"
             />
             <circle cx={hoverX} cy={yFor(data[hover.idx].incoming)} r={3.5} fill="#3b82f6" />
@@ -280,12 +283,12 @@ function LineSvg({
           letterboxed viewBox percentage. */}
       {hovered && hover !== null && (
         <div
-          className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-[11px] shadow-lg"
+          className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-slate-250 dark:border-slate-800 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-[11px] shadow-lg"
           style={{ left: `${hover.tooltipLeftPx}px` }}
         >
-          <div className="font-medium text-white">{longDayLabel(hovered.day)}</div>
+          <div className="font-medium text-slate-900 dark:text-white">{longDayLabel(hovered.day)}</div>
           <div className="mt-1 flex flex-col gap-0.5">
-            <span className="flex items-center gap-1.5 text-blue-300">
+            <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-300">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />
               {hovered.incoming} incoming
             </span>

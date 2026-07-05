@@ -17,7 +17,7 @@ export function PipelineDonut({ data, loading, currency }: PipelineDonutProps) {
   return (
     <section className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900">
       <header className="border-b border-slate-800 px-5 py-4">
-        <h2 className="text-sm font-semibold text-white">Pipeline Value</h2>
+        <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Pipeline Value</h2>
         <p className="mt-0.5 text-xs text-slate-500">
           Open deals by stage
         </p>
@@ -98,7 +98,7 @@ function Donut({ data, currency }: { data: PipelineDonutData; currency: string }
     <div className="flex items-center justify-center">
       <svg viewBox={`0 0 ${size} ${size}`} className="h-48 w-48" role="img" aria-label="Pipeline value by stage">
         {/* background ring */}
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgb(30 41 59)" strokeWidth={ringWidth} />
+        <circle cx={cx} cy={cy} r={r} fill="none" className="stroke-slate-200 dark:stroke-slate-800" strokeWidth={ringWidth} />
         {segments.map((seg) => (
           <path
             key={seg.id}
@@ -114,7 +114,7 @@ function Donut({ data, currency }: { data: PipelineDonutData; currency: string }
           x={cx}
           y={cy - 6}
           textAnchor="middle"
-          className="fill-slate-500 text-[11px]"
+          className="fill-slate-400 dark:fill-slate-500 text-[11px]"
         >
           Total
         </text>
@@ -122,7 +122,7 @@ function Donut({ data, currency }: { data: PipelineDonutData; currency: string }
           x={cx}
           y={cy + 14}
           textAnchor="middle"
-          className="fill-white text-[18px] font-semibold tabular-nums"
+          className="fill-slate-900 dark:fill-white text-[18px] font-semibold tabular-nums"
         >
           {formatCurrencyShort(data.totalValue, currency)}
         </text>

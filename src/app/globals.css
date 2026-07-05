@@ -436,6 +436,17 @@ html[data-mode="light"] {
   --tw-light-slate-100: #1a2040;
 }
 
+/* Explicit high-contrast overrides for status text colors in light mode */
+html[data-mode="light"] .text-amber-300 { color: #b45309 !important; }
+html[data-mode="light"] .text-amber-400 { color: #d97706 !important; }
+html[data-mode="light"] .text-blue-300 { color: #1d4ed8 !important; }
+html[data-mode="light"] .text-blue-400 { color: #2563eb !important; }
+html[data-mode="light"] .text-rose-300 { color: #be123c !important; }
+html[data-mode="light"] .text-rose-400 { color: #e11d48 !important; }
+html[data-mode="light"] .text-emerald-300 { color: #047857 !important; }
+html[data-mode="light"] .text-emerald-400 { color: #059669 !important; }
+
+
 /* Override Tailwind's slate colors in light mode */
 html[data-mode="light"] .bg-slate-950 { background-color: var(--tw-light-slate-950) !important; }
 html[data-mode="light"] .bg-slate-900 { background-color: var(--tw-light-slate-900) !important; }
