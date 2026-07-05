@@ -1,4 +1,5 @@
 import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
+import { sendEvolutionTextMessage } from '@/lib/whatsapp/evolution-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
   sanitizePhoneForMeta,
@@ -9,7 +10,7 @@ import {
 import { supabaseAdmin } from './admin-client'
 
 // ------------------------------------------------------------
-// Automation-side Meta sender.
+// Automation-side sender (Meta Cloud API + Evolution API).
 //
 // Mirrors the logic in src/app/api/whatsapp/send/route.ts but uses
 // the service-role client (engine has no cookies) and accepts the
@@ -17,6 +18,12 @@ import { supabaseAdmin } from './admin-client'
 // on hand. Kept here (rather than refactoring the user-facing send
 // route) to avoid risk to the working manual-send path — they can
 // converge in a later refactor.
+//
+// Connection-type routing: the whatsapp_config row carries a
+// `connection_type` column ('meta' | 'evolution'). When set to
+// 'evolution', sends go through the Evolution REST API instead of
+// Meta's Cloud API — same pattern used in /api/whatsapp/send and
+// the auto-responder.
 // ------------------------------------------------------------
 
 interface SendTextArgs {
@@ -44,20 +51,20 @@ interface SendTemplateArgs {
 }
 
 export async function engineSendText(args: SendTextArgs): Promise<{ whatsapp_message_id: string }> {
-  return sendViaMeta({ ...args, kind: 'text' })
+  return engineSend({ ...args, kind: 'text' })
 }
 
 export async function engineSendTemplate(
   args: SendTemplateArgs,
 ): Promise<{ whatsapp_message_id: string }> {
-  return sendViaMeta({ ...args, kind: 'template' })
+  return engineSend({ ...args, kind: 'template' })
 }
 
 type SendInput =
   | (SendTextArgs & { kind: 'text' })
   | (SendTemplateArgs & { kind: 'template' })
 
-async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: string }> {
+async function engineSend(input: SendInput): Promise<{ whatsapp_message_id: string }> {
   const db = supabaseAdmin()
 
   // Scope the contact + config lookups by account_id, not user_id.
@@ -93,8 +100,44 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   }
 
   const accessToken = decrypt(config.access_token)
+  const isEvolution = config.connection_type === 'evolution'
 
+  // ── Build the per-phone attempt function ──────────────────────
+  // Evolution and Meta have different send APIs; the attempt closure
+  // hides the difference so the retry loop below is identical.
   const attempt = async (phone: string): Promise<string> => {
+    if (isEvolution) {
+      // Evolution API path — send everything as plain text.
+      // Templates are rendered as text because Evolution uses
+      // regular WhatsApp (Baileys), not Meta's Business API, so
+      // there is no concept of pre-approved template sends.
+      let textToSend = ''
+      if (input.kind === 'template') {
+        // Build a human-readable text from the template name +
+        // any provided params, since we can't send a Meta-style
+        // template via Evolution.
+        const paramList = input.params?.length
+          ? ` (${input.params.join(', ')})`
+          : ''
+        textToSend = `[Template: ${input.templateName}]${paramList}`
+        console.log(
+          '[automations] Evolution: template send_template rendered as text:',
+          input.templateName,
+        )
+      } else {
+        textToSend = input.text
+      }
+      const r = await sendEvolutionTextMessage(
+        config.phone_number_id, // Evolution instance name
+        accessToken,            // Evolution instance token
+        phone,
+        textToSend,
+        config.evolution_api_url, // Custom Evolution API URL
+      )
+      return r.messageId
+    }
+
+    // Meta Cloud API path — original behaviour, unchanged.
     if (input.kind === 'template') {
       const r = await sendTemplateMessage({
         phoneNumberId: config.phone_number_id,
@@ -141,11 +184,19 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   }
 
   // Persist the sent message so it appears in the inbox with a real
-  // Meta message id. sender_type='bot' distinguishes automation sends
+  // message id. sender_type='bot' distinguishes automation sends
   // from manual agent sends.
-  const content_type = input.kind === 'template' ? 'template' : 'text'
-  const content_text = input.kind === 'text' ? input.text : null
-  const template_name = input.kind === 'template' ? input.templateName : null
+  const content_type =
+    input.kind === 'template' && !isEvolution ? 'template' : 'text'
+  const content_text =
+    input.kind === 'text'
+      ? input.text
+      : isEvolution
+        // Evolution templates are sent as text, so persist the rendered text
+        ? `[Template: ${input.templateName}]`
+        : null
+  const template_name =
+    input.kind === 'template' ? input.templateName : null
 
   const { error: msgErr } = await db.from('messages').insert({
     conversation_id: input.conversationId,
@@ -157,9 +208,9 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
     status: 'sent',
   })
   if (msgErr) {
-    // Meta already has the message; record the DB error but don't pretend
-    // the send failed. The engine wraps this in a log line.
-    throw new Error(`sent to Meta but DB insert failed: ${msgErr.message}`)
+    // The message was already sent; record the DB error but don't
+    // pretend the send failed. The engine wraps this in a log line.
+    throw new Error(`sent but DB insert failed: ${msgErr.message}`)
   }
 
   await db
