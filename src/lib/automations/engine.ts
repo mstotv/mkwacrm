@@ -628,6 +628,8 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       // 4) Query AI model
       let replyText = ''
       if (aiConfig.provider === 'openai') {
+        // Future recommendation: Consider migrating to Responses API (v1/responses)
+        // for reduced cost (40-80% savings) and optimized performance with modern models.
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
