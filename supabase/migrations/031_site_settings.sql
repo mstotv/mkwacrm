@@ -4,7 +4,7 @@
 
 CREATE TABLE IF NOT EXISTS site_settings (
   id UUID PRIMARY KEY DEFAULT 'd3b07384-d113-48b6-b514-41d9c15e85c1'::uuid,
-  site_name TEXT NOT NULL DEFAULT 'WaCRM',
+  site_name TEXT NOT NULL DEFAULT 'MK Whats',
   logo_url TEXT NOT NULL DEFAULT '',
   primary_color TEXT NOT NULL DEFAULT '#8B5CF6',
   secondary_color TEXT NOT NULL DEFAULT '#1e293b',
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS site_settings (
 
 -- Seed initial settings row if not present
 INSERT INTO site_settings (id, site_name, logo_url, primary_color, secondary_color, accent_color)
-VALUES ('d3b07384-d113-48b6-b514-41d9c15e85c1'::uuid, 'WaCRM', '', '#8B5CF6', '#1e293b', '#0f172a')
+VALUES ('d3b07384-d113-48b6-b514-41d9c15e85c1'::uuid, 'MK Whats', '', '#8B5CF6', '#1e293b', '#0f172a')
 ON CONFLICT (id) DO NOTHING;
 
 -- Enable RLS
