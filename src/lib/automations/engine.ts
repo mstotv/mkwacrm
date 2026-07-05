@@ -554,7 +554,20 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       const cfg = step.step_config as AiReplyStepConfig
       const conversationId = await resolveConversationId(args)
 
-      // 1) Verify active paid subscription (status = active AND name !== free AND price_monthly > 0)
+      // 1) Verify active paid subscription or admin status
+      const { data: profile, error: profileErr } = await db
+        .from('profiles')
+        .select('platform_role')
+        .eq('user_id', args.automation.user_id)
+        .maybeSingle()
+
+      if (profileErr) {
+        console.error('[automations] Failed to check admin status:', profileErr)
+      }
+
+      const platformRole = profile?.platform_role
+      const isAdmin = platformRole === 'super_admin' || platformRole === 'assistant_admin'
+
       const { data: subscription, error: subErr } = await db
         .from('account_subscriptions')
         .select(`
@@ -571,8 +584,9 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       const planName = (subscription as any)?.plan?.name;
       const planPrice = Number((subscription as any)?.plan?.price_monthly ?? 0);
       const isPaid = subscription?.status === 'active' && planName !== 'free' && planPrice > 0;
+      const hasAccess = isAdmin || isPaid;
 
-      if (!isPaid) {
+      if (!hasAccess) {
         throw new Error('AI Reply action is only available for active paid subscriptions.')
       }
 

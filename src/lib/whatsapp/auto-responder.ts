@@ -74,7 +74,20 @@ export async function runAutoResponder(args: AutoResponderArgs) {
       }
     }
 
-    // 2) Second check: AI Auto Reply (OpenAI & DeepSeek) - only for Pro subscribers
+    // 2) Second check: AI Auto Reply (OpenAI & DeepSeek) - only for Pro subscribers (admins bypass this)
+    const { data: profile, error: profileErr } = await adminSupabase
+      .from('profiles')
+      .select('platform_role')
+      .eq('user_id', configOwnerUserId)
+      .maybeSingle();
+
+    if (profileErr) {
+      console.error('[AutoResponder] Failed to check admin status:', profileErr);
+    }
+
+    const platformRole = profile?.platform_role;
+    const isAdmin = platformRole === 'super_admin' || platformRole === 'assistant_admin';
+
     const { data: subscription } = await adminSupabase
       .from('account_subscriptions')
       .select(`
@@ -84,7 +97,7 @@ export async function runAutoResponder(args: AutoResponderArgs) {
       .eq('account_id', accountId)
       .maybeSingle();
 
-    const isPro = (subscription as any)?.status === 'active' && (subscription as any)?.plan?.name === 'pro';
+    const isPro = isAdmin || ((subscription as any)?.status === 'active' && (subscription as any)?.plan?.name === 'pro');
 
     if (isPro) {
       const { data: aiConfig } = await adminSupabase
