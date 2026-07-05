@@ -30,6 +30,50 @@ const PADDING = { top: 16, right: 16, bottom: 28, left: 40 }
 
 export function ConversationsChart({ series, loading, range, onRangeChange }: ConversationsChartProps) {
   const data = series[range]
+  const { theme } = useTheme()
+
+  const chartColors = useMemo(() => {
+    switch (theme) {
+      case 'cobalt':
+        return {
+          incoming: '#3b82f6',
+          outgoing: '#2563eb',
+          textIncoming: 'text-blue-600 dark:text-blue-400',
+          textOutgoing: 'text-blue-700 dark:text-blue-500',
+          dotIncoming: 'bg-blue-500',
+          dotOutgoing: 'bg-blue-700',
+        }
+      case 'amber':
+        return {
+          incoming: '#f59e0b',
+          outgoing: '#d97706',
+          textIncoming: 'text-amber-600 dark:text-amber-400',
+          textOutgoing: 'text-amber-700 dark:text-amber-500',
+          dotIncoming: 'bg-amber-500',
+          dotOutgoing: 'bg-amber-700',
+        }
+      case 'rose':
+        return {
+          incoming: '#f43f5e',
+          outgoing: '#e11d48',
+          textIncoming: 'text-rose-600 dark:text-rose-400',
+          textOutgoing: 'text-rose-700 dark:text-rose-500',
+          dotIncoming: 'bg-rose-500',
+          dotOutgoing: 'bg-rose-700',
+        }
+      case 'emerald':
+      case 'violet':
+      default:
+        return {
+          incoming: '#10b981',
+          outgoing: '#16a34a',
+          textIncoming: 'text-emerald-600 dark:text-emerald-400',
+          textOutgoing: 'text-green-600 dark:text-green-400',
+          dotIncoming: 'bg-emerald-500',
+          dotOutgoing: 'bg-green-500',
+        }
+    }
+  }, [theme])
 
   // Memoise the max so per-day hover math doesn't recompute it.
   const { maxY, niceTicks } = useMemo(() => {
@@ -82,13 +126,13 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
             hint="Send or receive messages to start populating this chart."
           />
         ) : (
-          <LineSvg data={data} maxY={maxY} ticks={niceTicks} />
+          <LineSvg data={data} maxY={maxY} ticks={niceTicks} chartColors={chartColors} />
         )}
       </div>
 
       <footer className="flex items-center gap-4 border-t border-slate-800 px-5 py-3 text-xs text-slate-400">
-        <LegendDot color="#10b981" label="Incoming" />
-        <LegendDot color="#16a34a" label="Outgoing" />
+        <LegendDot color={chartColors.incoming} label="Incoming" />
+        <LegendDot color={chartColors.outgoing} label="Outgoing" />
       </footer>
     </section>
   )
@@ -102,10 +146,12 @@ function LineSvg({
   data,
   maxY,
   ticks,
+  chartColors,
 }: {
   data: ConversationsSeriesPoint[]
   maxY: number
   ticks: number[]
+  chartColors: any
 }) {
   const { colorMode } = useTheme()
   const isDark = colorMode === 'dark'
@@ -241,20 +287,20 @@ function LineSvg({
           ) : null,
         )}
 
-        {/* Outgoing polyline (green) */}
+        {/* Outgoing polyline */}
         <path
           d={outgoingPath}
           fill="none"
-          stroke="#16a34a"
+          stroke={chartColors.outgoing}
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        {/* Incoming polyline (emerald) */}
+        {/* Incoming polyline */}
         <path
           d={incomingPath}
           fill="none"
-          stroke="#10b981"
+          stroke={chartColors.incoming}
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -271,16 +317,13 @@ function LineSvg({
               className="stroke-slate-300 dark:stroke-slate-600"
               strokeDasharray="3 3"
             />
-            <circle cx={hoverX} cy={yFor(data[hover.idx].incoming)} r={3.5} fill="#10b981" />
-            <circle cx={hoverX} cy={yFor(data[hover.idx].outgoing)} r={3.5} fill="#16a34a" />
+            <circle cx={hoverX} cy={yFor(data[hover.idx].incoming)} r={3.5} fill={chartColors.incoming} />
+            <circle cx={hoverX} cy={yFor(data[hover.idx].outgoing)} r={3.5} fill={chartColors.outgoing} />
           </g>
         )}
       </svg>
 
-      {/* Tooltip — absolute-positioned div so we get crisp text, not
-          SVG-rendered text. The left offset comes from the CTM-based
-          mapping so it lines up with the actual crosshair pixel, not a
-          letterboxed viewBox percentage. */}
+      {/* Tooltip */}
       {hovered && hover !== null && (
         <div
           className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-slate-250 dark:border-slate-800 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-[11px] shadow-lg"
@@ -288,12 +331,12 @@ function LineSvg({
         >
           <div className="font-medium text-slate-900 dark:text-white">{longDayLabel(hovered.day)}</div>
           <div className="mt-1 flex flex-col gap-0.5">
-            <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className={cn("flex items-center gap-1.5", chartColors.textIncoming)}>
+              <span className={cn("inline-block h-1.5 w-1.5 rounded-full", chartColors.dotIncoming)} />
               {hovered.incoming} incoming
             </span>
-            <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
+            <span className={cn("flex items-center gap-1.5", chartColors.textOutgoing)}>
+              <span className={cn("inline-block h-1.5 w-1.5 rounded-full", chartColors.dotOutgoing)} />
               {hovered.outgoing} outgoing
             </span>
           </div>

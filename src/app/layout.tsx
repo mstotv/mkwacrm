@@ -135,7 +135,8 @@ export default async function RootLayout({
         />
         {/* Inject dynamic colors */}
         <style dangerouslySetInnerHTML={{ __html: `
-          :root {
+          html:not([data-theme]),
+          html[data-theme="violet"] {
             --primary: ${settings.primary_color} !important;
             --primary-hover: ${settings.primary_color}cc !important;
             --ring: ${settings.primary_color} !important;
