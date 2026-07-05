@@ -446,6 +446,33 @@ html[data-mode="light"] .text-rose-400 { color: #e11d48 !important; }
 html[data-mode="light"] .text-emerald-300 { color: #047857 !important; }
 html[data-mode="light"] .text-emerald-400 { color: #059669 !important; }
 
+/* Ensure light text colors switch to dark slate in light mode */
+html[data-mode="light"] .text-slate-200 { color: var(--tw-light-slate-200) !important; }
+html[data-mode="light"] .text-slate-100 { color: var(--tw-light-slate-100) !important; }
+html[data-mode="light"] .text-slate-50 { color: var(--tw-light-slate-100) !important; }
+
+/* Keep white text white on solid color backgrounds in light mode */
+html[data-mode="light"] button.text-white,
+html[data-mode="light"] a.text-white[class*="bg-"],
+html[data-mode="light"] div.text-white[class*="bg-"],
+html[data-mode="light"] [class*="bg-primary"] .text-white,
+html[data-mode="light"] [class*="bg-primary"].text-white,
+html[data-mode="light"] [class*="bg-emerald"] .text-white,
+html[data-mode="light"] [class*="bg-emerald"].text-white,
+html[data-mode="light"] [class*="bg-green"] .text-white,
+html[data-mode="light"] [class*="bg-green"].text-white,
+html[data-mode="light"] [class*="bg-red"] .text-white,
+html[data-mode="light"] [class*="bg-red"].text-white,
+html[data-mode="light"] [class*="bg-rose"] .text-white,
+html[data-mode="light"] [class*="bg-rose"].text-white,
+html[data-mode="light"] [class*="bg-destructive"] .text-white,
+html[data-mode="light"] [class*="bg-destructive"].text-white,
+html[data-mode="light"] .bg-primary .text-white,
+html[data-mode="light"] .bg-primary.text-white,
+html[data-mode="light"] .text-primary-foreground {
+  color: #ffffff !important;
+}
+
 
 /* Override Tailwind's slate colors in light mode */
 html[data-mode="light"] .bg-slate-950 { background-color: var(--tw-light-slate-950) !important; }
