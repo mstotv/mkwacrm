@@ -195,7 +195,7 @@ const translations = {
         },
         {
           title: 'CRM متقدم',
-          desc: 'استيراد/تصدير جهات الاتصال، تقييم VIP، حقول مخصصة، وسجل تفاعل كامل لكل عميل.',
+          desc: 'استيراد/تصدير جهات الاتصال، تقييم VIP، حقول مخصصة، وسجل تفاعل كامل لكل عمال.',
         },
         {
           title: 'حملات البث',
@@ -412,26 +412,30 @@ export default function LandingPage() {
   }, [lang, dbSettings, dbPlans, baseT])
 
   return (
-    <div dir={isRtl ? 'rtl' : 'ltr'} className="landing-root" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="landing-root">
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800;900&display=swap');
+
         /* ========== LANDING PAGE CSS ========== */
         .landing-root {
-          --ld-primary: ${dbSettings?.theme_colors?.primary || 'oklch(0.526 0.247 293)'};
-          --ld-primary-hover: ${dbSettings?.theme_colors?.primary_hover || 'oklch(0.6 0.22 293)'};
-          --ld-bg-dark: ${dbSettings?.theme_colors?.background || 'oklch(0.08 0.01 260)'};
-          --ld-bg-card: ${dbSettings?.theme_colors?.card || 'oklch(0.13 0.015 260)'};
-          --ld-bg-card-hover: ${dbSettings?.theme_colors?.card_hover || 'oklch(0.16 0.015 260)'};
-          --ld-text: ${dbSettings?.theme_colors?.text || 'oklch(0.95 0 0)'};
-          --ld-text-muted: oklch(0.6 0.01 260);
-          --ld-border: oklch(0.22 0.01 260);
-          --ld-gradient-1: ${dbSettings?.theme_colors?.primary || 'oklch(0.526 0.247 293)'};
-          --ld-gradient-2: ${dbSettings?.theme_colors?.secondary || 'oklch(0.55 0.2 330)'};
-          --ld-gradient-3: oklch(0.6 0.18 200);
+          --ld-primary: ${dbSettings?.theme_colors?.primary || '#10b981'};
+          --ld-primary-hover: ${dbSettings?.theme_colors?.primary_hover || '#059669'};
+          --ld-bg: #ffffff;
+          --ld-bg-subtle: #f8fafc;
+          --ld-card: #ffffff;
+          --ld-card-hover: #ffffff;
+          --ld-text: #0f172a;
+          --ld-text-muted: #475569;
+          --ld-border: #e2e8f0;
+          --ld-gradient-1: ${dbSettings?.theme_colors?.primary || '#10b981'};
+          --ld-gradient-2: ${dbSettings?.theme_colors?.secondary || '#0ea5e9'};
+          --ld-gradient-3: #6366f1;
 
-          background: var(--ld-bg-dark);
+          background: var(--ld-bg);
           color: var(--ld-text);
           min-height: 100vh;
           overflow-x: hidden;
+          font-family: 'Inter', 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         }
 
         /* ===== NAV ===== */
@@ -441,18 +445,20 @@ export default function LandingPage() {
           left: 0;
           right: 0;
           z-index: 100;
-          padding: 1rem 2rem;
+          padding: 1.25rem 2rem;
           display: flex;
           align-items: center;
           justify-content: space-between;
           transition: all 0.3s ease;
+          background: transparent;
         }
         .ld-nav.scrolled {
-          background: oklch(0.08 0.01 260 / 0.85);
+          background: rgba(255, 255, 255, 0.85);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
-          border-bottom: 1px solid oklch(0.22 0.01 260 / 0.5);
-          padding: 0.75rem 2rem;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+          padding: 0.85rem 2rem;
+          box-shadow: 0 4px 30px rgba(0, 0, 0, 0.02);
         }
         .ld-nav-logo {
           font-size: 1.5rem;
@@ -462,17 +468,20 @@ export default function LandingPage() {
           -webkit-text-fill-color: transparent;
           background-clip: text;
           text-decoration: none;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
         }
         .ld-nav-links {
           display: flex;
           align-items: center;
-          gap: 2rem;
+          gap: 1.75rem;
         }
         .ld-nav-links a, .ld-nav-links button {
           color: var(--ld-text-muted);
           text-decoration: none;
-          font-size: 0.9rem;
-          font-weight: 500;
+          font-size: 0.95rem;
+          font-weight: 600;
           transition: color 0.2s;
           background: none;
           border: none;
@@ -485,42 +494,47 @@ export default function LandingPage() {
         .ld-btn-primary {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: 0.5rem;
-          padding: 0.6rem 1.4rem;
-          border-radius: 10px;
+          padding: 0.65rem 1.5rem;
+          border-radius: 9999px;
           background: linear-gradient(135deg, var(--ld-gradient-1), var(--ld-gradient-2));
           color: white !important;
-          font-weight: 600;
+          font-weight: 700;
           font-size: 0.9rem;
           border: none;
           text-decoration: none;
           cursor: pointer;
-          transition: all 0.3s ease;
+          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+          box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
           -webkit-text-fill-color: white !important;
         }
         .ld-btn-primary:hover {
           transform: translateY(-2px);
-          box-shadow: 0 8px 32px oklch(0.526 0.247 293 / 0.35);
+          box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
         }
         .ld-btn-outline {
           display: inline-flex;
           align-items: center;
+          justify-content: center;
           gap: 0.5rem;
-          padding: 0.6rem 1.4rem;
-          border-radius: 10px;
-          background: transparent;
+          padding: 0.65rem 1.5rem;
+          border-radius: 9999px;
+          background: white;
           color: var(--ld-text) !important;
-          font-weight: 600;
+          font-weight: 700;
           font-size: 0.9rem;
           border: 1px solid var(--ld-border);
           text-decoration: none;
           cursor: pointer;
-          transition: all 0.3s ease;
+          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
           -webkit-text-fill-color: var(--ld-text) !important;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
         }
         .ld-btn-outline:hover {
           border-color: var(--ld-primary);
-          background: oklch(0.526 0.247 293 / 0.08);
+          background: rgba(16, 185, 129, 0.04);
+          transform: translateY(-2px);
         }
         .ld-mobile-toggle {
           display: none;
@@ -533,22 +547,28 @@ export default function LandingPage() {
 
         /* ===== HERO ===== */
         .ld-hero {
-          padding: 10rem 2rem 6rem;
+          padding: 11rem 2rem 7rem;
           text-align: center;
           position: relative;
           max-width: 1200px;
           margin: 0 auto;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          z-index: 1;
         }
         .ld-hero::before {
           content: '';
           position: absolute;
-          top: 0;
+          top: -10%;
           left: 50%;
           transform: translateX(-50%);
-          width: 800px;
-          height: 800px;
-          background: radial-gradient(circle, oklch(0.526 0.247 293 / 0.12) 0%, transparent 60%);
+          width: 100%;
+          max-width: 1200px;
+          height: 600px;
+          background: radial-gradient(circle, rgba(16, 185, 129, 0.08) 0%, rgba(14, 165, 233, 0.06) 30%, rgba(99, 102, 241, 0.03) 60%, transparent 80%);
           pointer-events: none;
+          z-index: -1;
         }
         .ld-hero-badge {
           display: inline-flex;
@@ -556,19 +576,22 @@ export default function LandingPage() {
           gap: 0.5rem;
           padding: 0.5rem 1.2rem;
           border-radius: 999px;
-          background: oklch(0.526 0.247 293 / 0.1);
-          border: 1px solid oklch(0.526 0.247 293 / 0.2);
+          background: rgba(16, 185, 129, 0.08);
+          border: 1px solid rgba(16, 185, 129, 0.15);
           font-size: 0.85rem;
-          color: oklch(0.7 0.15 293);
+          color: #059669;
           margin-bottom: 2rem;
-          font-weight: 500;
+          font-weight: 600;
+          box-shadow: 0 2px 10px rgba(16, 185, 129, 0.05);
         }
         .ld-hero h1 {
-          font-size: clamp(2.5rem, 6vw, 4.5rem);
-          font-weight: 800;
-          line-height: 1.1;
+          font-size: clamp(2.5rem, 6vw, 4.25rem);
+          font-weight: 900;
+          line-height: 1.15;
           margin-bottom: 1.5rem;
-          letter-spacing: -0.02em;
+          letter-spacing: -0.03em;
+          color: #0f172a;
+          max-width: 900px;
         }
         .ld-hero h1 span {
           background: linear-gradient(135deg, var(--ld-gradient-1), var(--ld-gradient-2), var(--ld-gradient-3));
@@ -577,18 +600,18 @@ export default function LandingPage() {
           background-clip: text;
         }
         .ld-hero p {
-          font-size: 1.15rem;
+          font-size: 1.2rem;
           color: var(--ld-text-muted);
-          max-width: 640px;
+          max-width: 720px;
           margin: 0 auto 2.5rem;
-          line-height: 1.7;
+          line-height: 1.65;
         }
         .ld-hero-ctas {
           display: flex;
           gap: 1rem;
           justify-content: center;
           flex-wrap: wrap;
-          margin-bottom: 4rem;
+          margin-bottom: 4.5rem;
         }
         .ld-hero-ctas .ld-btn-primary {
           padding: 0.85rem 2rem;
@@ -598,38 +621,115 @@ export default function LandingPage() {
           padding: 0.85rem 2rem;
           font-size: 1rem;
         }
+
+        /* ===== MOCKUP SHOWCASE ===== */
+        .ld-hero-mockup-wrapper {
+          position: relative;
+          width: 100%;
+          max-width: 1000px;
+          margin: 0 auto 5rem;
+        }
+        .ld-hero-mockup {
+          background: #ffffff;
+          border-radius: 20px;
+          border: 1px solid rgba(226, 232, 240, 0.8);
+          box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.12), 0 0 50px rgba(16, 185, 129, 0.04);
+          padding: 6px;
+          overflow: hidden;
+          transition: transform 0.5s ease;
+        }
+        .ld-hero-mockup:hover {
+          transform: translateY(-4px);
+        }
+        .ld-hero-mockup-header {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1rem;
+          background: #f8fafc;
+          border-bottom: 1px solid #e2e8f0;
+          border-top-left-radius: 14px;
+          border-top-right-radius: 14px;
+        }
+        .ld-mockup-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+        }
+        .ld-mockup-dot.red { background: #ef4444; }
+        .ld-mockup-dot.yellow { background: #f59e0b; }
+        .ld-mockup-dot.green { background: #10b981; }
+        .ld-mockup-address {
+          flex-grow: 1;
+          max-width: 480px;
+          margin: 0 auto;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          font-size: 0.75rem;
+          color: #64748b;
+          padding: 0.2rem 1rem;
+          text-align: center;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.25rem;
+        }
+        .ld-hero-mockup img {
+          width: 100%;
+          height: auto;
+          display: block;
+          border-bottom-left-radius: 14px;
+          border-bottom-right-radius: 14px;
+        }
+
+        /* ===== STATS ===== */
         .ld-hero-stats {
           display: flex;
           justify-content: center;
-          gap: 4rem;
+          gap: 5rem;
           flex-wrap: wrap;
+          border-top: 1px solid var(--ld-border);
+          padding-top: 3.5rem;
+          width: 100%;
+          max-width: 900px;
+          margin: 0 auto;
         }
         .ld-hero-stat {
           text-align: center;
         }
         .ld-hero-stat strong {
           display: block;
-          font-size: 2.2rem;
-          font-weight: 800;
+          font-size: 2.5rem;
+          font-weight: 900;
           background: linear-gradient(135deg, var(--ld-gradient-1), var(--ld-gradient-2));
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
+          margin-bottom: 0.25rem;
         }
         .ld-hero-stat span {
-          font-size: 0.85rem;
+          font-size: 0.95rem;
+          font-weight: 600;
           color: var(--ld-text-muted);
         }
 
         /* ===== FEATURES ===== */
         .ld-features {
-          padding: 6rem 2rem;
+          padding: 7rem 2rem;
           max-width: 1200px;
           margin: 0 auto;
+          position: relative;
         }
         .ld-section-header {
           text-align: center;
-          margin-bottom: 4rem;
+          margin-bottom: 5rem;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
         }
         .ld-section-badge {
           display: inline-flex;
@@ -637,40 +737,44 @@ export default function LandingPage() {
           gap: 0.4rem;
           padding: 0.4rem 1rem;
           border-radius: 999px;
-          background: oklch(0.526 0.247 293 / 0.1);
-          border: 1px solid oklch(0.526 0.247 293 / 0.2);
+          background: rgba(16, 185, 129, 0.08);
+          border: 1px solid rgba(16, 185, 129, 0.15);
           font-size: 0.8rem;
-          color: oklch(0.7 0.15 293);
-          margin-bottom: 1rem;
+          color: #059669;
+          margin-bottom: 1.25rem;
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.05em;
         }
         .ld-section-header h2 {
-          font-size: clamp(2rem, 4vw, 3rem);
-          font-weight: 800;
-          margin-bottom: 1rem;
-          letter-spacing: -0.02em;
+          font-size: clamp(2.25rem, 5vw, 3.25rem);
+          font-weight: 900;
+          margin-bottom: 1.25rem;
+          letter-spacing: -0.03em;
+          color: #0f172a;
+          max-width: 800px;
         }
         .ld-section-header p {
-          font-size: 1.1rem;
+          font-size: 1.15rem;
           color: var(--ld-text-muted);
-          max-width: 560px;
+          max-width: 600px;
           margin: 0 auto;
+          line-height: 1.6;
         }
         .ld-features-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 1.5rem;
+          gap: 2rem;
         }
         .ld-feature-card {
-          padding: 2rem;
-          border-radius: 16px;
-          background: var(--ld-bg-card);
+          padding: 2.5rem 2rem;
+          border-radius: 20px;
+          background: var(--ld-card);
           border: 1px solid var(--ld-border);
-          transition: all 0.3s ease;
+          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
           position: relative;
           overflow: hidden;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.01);
         }
         .ld-feature-card::before {
           content: '';
@@ -678,182 +782,205 @@ export default function LandingPage() {
           top: 0;
           left: 0;
           right: 0;
-          height: 2px;
+          height: 4px;
           background: linear-gradient(90deg, var(--ld-gradient-1), var(--ld-gradient-2));
           opacity: 0;
           transition: opacity 0.3s ease;
         }
         .ld-feature-card:hover {
-          background: var(--ld-bg-card-hover);
-          border-color: oklch(0.526 0.247 293 / 0.3);
-          transform: translateY(-4px);
+          border-color: rgba(16, 185, 129, 0.25);
+          transform: translateY(-6px);
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
         }
         .ld-feature-card:hover::before {
           opacity: 1;
         }
         .ld-feature-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 12px;
-          background: linear-gradient(135deg, oklch(0.526 0.247 293 / 0.15), oklch(0.55 0.2 330 / 0.1));
+          width: 52px;
+          height: 52px;
+          border-radius: 14px;
+          background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(14, 165, 233, 0.08));
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-bottom: 1.2rem;
-          color: oklch(0.7 0.2 293);
+          margin-bottom: 1.5rem;
+          color: var(--ld-primary);
         }
         .ld-feature-card h3 {
-          font-size: 1.15rem;
-          font-weight: 700;
-          margin-bottom: 0.6rem;
+          font-size: 1.3rem;
+          font-weight: 850;
+          margin-bottom: 0.75rem;
+          color: #0f172a;
         }
         .ld-feature-card p {
-          font-size: 0.9rem;
+          font-size: 0.95rem;
           color: var(--ld-text-muted);
           line-height: 1.6;
         }
 
         /* ===== PRICING ===== */
         .ld-pricing {
-          padding: 6rem 2rem;
+          padding: 7rem 2rem;
           max-width: 1200px;
           margin: 0 auto;
+          position: relative;
         }
         .ld-pricing-toggle {
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 1rem;
-          margin-bottom: 3rem;
+          margin-bottom: 4rem;
         }
         .ld-pricing-toggle span {
-          font-size: 0.95rem;
+          font-size: 1rem;
           color: var(--ld-text-muted);
-          font-weight: 500;
+          font-weight: 600;
+          transition: color 0.2s;
         }
         .ld-pricing-toggle span.active {
           color: var(--ld-text);
         }
         .ld-toggle-track {
-          width: 52px;
-          height: 28px;
+          width: 60px;
+          height: 32px;
           border-radius: 999px;
-          background: var(--ld-border);
+          background: #cbd5e1;
           cursor: pointer;
           position: relative;
           transition: background 0.3s;
           border: none;
           padding: 0;
+          box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
         }
         .ld-toggle-track.on {
           background: var(--ld-primary);
         }
         .ld-toggle-knob {
           position: absolute;
-          top: 3px;
-          left: 3px;
-          width: 22px;
-          height: 22px;
+          top: 4px;
+          left: 4px;
+          width: 24px;
+          height: 24px;
           border-radius: 50%;
           background: white;
-          transition: transform 0.3s;
+          transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.15);
         }
         .ld-toggle-track.on .ld-toggle-knob {
-          transform: translateX(24px);
+          transform: translateX(28px);
         }
         [dir="rtl"] .ld-toggle-track.on .ld-toggle-knob {
-          transform: translateX(-24px);
+          transform: translateX(-28px);
         }
         [dir="rtl"] .ld-toggle-knob {
           left: auto;
-          right: 3px;
+          right: 4px;
         }
         .ld-pricing-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 1.5rem;
-          align-items: start;
+          gap: 2rem;
+          align-items: stretch;
         }
         .ld-plan-card {
-          padding: 2.5rem 2rem;
-          border-radius: 20px;
-          background: var(--ld-bg-card);
+          padding: 3.25rem 2.25rem;
+          border-radius: 24px;
+          background: var(--ld-card);
           border: 1px solid var(--ld-border);
-          transition: all 0.3s ease;
+          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
           position: relative;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.01);
         }
         .ld-plan-card.popular {
           border-color: var(--ld-primary);
-          background: linear-gradient(180deg, oklch(0.16 0.02 293), var(--ld-bg-card));
-          transform: scale(1.03);
+          background: linear-gradient(180deg, rgba(16, 185, 129, 0.03), #ffffff);
+          transform: scale(1.04);
+          box-shadow: 0 20px 40px rgba(16, 185, 129, 0.08);
+          border-width: 2px;
         }
         .ld-plan-card:hover {
-          transform: translateY(-4px);
+          transform: translateY(-6px);
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
         }
         .ld-plan-card.popular:hover {
-          transform: scale(1.03) translateY(-4px);
+          transform: scale(1.04) translateY(-6px);
+          box-shadow: 0 24px 48px rgba(16, 185, 129, 0.12);
         }
         .ld-plan-popular-badge {
           position: absolute;
-          top: -14px;
+          top: -16px;
           left: 50%;
           transform: translateX(-50%);
-          padding: 0.35rem 1.2rem;
+          padding: 0.4rem 1.5rem;
           border-radius: 999px;
           background: linear-gradient(135deg, var(--ld-gradient-1), var(--ld-gradient-2));
           color: white;
-          font-size: 0.75rem;
+          font-size: 0.8rem;
           font-weight: 700;
           white-space: nowrap;
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
         }
         .ld-plan-name {
-          font-size: 1.1rem;
-          font-weight: 600;
-          color: var(--ld-text-muted);
-          margin-bottom: 0.5rem;
+          font-size: 1.25rem;
+          font-weight: 700;
+          color: #0f172a;
+          margin-bottom: 0.75rem;
         }
         .ld-plan-price {
-          font-size: 3rem;
-          font-weight: 800;
-          margin-bottom: 0.25rem;
+          font-size: 3.25rem;
+          font-weight: 900;
+          margin-bottom: 0.5rem;
           line-height: 1;
+          color: #0f172a;
+          display: flex;
+          align-items: baseline;
         }
         .ld-plan-price small {
-          font-size: 1rem;
-          font-weight: 500;
+          font-size: 1.05rem;
+          font-weight: 600;
           color: var(--ld-text-muted);
+          margin-left: 0.25rem;
+        }
+        [dir="rtl"] .ld-plan-price small {
+          margin-left: 0;
+          margin-right: 0.25rem;
         }
         .ld-plan-desc {
-          font-size: 0.9rem;
+          font-size: 0.95rem;
           color: var(--ld-text-muted);
-          margin-bottom: 2rem;
-          line-height: 1.5;
+          margin-bottom: 2.25rem;
+          line-height: 1.6;
+          min-height: 48px;
         }
         .ld-plan-features {
           list-style: none;
           padding: 0;
-          margin: 0 0 2rem;
+          margin: 0 0 2.5rem;
           display: flex;
           flex-direction: column;
-          gap: 0.75rem;
+          gap: 1rem;
+          flex-grow: 1;
         }
         .ld-plan-features li {
           display: flex;
           align-items: center;
-          gap: 0.6rem;
-          font-size: 0.9rem;
+          gap: 0.75rem;
+          font-size: 0.95rem;
           color: var(--ld-text-muted);
         }
         .ld-plan-features li svg {
-          color: oklch(0.65 0.2 160);
+          color: #10b981;
           flex-shrink: 0;
         }
         .ld-plan-cta {
           width: 100%;
-          padding: 0.85rem;
-          border-radius: 12px;
-          font-weight: 600;
-          font-size: 0.95rem;
+          padding: 0.9rem;
+          border-radius: 14px;
+          font-weight: 700;
+          font-size: 1rem;
           cursor: pointer;
           text-align: center;
           text-decoration: none;
@@ -865,9 +992,11 @@ export default function LandingPage() {
           background: linear-gradient(135deg, var(--ld-gradient-1), var(--ld-gradient-2));
           color: white;
           border: none;
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
         }
         .ld-plan-cta.primary:hover {
-          box-shadow: 0 8px 32px oklch(0.526 0.247 293 / 0.35);
+          box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35);
+          transform: translateY(-2px);
         }
         .ld-plan-cta.outline {
           background: transparent;
@@ -876,62 +1005,68 @@ export default function LandingPage() {
         }
         .ld-plan-cta.outline:hover {
           border-color: var(--ld-primary);
+          background: rgba(16, 185, 129, 0.04);
+          transform: translateY(-2px);
         }
 
         /* ===== FOOTER ===== */
         .ld-footer {
           border-top: 1px solid var(--ld-border);
-          padding: 4rem 2rem 2rem;
+          padding: 6rem 2rem 3rem;
+          background: #f8fafc;
+          width: 100%;
+        }
+        .ld-footer-container {
           max-width: 1200px;
           margin: 0 auto;
         }
         .ld-footer-grid {
           display: grid;
           grid-template-columns: 2fr 1fr 1fr 1fr;
-          gap: 3rem;
-          margin-bottom: 3rem;
+          gap: 4rem;
+          margin-bottom: 4rem;
         }
         .ld-footer-brand {
-          max-width: 280px;
+          max-width: 320px;
         }
         .ld-footer-brand h3 {
-          font-size: 1.3rem;
-          font-weight: 800;
+          font-size: 1.5rem;
+          font-weight: 900;
           background: linear-gradient(135deg, var(--ld-gradient-1), var(--ld-gradient-2));
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
-          margin-bottom: 0.75rem;
+          margin-bottom: 1rem;
         }
         .ld-footer-brand p {
-          font-size: 0.9rem;
+          font-size: 0.95rem;
           color: var(--ld-text-muted);
           line-height: 1.6;
         }
         .ld-footer-col h4 {
-          font-size: 0.85rem;
-          font-weight: 700;
+          font-size: 0.9rem;
+          font-weight: 750;
           text-transform: uppercase;
-          letter-spacing: 0.06em;
-          margin-bottom: 1rem;
-          color: var(--ld-text);
+          letter-spacing: 0.08em;
+          margin-bottom: 1.25rem;
+          color: #0f172a;
         }
         .ld-footer-col a {
           display: block;
-          font-size: 0.88rem;
+          font-size: 0.95rem;
           color: var(--ld-text-muted);
           text-decoration: none;
-          margin-bottom: 0.6rem;
+          margin-bottom: 0.75rem;
           transition: color 0.2s;
         }
         .ld-footer-col a:hover {
-          color: var(--ld-text);
+          color: var(--ld-primary);
         }
         .ld-footer-bottom {
           border-top: 1px solid var(--ld-border);
-          padding-top: 1.5rem;
+          padding-top: 2rem;
           text-align: center;
-          font-size: 0.8rem;
+          font-size: 0.9rem;
           color: var(--ld-text-muted);
         }
 
@@ -944,12 +1079,12 @@ export default function LandingPage() {
           right: 0;
           bottom: 0;
           z-index: 200;
-          background: oklch(0.08 0.01 260 / 0.95);
-          backdrop-filter: blur(30px);
+          background: rgba(255, 255, 255, 0.98);
+          backdrop-filter: blur(20px);
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 2rem;
+          gap: 2.5rem;
         }
         .ld-mobile-menu.open {
           display: flex;
@@ -957,8 +1092,8 @@ export default function LandingPage() {
         .ld-mobile-menu a, .ld-mobile-menu button {
           color: var(--ld-text);
           text-decoration: none;
-          font-size: 1.3rem;
-          font-weight: 600;
+          font-size: 1.5rem;
+          font-weight: 700;
           background: none;
           border: none;
           cursor: pointer;
@@ -972,6 +1107,7 @@ export default function LandingPage() {
           border: none;
           color: var(--ld-text);
           cursor: pointer;
+          padding: 0.5rem;
         }
         [dir="rtl"] .ld-mobile-close {
           right: auto;
@@ -979,43 +1115,59 @@ export default function LandingPage() {
         }
 
         /* ===== RESPONSIVENESS ===== */
-        @media (max-width: 900px) {
-          .ld-nav-links { display: none; }
-          .ld-mobile-toggle { display: block; }
-          .ld-features-grid { grid-template-columns: 1fr 1fr; }
-          .ld-pricing-grid { grid-template-columns: 1fr; max-width: 440px; margin: 0 auto; }
+        @media (max-width: 1024px) {
+          .ld-features-grid { grid-template-columns: repeat(2, 1fr); }
+          .ld-pricing-grid { grid-template-columns: repeat(2, 1fr); }
           .ld-plan-card.popular { transform: none; }
-          .ld-plan-card.popular:hover { transform: translateY(-4px); }
-          .ld-footer-grid { grid-template-columns: 1fr 1fr; }
-          .ld-hero-stats { gap: 2rem; }
+          .ld-plan-card.popular:hover { transform: translateY(-6px); }
+          .ld-footer-grid { grid-template-columns: 1.5fr 1fr 1fr; gap: 2rem; }
         }
-        @media (max-width: 600px) {
+        @media (max-width: 768px) {
+          .ld-nav-links { display: none; }
+          .ld-mobile-toggle { display: block; background: none; border: none; color: var(--ld-text); cursor: pointer; padding: 0.5rem; }
           .ld-features-grid { grid-template-columns: 1fr; }
+          .ld-pricing-grid { grid-template-columns: 1fr; max-width: 440px; margin: 0 auto; }
+          .ld-footer-grid { grid-template-columns: 1fr 1fr; }
+          .ld-hero-stats { gap: 3rem; }
+        }
+        @media (max-width: 480px) {
           .ld-footer-grid { grid-template-columns: 1fr; }
-          .ld-hero { padding-top: 8rem; }
+          .ld-hero { padding-top: 9rem; }
+          .ld-hero-stats { gap: 2rem; flex-direction: column; }
+        }
+
+        /* ===== RTL SUPPORT ===== */
+        [dir="rtl"] .ld-btn-primary svg {
+          transform: rotate(180deg);
+        }
+        [dir="rtl"] .ld-plan-cta.primary svg {
+          transform: rotate(180deg);
+        }
+        [dir="rtl"] .ld-plan-features li svg {
+          order: -1;
         }
 
         /* ===== ANIMATIONS ===== */
         @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(24px); }
+          from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
         .ld-animate {
-          animation: fadeInUp 0.7s ease-out both;
+          animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
         }
-        .ld-animate-d1 { animation-delay: 0.1s; }
-        .ld-animate-d2 { animation-delay: 0.2s; }
-        .ld-animate-d3 { animation-delay: 0.3s; }
-        .ld-animate-d4 { animation-delay: 0.4s; }
-        .ld-animate-d5 { animation-delay: 0.5s; }
-        .ld-animate-d6 { animation-delay: 0.6s; }
+        .ld-animate-d1 { animation-delay: 0.08s; }
+        .ld-animate-d2 { animation-delay: 0.16s; }
+        .ld-animate-d3 { animation-delay: 0.24s; }
+        .ld-animate-d4 { animation-delay: 0.32s; }
+        .ld-animate-d5 { animation-delay: 0.4s; }
+        .ld-animate-d6 { animation-delay: 0.48s; }
       `}</style>
 
       {/* ====== NAVBAR ====== */}
       <nav className={`ld-nav ${scrolled ? 'scrolled' : ''}`}>
-        <a href="#" className="ld-nav-logo" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <a href="#" className="ld-nav-logo">
           {settings.logo_url && (
-            <img src={settings.logo_url} alt="Logo" style={{ height: '2rem', objectFit: 'contain', borderRadius: '0.375rem' }} />
+            <img src={settings.logo_url} alt="Logo" style={{ height: '2.25rem', objectFit: 'contain', borderRadius: '0.375rem' }} />
           )}
           <span>{settings.site_name}</span>
         </a>
@@ -1065,7 +1217,24 @@ export default function LandingPage() {
           </Link>
           <a href="#pricing" className="ld-btn-outline">{t.hero.ctaSecondary}</a>
         </div>
-        <div className="ld-hero-stats ld-animate ld-animate-d4">
+
+        {/* Browser Mockup Showcase */}
+        <div className="ld-hero-mockup-wrapper ld-animate ld-animate-d4">
+          <div className="ld-hero-mockup">
+            <div className="ld-hero-mockup-header">
+              <span className="ld-mockup-dot red" />
+              <span className="ld-mockup-dot yellow" />
+              <span className="ld-mockup-dot green" />
+              <div className="ld-mockup-address">
+                <Shield size={12} />
+                <span>{settings.site_name ? `${settings.site_name.toLowerCase().replace(/\s+/g, '')}.com/dashboard` : 'wacrm.com/dashboard'}</span>
+              </div>
+            </div>
+            <img src="/dashboard_mockup.png" alt="Platform Dashboard Preview" />
+          </div>
+        </div>
+
+        <div className="ld-hero-stats ld-animate ld-animate-d5">
           {t.hero.stats.map((s, i) => (
             <div key={i} className="ld-hero-stat">
               <strong>{s.value}</strong>
@@ -1138,36 +1307,38 @@ export default function LandingPage() {
 
       {/* ====== FOOTER ====== */}
       <footer className="ld-footer">
-        <div className="ld-footer-grid">
-          <div className="ld-footer-brand">
-            <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              {settings.logo_url && (
-                <img src={settings.logo_url} alt="Logo" style={{ height: '1.5rem', objectFit: 'contain', borderRadius: '0.25rem' }} />
-              )}
-              <span>{settings.site_name}</span>
-            </h3>
-            <p>{t.footer.desc}</p>
+        <div className="ld-footer-container">
+          <div className="ld-footer-grid">
+            <div className="ld-footer-brand">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {settings.logo_url && (
+                  <img src={settings.logo_url} alt="Logo" style={{ height: '2.25rem', objectFit: 'contain', borderRadius: '0.375rem' }} />
+                )}
+                <span>{settings.site_name}</span>
+              </h3>
+              <p>{t.footer.desc}</p>
+            </div>
+            <div className="ld-footer-col">
+              <h4>{t.footer.product}</h4>
+              <a href="#features">{t.footer.links.features}</a>
+              <a href="#pricing">{t.footer.links.pricing}</a>
+              <a href="#">{t.footer.links.docs}</a>
+            </div>
+            <div className="ld-footer-col">
+              <h4>{t.footer.company}</h4>
+              <a href="#">{t.footer.links.about}</a>
+              <a href="#">{t.footer.links.contact}</a>
+              <a href="#">{t.footer.links.blog}</a>
+            </div>
+            <div className="ld-footer-col">
+              <h4>{t.footer.legal}</h4>
+              <a href="#">{t.footer.links.privacy}</a>
+              <a href="#">{t.footer.links.terms}</a>
+            </div>
           </div>
-          <div className="ld-footer-col">
-            <h4>{t.footer.product}</h4>
-            <a href="#features">{t.footer.links.features}</a>
-            <a href="#pricing">{t.footer.links.pricing}</a>
-            <a href="#">{t.footer.links.docs}</a>
+          <div className="ld-footer-bottom">
+            {t.footer.copyright.replace('WaCRM', settings.site_name)}
           </div>
-          <div className="ld-footer-col">
-            <h4>{t.footer.company}</h4>
-            <a href="#">{t.footer.links.about}</a>
-            <a href="#">{t.footer.links.contact}</a>
-            <a href="#">{t.footer.links.blog}</a>
-          </div>
-          <div className="ld-footer-col">
-            <h4>{t.footer.legal}</h4>
-            <a href="#">{t.footer.links.privacy}</a>
-            <a href="#">{t.footer.links.terms}</a>
-          </div>
-        </div>
-        <div className="ld-footer-bottom">
-          {t.footer.copyright.replace('WaCRM', settings.site_name)}
         </div>
       </footer>
     </div>
