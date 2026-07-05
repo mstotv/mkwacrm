@@ -477,7 +477,7 @@ export default function LandingPage() {
           align-items: center;
           gap: 1.75rem;
         }
-        .ld-nav-links a, .ld-nav-links button {
+        .ld-nav-links a:not([class*="ld-btn-"]), .ld-nav-links button:not([class*="ld-btn-"]) {
           color: var(--ld-text-muted);
           text-decoration: none;
           font-size: 0.95rem;
@@ -488,7 +488,7 @@ export default function LandingPage() {
           cursor: pointer;
           font-family: inherit;
         }
-        .ld-nav-links a:hover, .ld-nav-links button:hover {
+        .ld-nav-links a:not([class*="ld-btn-"]):hover, .ld-nav-links button:not([class*="ld-btn-"]):hover {
           color: var(--ld-text);
         }
         .ld-btn-primary {
