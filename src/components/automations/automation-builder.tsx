@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react"
 import { useRouter } from "next/navigation"
+import { useLanguage } from "@/hooks/use-language"
 import { toast } from "sonner"
 import {
   ArrowLeft,
@@ -1039,6 +1040,7 @@ function StepEditor({
   step: BuilderStep
   onChange: (s: BuilderStep) => void
 }) {
+  const { t, language: lang } = useLanguage()
   const cfg = step.step_config
   const set = (patch: Record<string, unknown>) =>
     onChange({ ...step, step_config: { ...cfg, ...patch } })
@@ -1382,58 +1384,90 @@ function StepEditor({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="block text-xs font-medium text-slate-400">Field to Column Mapping</label>
+              <label className="block text-xs font-medium text-slate-400">
+                {lang === 'ar' ? 'ربط الحقول بالأعمدة' : 'Field to Column Mapping'}
+              </label>
             </div>
             <div className="text-[10px] text-slate-500 mb-1 leading-relaxed">
-              Mapped fields support values like: <code className="text-slate-400">contact.name</code>, <code className="text-slate-400">contact.phone</code>, <code className="text-slate-400">message.text</code>, or dynamic templates like <code className="text-slate-400">{"{{ vars.ai_reply }}"}</code>.
+              {lang === 'ar' 
+                ? 'الحقول المربوطة تدعم القيم مثل contact.name أو contact.phone أو message.text أو المتغيرات الديناميكية مثل {{ vars.ai_reply }}.'
+                : 'Mapped fields support values like: contact.name, contact.phone, message.text, or dynamic templates like {{ vars.ai_reply }}.'}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {mappings.map((m, idx) => (
-                <div key={idx} className="flex flex-col gap-1.5 p-2 rounded-lg border border-slate-800 bg-slate-900/40">
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={m.field.startsWith('{{') ? m.field : m.field === 'contact.name' || m.field === 'contact.phone' || m.field === 'contact.email' || m.field === 'message.text' ? m.field : 'custom'}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        if (val !== 'custom') {
-                          updateMapping(idx, 'field', val)
-                        } else {
-                          updateMapping(idx, 'field', '')
-                        }
-                      }}
-                      className="rounded border border-slate-700 bg-slate-800 p-1 text-[11px] text-white flex-1"
-                    >
-                      <option value="contact.name">Contact Name</option>
-                      <option value="contact.phone">Contact Phone</option>
-                      <option value="contact.email">Contact Email</option>
-                      <option value="message.text">Current Message Text</option>
-                      <option value="{{ vars.ai_reply }}">AI Reply Output</option>
-                      <option value="custom">Custom Template / Key...</option>
-                    </select>
-                    <span className="text-slate-500">→</span>
-                    <Input
-                      placeholder="Column (e.g. A or Name)"
-                      value={m.column}
-                      onChange={(e) => updateMapping(idx, "column", e.target.value)}
-                      className="bg-slate-850 border-slate-750 text-white text-xs flex-1 h-7"
-                    />
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => removeMapping(idx)}
-                      className="h-7 w-7 text-rose-400 hover:text-rose-350 hover:bg-rose-950/20"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                <div key={idx} className="flex flex-col gap-2 p-2.5 rounded-lg border border-slate-800 bg-slate-900/40">
+                  <div className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-6 flex flex-col gap-1">
+                      <label className="text-[10px] text-slate-500">
+                        {lang === 'ar' ? 'الحقل المصدر' : 'Source Field'}
+                      </label>
+                      <select
+                        value={m.field.startsWith('{{') ? m.field : m.field === 'contact.name' || m.field === 'contact.phone' || m.field === 'contact.email' || m.field === 'message.text' ? m.field : 'custom'}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          if (val !== 'custom') {
+                            updateMapping(idx, 'field', val)
+                          } else {
+                            updateMapping(idx, 'field', '')
+                          }
+                        }}
+                        className="rounded border border-slate-700 bg-slate-800 p-1 text-[11px] text-white w-full h-8"
+                      >
+                        <option value="contact.name">{lang === 'ar' ? 'اسم جهة الاتصال' : 'Contact Name'}</option>
+                        <option value="contact.phone">{lang === 'ar' ? 'هاتف جهة الاتصال' : 'Contact Phone'}</option>
+                        <option value="contact.email">{lang === 'ar' ? 'بريد جهة الاتصال' : 'Contact Email'}</option>
+                        <option value="message.text">{lang === 'ar' ? 'نص الرسالة الحالية' : 'Current Message Text'}</option>
+                        <option value="{{ vars.ai_reply }}">{lang === 'ar' ? 'رد الذكاء الاصطناعي (AI Reply Output)' : 'AI Reply Output'}</option>
+                        <option value="custom">{lang === 'ar' ? 'قالب مخصص / متغير...' : 'Custom Template / Key...'}</option>
+                      </select>
+                    </div>
+
+                    <div className="col-span-1 flex justify-center text-slate-500 pb-2">→</div>
+
+                    <div className="col-span-4 flex flex-col gap-1">
+                      <label className="text-[10px] text-slate-500">
+                        {lang === 'ar' ? 'اسم العمود بالشيت' : 'Target Column'}
+                      </label>
+                      <Input
+                        placeholder={lang === 'ar' ? 'مثال: A أو Name' : 'e.g. A or Name'}
+                        value={m.column}
+                        onChange={(e) => updateMapping(idx, "column", e.target.value)}
+                        className="bg-slate-850 border-slate-750 text-white text-[11px] h-8 w-full"
+                      />
+                    </div>
+
+                    <div className="col-span-1 flex justify-end pb-0.5">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => removeMapping(idx)}
+                        className="h-8 w-8 text-rose-400 hover:text-rose-350 hover:bg-rose-950/20"
+                        title={lang === 'ar' ? 'حذف الربط' : 'Delete mapping'}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
+
                   {(!['contact.name', 'contact.phone', 'contact.email', 'message.text', '{{ vars.ai_reply }}'].includes(m.field) || m.field === '') && (
-                    <Input
-                      placeholder="Enter custom template key e.g. {{ vars.my_variable }}"
-                      value={m.field}
-                      onChange={(e) => updateMapping(idx, "field", e.target.value)}
-                      className="bg-slate-850 border-slate-750 text-white text-[11px] h-7"
-                    />
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-slate-500">
+                        {lang === 'ar' ? 'مفتاح المتغير المخصص' : 'Custom Variable Key'}
+                      </label>
+                      <Input
+                        placeholder={lang === 'ar' ? 'أدخل مفتاح المتغير المخصص مثل {{ vars.my_variable }}' : 'Enter custom template key e.g. {{ vars.my_variable }}'}
+                        value={m.field}
+                        onChange={(e) => updateMapping(idx, "field", e.target.value)}
+                        className="bg-slate-850 border-slate-750 text-white text-[11px] h-7"
+                      />
+                    </div>
                   )}
+
+                  <div className="text-[10px] text-slate-400 bg-slate-950/30 p-1.5 rounded leading-relaxed">
+                    {lang === 'ar' 
+                      ? 'اكتب رمز العمود بالإنجليزية (مثال: A أو B) أو اسم العمود المطابق تماماً للصف الأول بالجدول (مثال: Name).'
+                      : 'Enter the column letter (e.g. A, B) or the exact header name matching the first row of your sheet (e.g. Name).'}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1444,7 +1478,7 @@ function StepEditor({
               className="mt-2 w-full text-xs"
             >
               <Plus className="mr-1 h-3.5 w-3.5" />
-              Add Mapping
+              {lang === 'ar' ? 'إضافة ربط جديد' : 'Add Mapping'}
             </Button>
           </div>
         </div>

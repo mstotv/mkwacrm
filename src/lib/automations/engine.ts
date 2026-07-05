@@ -725,6 +725,16 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         throw new Error('No Google Spreadsheet selected in workflow step.')
       }
 
+      const mappings = cfg.mappings || []
+      for (const m of mappings) {
+        if (!m.field) {
+          throw new Error('Google Sheets mapping source field cannot be empty.')
+        }
+        if (!m.column || String(m.column).trim() === '') {
+          throw new Error('Google Sheets mapping target column cannot be empty. Please specify a column (e.g. A, B or Name).')
+        }
+      }
+
       // Load config to find the Google Account ID for this spreadsheet
       const { sheets } = await getGoogleSheetsConfig(args.automation.account_id)
       const matchedSheet = sheets.find(s => s.spreadsheet_id === spreadsheetId)
@@ -743,8 +753,6 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         throw new Error(`Google authentication expired. Please reconnect your account in Settings: ${tokenErr.message}`)
       }
 
-      // Resolve variables for mappings
-      const mappings = cfg.mappings || []
       const rowValues: Record<string, string> = {}
 
       // Fetch contact details if needed
@@ -759,8 +767,6 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       }
 
       for (const m of mappings) {
-        if (!m.field || !m.column) continue
-
         let resolvedValue = ''
         if (m.field.includes('{{')) {
           resolvedValue = interpolate(m.field, args)

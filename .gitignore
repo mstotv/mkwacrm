@@ -42,3 +42,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local logs and temporary artifacts containing secrets
+/Fixing Google OAuth Configuration.md
+/Fixing Google OAuth Redirect.md
+/Debugging WhatsApp Automation Workflows.md
+/implementation_plan.md
+/implementation_plan1
+/preview.webp
+/scratch/

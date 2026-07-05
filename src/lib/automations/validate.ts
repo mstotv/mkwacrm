@@ -139,7 +139,25 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
       // No strict validation required since local config can fall back to global config.
       break
     case 'save_to_google_sheet':
-      // No strict validation, dynamic inputs will be validated at runtime
+      if (!nonEmpty(c.spreadsheet_id)) {
+        issues.push({ path: `${path}.spreadsheet_id`, message: 'Google Spreadsheet is required' })
+      }
+      if (Array.isArray(c.mappings)) {
+        if (c.mappings.length === 0) {
+          issues.push({ path: `${path}.mappings`, message: 'At least one field mapping is required' })
+        } else {
+          c.mappings.forEach((m, idx) => {
+            if (!m.field) {
+              issues.push({ path: `${path}.mappings[${idx}].field`, message: 'Source field is required' })
+            }
+            if (!m.column || String(m.column).trim() === '') {
+              issues.push({ path: `${path}.mappings[${idx}].column`, message: 'Column identifier is required (e.g. A, B or Name)' })
+            }
+          })
+        }
+      } else {
+        issues.push({ path: `${path}.mappings`, message: 'Field mappings are required' })
+      }
       break
     default:
       issues.push({ path, message: `unknown step type: ${step.step_type}` })
