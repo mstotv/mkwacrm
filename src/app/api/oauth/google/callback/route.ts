@@ -96,7 +96,7 @@ export async function GET(request: Request) {
     await saveGoogleSheetsConfig(profile.account_id, accounts, sheets)
 
     // Redirect to settings page with google-sheets tab active
-    return NextResponse.redirect(`${url.protocol}//${url.host}/settings?tab=google-sheets`)
+    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_SITE_URL}/settings?tab=google-sheets`)
   } catch (error: any) {
     console.error('Callback error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
