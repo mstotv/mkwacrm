@@ -87,8 +87,8 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
       </div>
 
       <footer className="flex items-center gap-4 border-t border-slate-800 px-5 py-3 text-xs text-slate-400">
-        <LegendDot color="#3b82f6" label="Incoming" />
-        <LegendDot color="#7c3aed" label="Outgoing" />
+        <LegendDot color="#10b981" label="Incoming" />
+        <LegendDot color="#16a34a" label="Outgoing" />
       </footer>
     </section>
   )
@@ -241,20 +241,20 @@ function LineSvg({
           ) : null,
         )}
 
-        {/* Outgoing polyline (violet) */}
+        {/* Outgoing polyline (green) */}
         <path
           d={outgoingPath}
           fill="none"
-          stroke="#7c3aed"
+          stroke="#16a34a"
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        {/* Incoming polyline (blue) */}
+        {/* Incoming polyline (emerald) */}
         <path
           d={incomingPath}
           fill="none"
-          stroke="#3b82f6"
+          stroke="#10b981"
           strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -271,8 +271,8 @@ function LineSvg({
               className="stroke-slate-300 dark:stroke-slate-600"
               strokeDasharray="3 3"
             />
-            <circle cx={hoverX} cy={yFor(data[hover.idx].incoming)} r={3.5} fill="#3b82f6" />
-            <circle cx={hoverX} cy={yFor(data[hover.idx].outgoing)} r={3.5} fill="#7c3aed" />
+            <circle cx={hoverX} cy={yFor(data[hover.idx].incoming)} r={3.5} fill="#10b981" />
+            <circle cx={hoverX} cy={yFor(data[hover.idx].outgoing)} r={3.5} fill="#16a34a" />
           </g>
         )}
       </svg>
@@ -288,12 +288,12 @@ function LineSvg({
         >
           <div className="font-medium text-slate-900 dark:text-white">{longDayLabel(hovered.day)}</div>
           <div className="mt-1 flex flex-col gap-0.5">
-            <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-300">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />
+            <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
               {hovered.incoming} incoming
             </span>
-            <span className="flex items-center gap-1.5 text-primary">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
+            <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
               {hovered.outgoing} outgoing
             </span>
           </div>

@@ -61,11 +61,11 @@ html[data-theme="violet"] {
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.18 0.01 260);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.526 0.247 293);
+  --primary: oklch(0.627 0.194 145.45);
   --primary-foreground: oklch(0.985 0 0);
-  --primary-hover: oklch(0.6 0.22 293);
-  --primary-soft: oklch(0.526 0.247 293 / 0.12);
-  --primary-soft-2: oklch(0.526 0.247 293 / 0.2);
+  --primary-hover: oklch(0.68 0.18 145);
+  --primary-soft: oklch(0.627 0.194 145.45 / 0.12);
+  --primary-soft-2: oklch(0.627 0.194 145.45 / 0.2);
   --secondary: oklch(0.22 0.01 260);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.22 0.01 260);
@@ -75,7 +75,7 @@ html[data-theme="violet"] {
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.28 0.01 260);
   --input: oklch(0.28 0.01 260);
-  --ring: oklch(0.526 0.247 293);
+  --ring: oklch(0.627 0.194 145.45);
   --chart-1: oklch(0.526 0.247 293);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -257,11 +257,11 @@ html[data-mode="light"][data-theme="violet"] {
   --card-foreground: oklch(0.14 0.02 260);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.14 0.02 260);
-  --primary: oklch(0.5 0.24 293);
+  --primary: oklch(0.58 0.19 145);
   --primary-foreground: oklch(0.985 0 0);
-  --primary-hover: oklch(0.44 0.26 293);
-  --primary-soft: oklch(0.526 0.247 293 / 0.1);
-  --primary-soft-2: oklch(0.526 0.247 293 / 0.18);
+  --primary-hover: oklch(0.52 0.2 145);
+  --primary-soft: oklch(0.58 0.19 145 / 0.1);
+  --primary-soft-2: oklch(0.58 0.19 145 / 0.18);
   --secondary: oklch(0.93 0.005 260);
   --secondary-foreground: oklch(0.2 0.02 260);
   --muted: oklch(0.93 0.005 260);
@@ -271,15 +271,15 @@ html[data-mode="light"][data-theme="violet"] {
   --destructive: oklch(0.55 0.24 27);
   --border: oklch(0.87 0.006 260);
   --input: oklch(0.9 0.005 260);
-  --ring: oklch(0.5 0.24 293);
+  --ring: oklch(0.58 0.19 145);
   --sidebar: oklch(0.95 0.004 260);
   --sidebar-foreground: oklch(0.14 0.02 260);
-  --sidebar-primary: oklch(0.5 0.24 293);
+  --sidebar-primary: oklch(0.58 0.19 145);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.89 0.006 260);
-  --sidebar-accent-foreground: oklch(0.14 0.02 260);
-  --sidebar-border: oklch(0.87 0.006 260);
-  --sidebar-ring: oklch(0.5 0.24 293);
+  --sidebar-accent: oklch(0.95 0.004 145);
+  --sidebar-accent-foreground: oklch(0.14 0.02 145);
+  --sidebar-border: oklch(0.87 0.006 145);
+  --sidebar-ring: oklch(0.58 0.19 145);
 }
 
 html[data-mode="light"][data-theme="emerald"] {
@@ -449,13 +449,13 @@ html[data-mode="light"] .text-emerald-400 { color: #059669 !important; }
 
 /* Override Tailwind's slate colors in light mode */
 html[data-mode="light"] .bg-slate-950 { background-color: var(--tw-light-slate-950) !important; }
-html[data-mode="light"] .bg-slate-900 { background-color: var(--tw-light-slate-900) !important; }
+html[data-mode="light"] .bg-slate-900 { background-color: #ffffff !important; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04), 0 2px 8px -1px rgba(0, 0, 0, 0.02) !important; }
 html[data-mode="light"] .bg-slate-800 { background-color: var(--tw-light-slate-800) !important; }
 html[data-mode="light"] .bg-slate-700 { background-color: var(--tw-light-slate-700) !important; }
 html[data-mode="light"] .bg-slate-600 { background-color: var(--tw-light-slate-600) !important; }
 
 html[data-mode="light"] .border-slate-900 { border-color: var(--tw-light-slate-900) !important; }
-html[data-mode="light"] .border-slate-800 { border-color: var(--tw-light-slate-800) !important; }
+html[data-mode="light"] .border-slate-800 { border-color: #f1f5f9 !important; }
 html[data-mode="light"] .border-slate-700 { border-color: var(--tw-light-slate-700) !important; }
 html[data-mode="light"] .border-slate-600 { border-color: var(--tw-light-slate-600) !important; }
 
@@ -468,10 +468,10 @@ html[data-mode="light"] .hover\:bg-slate-800:hover { background-color: var(--tw-
 html[data-mode="light"] .hover\:bg-slate-700:hover { background-color: var(--tw-light-slate-700) !important; }
 
 /* Sidebar in light mode */
-html[data-mode="light"] aside { background-color: var(--tw-light-slate-900) !important; border-color: var(--tw-light-slate-800) !important; }
-html[data-mode="light"] aside .border-b { border-color: var(--tw-light-slate-800) !important; }
-html[data-mode="light"] aside .border-t { border-color: var(--tw-light-slate-800) !important; }
-html[data-mode="light"] aside .my-4 { border-color: var(--tw-light-slate-800) !important; }
+html[data-mode="light"] aside { background-color: #ffffff !important; border-color: #f1f5f9 !important; }
+html[data-mode="light"] aside .border-b { border-color: #f1f5f9 !important; }
+html[data-mode="light"] aside .border-t { border-color: #f1f5f9 !important; }
+html[data-mode="light"] aside .my-4 { border-color: #f1f5f9 !important; }
 
 /* Input / form elements */
 html[data-mode="light"] .bg-slate-900\/40 { background-color: rgba(241, 243, 247, 0.6) !important; }
