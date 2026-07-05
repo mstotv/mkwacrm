@@ -220,6 +220,11 @@ export default function InboxPage() {
           prev.map((m) => (m.id === newMsg.id ? { ...m, ...newMsg } : m))
         );
       }
+
+      if (event.eventType === "DELETE") {
+        const oldMsg = event.old;
+        setMessages((prev) => prev.filter((m) => m.id !== oldMsg.id));
+      }
     },
     [activeConversation, hydrateConversation]
   );

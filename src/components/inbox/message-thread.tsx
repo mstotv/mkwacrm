@@ -473,6 +473,43 @@ export function MessageThread({
     [conversation, onNewMessage, onUpdateMessage]
   );
 
+  const handleApproveDraft = useCallback(
+    async (draftMsg: Message) => {
+      if (!conversation || !draftMsg.content_text) return;
+
+      // 1. Send the text message
+      await handleSend(draftMsg.content_text, draftMsg.reply_to_message_id ?? undefined);
+
+      // 2. Delete the draft message from DB
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("messages")
+        .delete()
+        .eq("id", draftMsg.id);
+
+      if (error) {
+        console.error("Failed to delete draft message:", error);
+      }
+    },
+    [conversation, handleSend]
+  );
+
+  const handleDeleteDraft = useCallback(
+    async (draftMsg: Message) => {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("messages")
+        .delete()
+        .eq("id", draftMsg.id);
+
+      if (error) {
+        console.error("Failed to delete draft message:", error);
+        toast.error("Failed to delete draft");
+      }
+    },
+    []
+  );
+
   const handleStatusChange = useCallback(
     async (status: ConversationStatus) => {
       if (!conversation) return;
@@ -926,6 +963,8 @@ export function MessageThread({
                           reactions={msgReactions}
                           currentUserId={user?.id}
                           onToggleReaction={handlePillToggle}
+                          onApproveDraft={handleApproveDraft}
+                          onDeleteDraft={handleDeleteDraft}
                         />
                       </MessageActions>
                     );

@@ -13,6 +13,7 @@ import type {
   WaitStepConfig,
   CreateDealStepConfig,
   AssignConversationStepConfig,
+  AiReplyStepConfig,
 } from '@/types'
 import { supabaseAdmin } from './admin-client'
 import { engineSendText, engineSendTemplate } from './meta-send'
@@ -545,6 +546,158 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         .eq('account_id', args.automation.account_id)
         .eq('contact_id', args.contactId)
       return 'conversation closed'
+    }
+
+    case 'ai_reply': {
+      const cfg = step.step_config as AiReplyStepConfig
+      const conversationId = await resolveConversationId(args)
+
+      // 1) Verify active paid subscription (status = active AND name !== free AND price_monthly > 0)
+      const { data: subscription, error: subErr } = await db
+        .from('account_subscriptions')
+        .select(`
+          status,
+          plan:subscription_plans(name, price_monthly)
+        `)
+        .eq('account_id', args.automation.account_id)
+        .maybeSingle()
+
+      if (subErr) {
+        throw new Error(`Failed to check subscription: ${subErr.message}`)
+      }
+
+      const planName = (subscription as any)?.plan?.name;
+      const planPrice = Number((subscription as any)?.plan?.price_monthly ?? 0);
+      const isPaid = subscription?.status === 'active' && planName !== 'free' && planPrice > 0;
+
+      if (!isPaid) {
+        throw new Error('AI Reply action is only available for active paid subscriptions.')
+      }
+
+      // 2) Get AI Configuration (provider, API key, system prompt)
+      const { data: aiConfig, error: aiErr } = await db
+        .from('ai_config')
+        .select('*')
+        .eq('account_id', args.automation.account_id)
+        .maybeSingle()
+
+      if (aiErr) {
+        throw new Error(`Failed to load AI configuration: ${aiErr.message}`)
+      }
+      if (!aiConfig || !aiConfig.api_key) {
+        throw new Error('AI assistant is not configured. Please configure your API key in AI settings.')
+      }
+
+      // 3) Retrieve conversation history for context (up to 10 messages)
+      const { data: recentMsgs } = await db
+        .from('messages')
+        .select('sender_type, content_text')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+      const history = (recentMsgs ?? [])
+        .reverse()
+        .map((m) => {
+          const role = m.sender_type === 'customer' ? 'user' : 'assistant'
+          return { role, content: m.content_text || '' }
+        })
+        .filter((m) => m.content)
+
+      const systemPrompt =
+        cfg.system_prompt ||
+        aiConfig.system_prompt ||
+        'You are a helpful customer assistant.'
+
+      const llmMessages = [
+        { role: 'system', content: systemPrompt },
+        ...history,
+      ]
+
+      // If the incoming message text isn't in history yet, append it as user message
+      const lastMsgText = args.context?.message_text
+      if (
+        lastMsgText &&
+        (history.length === 0 || history[history.length - 1].content !== lastMsgText)
+      ) {
+        llmMessages.push({ role: 'user', content: lastMsgText })
+      }
+
+      // 4) Query AI model
+      let replyText = ''
+      if (aiConfig.provider === 'openai') {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${aiConfig.api_key}`,
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: llmMessages,
+            max_tokens: 500,
+          }),
+        })
+
+        const resData = await response.json()
+        if (response.ok && resData.choices?.[0]?.message?.content) {
+          replyText = resData.choices[0].message.content.trim()
+        } else {
+          throw new Error(`OpenAI API error: ${resData.error?.message || JSON.stringify(resData)}`)
+        }
+      } else if (aiConfig.provider === 'deepseek') {
+        const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${aiConfig.api_key}`,
+          },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: llmMessages,
+            max_tokens: 500,
+          }),
+        })
+
+        const resData = await response.json()
+        if (response.ok && resData.choices?.[0]?.message?.content) {
+          replyText = resData.choices[0].message.content.trim()
+        } else {
+          throw new Error(`DeepSeek API error: ${resData.error?.message || JSON.stringify(resData)}`)
+        }
+      } else {
+        throw new Error(`Unsupported AI provider: ${aiConfig.provider}`)
+      }
+
+      if (!replyText) {
+        throw new Error('AI generated an empty reply.')
+      }
+
+      // 5) Send directly or create human-in-the-loop draft
+      if (cfg.human_in_the_loop) {
+        const draftId = `ai-draft-${crypto.randomUUID()}`
+        const { error: insertErr } = await db.from('messages').insert({
+          conversation_id: conversationId,
+          sender_type: 'bot',
+          content_type: 'text',
+          content_text: replyText,
+          message_id: draftId,
+          status: 'sending',
+        })
+        if (insertErr) {
+          throw new Error(`Failed to insert AI draft: ${insertErr.message}`)
+        }
+        return `Draft created for review (${draftId})`
+      } else {
+        const { whatsapp_message_id } = await engineSendText({
+          accountId: args.automation.account_id,
+          userId: args.automation.user_id,
+          conversationId,
+          contactId: args.contactId!,
+          text: replyText,
+        })
+        return `AI reply sent (${whatsapp_message_id})`
+      }
     }
 
     default:

@@ -30,6 +30,7 @@ import {
   Loader2,
   ArrowDown,
   ArrowUp,
+  Sparkles,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -99,6 +100,7 @@ const STEP_META: Record<AutomationStepType, StepMeta> = {
   condition: { label: "Condition (If/Else)", icon: GitBranch, border: "border-l-amber-500" },
   send_webhook: { label: "Send Webhook", icon: Webhook, border: "border-l-primary" },
   close_conversation: { label: "Close Conversation", icon: CircleSlash, border: "border-l-primary" },
+  ai_reply: { label: "AI Reply", icon: Sparkles, border: "border-l-amber-500" },
 }
 
 const ADDABLE_STEPS: AutomationStepType[] = [
@@ -113,6 +115,7 @@ const ADDABLE_STEPS: AutomationStepType[] = [
   "condition",
   "send_webhook",
   "close_conversation",
+  "ai_reply",
 ]
 
 const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string; hint: string }[] = [
@@ -161,6 +164,8 @@ function blankConfig(type: AutomationStepType): Record<string, unknown> {
       return { url: "", headers: {}, body_template: "" }
     case "close_conversation":
       return {}
+    case "ai_reply":
+      return { system_prompt: "", human_in_the_loop: false }
     default:
       return {}
   }
@@ -1231,6 +1236,28 @@ function StepEditor({
           Sets the conversation status to &quot;closed&quot;. No configuration needed.
         </p>
       )
+    case "ai_reply":
+      return (
+        <>
+          <FieldBlock label="System Prompt (Instructions)">
+            <Textarea
+              value={(cfg.system_prompt as string) ?? ""}
+              onChange={(e) => set({ system_prompt: e.target.value })}
+              placeholder="Instructions for the AI. If empty, falls back to global AI Assistant settings..."
+              className="min-h-24 bg-slate-800 text-white"
+            />
+          </FieldBlock>
+          <div className="mt-3 flex items-center justify-between">
+            <label className="text-xs font-medium text-slate-400">
+              Human-in-the-loop (Draft for manual review)
+            </label>
+            <Switch
+              checked={(cfg.human_in_the_loop as boolean) ?? false}
+              onCheckedChange={(v) => set({ human_in_the_loop: !!v })}
+            />
+          </div>
+        </>
+      )
     default:
       return null
   }
@@ -1263,6 +1290,8 @@ function previewFor(step: BuilderStep): string {
       return `when ${step.step_config.subject ?? "?"}`
     case "send_webhook":
       return (step.step_config.url as string) || "no url"
+    case "ai_reply":
+      return `AI Reply: ${(step.step_config.system_prompt as string)?.slice(0, 30) || "system settings"}`
     default:
       return ""
   }

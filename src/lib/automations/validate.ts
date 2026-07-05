@@ -135,6 +135,9 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
     case 'close_conversation':
       // No config required.
       break
+    case 'ai_reply':
+      // No strict validation required since local config can fall back to global config.
+      break
     default:
       issues.push({ path, message: `unknown step type: ${step.step_type}` })
   }

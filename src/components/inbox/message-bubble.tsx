@@ -13,6 +13,7 @@ import {
   LayoutTemplate,
   ImageOff,
   CornerDownLeft,
+  Sparkles,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
@@ -25,6 +26,8 @@ interface MessageBubbleProps {
   reactions?: MessageReaction[];
   currentUserId?: string;
   onToggleReaction?: (emoji: string) => void;
+  onApproveDraft?: (message: Message) => void;
+  onDeleteDraft?: (message: Message) => void;
 }
 
 function StatusIcon({ status }: { status: Message["status"] }) {
@@ -247,8 +250,11 @@ export function MessageBubble({
   reactions,
   currentUserId,
   onToggleReaction,
+  onApproveDraft,
+  onDeleteDraft,
 }: MessageBubbleProps) {
   const isAgent = message.sender_type === "agent" || message.sender_type === "bot";
+  const isAiDraft = message.message_id?.startsWith("ai-draft-");
   const time = format(new Date(message.created_at), "HH:mm");
 
   // Row alignment + width cap are owned by <MessageActions> so its hover
@@ -263,11 +269,19 @@ export function MessageBubble({
       <div
         className={cn(
           "relative rounded-2xl px-3 py-2",
-          isAgent
-            ? "rounded-br-md bg-primary text-primary-foreground"
-            : "rounded-bl-md bg-slate-800 text-slate-100",
+          isAiDraft
+            ? "rounded-br-md border-2 border-dashed border-amber-500/60 bg-slate-900/90 text-slate-100"
+            : isAgent
+              ? "rounded-br-md bg-primary text-primary-foreground"
+              : "rounded-bl-md bg-slate-800 text-slate-100",
         )}
       >
+        {isAiDraft && (
+          <div className="mb-1.5 flex items-center gap-1.5 rounded bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400 border border-amber-500/20 max-w-fit">
+            <Sparkles className="h-3 w-3" />
+            AI Draft (Requires Approval)
+          </div>
+        )}
         {reply && (
           <ReplyQuote authorLabel={reply.authorLabel} preview={reply.preview} />
         )}
@@ -279,9 +293,27 @@ export function MessageBubble({
           )}
         >
           <span className="text-[10px] text-white/60">{time}</span>
-          {isAgent && <StatusIcon status={message.status} />}
+          {isAgent && !isAiDraft && <StatusIcon status={message.status} />}
         </div>
       </div>
+
+      {isAiDraft && onApproveDraft && onDeleteDraft && (
+        <div className="mt-1 flex items-center gap-2">
+          <button
+            onClick={() => onApproveDraft(message)}
+            className="flex items-center gap-1 rounded bg-emerald-500/20 px-2.5 py-1 text-[11px] font-medium text-emerald-400 hover:bg-emerald-500/35 border border-emerald-500/20 transition-all cursor-pointer shadow-sm hover:shadow"
+          >
+            Approve & Send
+          </button>
+          <button
+            onClick={() => onDeleteDraft(message)}
+            className="flex items-center gap-1 rounded bg-rose-500/20 px-2.5 py-1 text-[11px] font-medium text-rose-400 hover:bg-rose-500/35 border border-rose-500/20 transition-all cursor-pointer shadow-sm hover:shadow"
+          >
+            Delete
+          </button>
+        </div>
+      )}
+
       {reactions && reactions.length > 0 && onToggleReaction && (
         <MessageReactions
           reactions={reactions}
