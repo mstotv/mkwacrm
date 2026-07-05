@@ -57,7 +57,7 @@ export interface DispatchInput {
  * All errors are caught and logged; per-automation failures are
  * recorded into automation_logs with status='failed'.
  */
-export async function runAutomationsForTrigger(input: DispatchInput): Promise<void> {
+async function dispatchActual(input: DispatchInput): Promise<void> {
   try {
     const db = supabaseAdmin()
 
@@ -109,6 +109,55 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
   } catch (err) {
     console.error('[automations] dispatch failed:', err)
   }
+}
+
+const debounceMap = new Map<string, { timeoutId: NodeJS.Timeout; messages: string[] }>()
+const DEBOUNCE_DELAY_MS = 6000
+
+export async function runAutomationsForTrigger(input: DispatchInput): Promise<void> {
+  if (input.contactId && (input.triggerType === 'new_message_received' || input.triggerType === 'keyword_match')) {
+    const key = `${input.accountId}:${input.contactId}:${input.triggerType}`
+    const existing = debounceMap.get(key)
+    const currentText = input.context?.message_text || ''
+
+    if (existing) {
+      clearTimeout(existing.timeoutId)
+      if (currentText && !existing.messages.includes(currentText)) {
+        existing.messages.push(currentText)
+      }
+      
+      existing.timeoutId = setTimeout(() => {
+        debounceMap.delete(key)
+        const combinedText = existing.messages.join('\n')
+        dispatchActual({
+          ...input,
+          context: {
+            ...input.context,
+            message_text: combinedText
+          }
+        }).catch(err => console.error('[automations] debounced dispatch error:', err))
+      }, DEBOUNCE_DELAY_MS)
+      return
+    } else {
+      const messages = currentText ? [currentText] : []
+      const timeoutId = setTimeout(() => {
+        debounceMap.delete(key)
+        const combinedText = messages.join('\n')
+        dispatchActual({
+          ...input,
+          context: {
+            ...input.context,
+            message_text: combinedText
+          }
+        }).catch(err => console.error('[automations] debounced dispatch error:', err))
+      }, DEBOUNCE_DELAY_MS)
+
+      debounceMap.set(key, { timeoutId, messages })
+      return
+    }
+  }
+
+  return dispatchActual(input)
 }
 
 /**
@@ -612,6 +661,8 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         .order('created_at', { ascending: false })
         .limit(10)
 
+      const lastMsgText = args.context?.message_text
+
       const history = (recentMsgs ?? [])
         .reverse()
         .map((m) => {
@@ -619,19 +670,29 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           return { role, content: m.content_text || '' }
         })
         .filter((m) => m.content)
+        // Prevent duplication if message_text contains combined debounced messages
+        .filter((m) => {
+          if (m.role === 'user' && lastMsgText && lastMsgText.includes(m.content) && lastMsgText !== m.content) {
+            return false;
+          }
+          return true;
+        })
 
       const systemPrompt =
         cfg.system_prompt ||
         aiConfig.system_prompt ||
         'You are a helpful customer assistant.'
 
+      // Append default brevity instruction to system prompt
+      const brevityInstruction = '\n\n**تعليمات هامة لأسلوب الرد / Important reply instructions:**\n- أجب دائماً بإيجاز شديد (جملتين إلى ثلاث جمل كحد أقصى)، بما يكفي لإعطاء العميل المعلومة الكافية دون إطالة أو حشو.\n- Always answer very briefly (maximum 2 to 3 sentences), enough to give the customer sufficient information without lengthiness.'
+      const compiledSystemPrompt = `${systemPrompt}${brevityInstruction}`
+
       const llmMessages = [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: compiledSystemPrompt },
         ...history,
       ]
 
       // If the incoming message text isn't in history yet, append it as user message
-      const lastMsgText = args.context?.message_text
       if (
         lastMsgText &&
         (history.length === 0 || history[history.length - 1].content !== lastMsgText)
@@ -653,7 +714,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           body: JSON.stringify({
             model: 'gpt-4o-mini',
             messages: llmMessages,
-            max_tokens: 500,
+            max_tokens: 200, // Reduced max_tokens to 200 for brevity and token savings
           }),
         })
 
@@ -673,7 +734,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           body: JSON.stringify({
             model: 'deepseek-chat',
             messages: llmMessages,
-            max_tokens: 500,
+            max_tokens: 200, // Reduced max_tokens to 200 for brevity and token savings
           }),
         })
 
