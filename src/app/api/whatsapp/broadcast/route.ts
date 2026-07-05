@@ -181,7 +181,10 @@ export async function POST(request: Request) {
     let sentCount = 0
     let failedCount = 0
 
-    for (const recipient of recipients) {
+    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+    for (let idx = 0; idx < recipients.length; idx++) {
+      const recipient = recipients[idx]
       const sanitized = sanitizePhoneForMeta(recipient.phone)
 
       if (!isValidE164(sanitized)) {
@@ -193,6 +196,15 @@ export async function POST(request: Request) {
         failedCount++
         continue
       }
+
+      // Add a random delay between 2-5 seconds for Evolution to avoid number ban/rate-limiting
+      if (config.connection_type === 'evolution' && sentCount > 0) {
+        const ms = Math.floor(Math.random() * 3000) + 2000
+        console.log(`[Broadcast] Delaying ${ms}ms to send next message via Evolution...`)
+        await delay(ms)
+      }
+
+      console.log(`[Broadcast] Attempting to send to ${recipient.phone} (${idx + 1}/${recipients.length}) via ${config.connection_type}`)
 
       // Retry with phone variants on "not in allowed list" so numbers
       // that differ only in a trunk-prefix 0 still reach recipients.

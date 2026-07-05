@@ -13,6 +13,7 @@ import {
   SlidersHorizontal,
   CreditCard,
   Brain,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useCan } from '@/hooks/use-can';
@@ -29,6 +30,7 @@ import { DealsSettings } from '@/components/settings/deals-settings';
 import { CustomFieldsSettings } from '@/components/settings/custom-fields-settings';
 import { BillingPanel } from '@/components/settings/billing-panel';
 import { AIPanel } from '@/components/settings/ai-panel';
+import { GoogleSheetsPanel } from '@/components/settings/google-sheets-panel';
 
 const TAB_VALUES = [
   'profile',
@@ -41,6 +43,7 @@ const TAB_VALUES = [
   'members',
   'billing',
   'ai',
+  'google-sheets',
 ] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 
@@ -160,6 +163,13 @@ function SettingsPageInner() {
             <Brain className="size-4" />
             {t('settings.aiTab')}
           </TabsTrigger>
+          <TabsTrigger
+            value="google-sheets"
+            className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
+          >
+            <FileSpreadsheet className="size-4" />
+            Google Sheets
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="space-y-6">
@@ -204,6 +214,10 @@ function SettingsPageInner() {
 
         <TabsContent value="ai">
           <AIPanel />
+        </TabsContent>
+
+        <TabsContent value="google-sheets">
+          <GoogleSheetsPanel />
         </TabsContent>
       </Tabs>
     </div>

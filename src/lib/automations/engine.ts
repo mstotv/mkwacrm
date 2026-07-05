@@ -14,9 +14,11 @@ import type {
   CreateDealStepConfig,
   AssignConversationStepConfig,
   AiReplyStepConfig,
+  SaveToGoogleSheetStepConfig,
 } from '@/types'
 import { supabaseAdmin } from './admin-client'
 import { engineSendText, engineSendTemplate } from './meta-send'
+import { getFreshTokenForAccount, getGoogleSheetsConfig } from '@/lib/whatsapp/google-sheets'
 
 // ------------------------------------------------------------
 // Public API
@@ -698,6 +700,146 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         })
         return `AI reply sent (${whatsapp_message_id})`
       }
+    }
+    case 'save_to_google_sheet': {
+      const cfg = step.step_config as SaveToGoogleSheetStepConfig
+      
+      const spreadsheetId = cfg.spreadsheet_id
+      if (!spreadsheetId) {
+        throw new Error('No Google Spreadsheet selected in workflow step.')
+      }
+
+      // Load config to find the Google Account ID for this spreadsheet
+      const { sheets } = await getGoogleSheetsConfig(args.automation.account_id)
+      const matchedSheet = sheets.find(s => s.spreadsheet_id === spreadsheetId)
+      if (!matchedSheet) {
+        throw new Error(`The spreadsheet ID ${spreadsheetId} is not linked to any Google account in Settings.`)
+      }
+
+      const googleAccountId = matchedSheet.google_account_id
+      const sheetName = cfg.sheet_name || 'Sheet1'
+      
+      // Refresh token and call Google Sheets API
+      let token = ''
+      try {
+        token = await getFreshTokenForAccount(args.automation.account_id, googleAccountId)
+      } catch (tokenErr: any) {
+        throw new Error(`Google authentication expired. Please reconnect your account in Settings: ${tokenErr.message}`)
+      }
+
+      // Resolve variables for mappings
+      const mappings = cfg.mappings || []
+      const rowValues: Record<string, string> = {}
+
+      // Fetch contact details if needed
+      let contactData: any = null
+      if (args.contactId) {
+        const { data } = await db
+          .from('contacts')
+          .select('*')
+          .eq('id', args.contactId)
+          .maybeSingle()
+        contactData = data
+      }
+
+      for (const m of mappings) {
+        if (!m.field || !m.column) continue
+
+        let resolvedValue = ''
+        if (m.field.includes('{{')) {
+          resolvedValue = interpolate(m.field, args)
+        } else {
+          switch (m.field) {
+            case 'contact.name':
+            case 'name':
+              resolvedValue = contactData?.name || ''
+              break
+            case 'contact.phone':
+            case 'phone':
+              resolvedValue = contactData?.phone || ''
+              break
+            case 'contact.email':
+            case 'email':
+              resolvedValue = contactData?.email || ''
+              break
+            case 'contact.company':
+            case 'company':
+              resolvedValue = contactData?.company || ''
+              break
+            case 'message.text':
+            case 'message_text':
+              resolvedValue = args.context?.message_text || ''
+              break
+            default:
+              resolvedValue = String(args.context?.vars?.[m.field] || m.field)
+              break
+          }
+        }
+        rowValues[m.column] = resolvedValue
+      }
+
+      // Fetch headers to map column names to indices
+      let headers: string[] = []
+      try {
+        const headersRes = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!1:1`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        if (headersRes.ok) {
+          const data = await headersRes.json()
+          headers = data.values?.[0] || []
+        }
+      } catch (err) {
+        console.warn('Failed to fetch headers, falling back to column letters only:', err)
+      }
+
+      // Convert letter to index helper
+      const getColumnIndex = (col: string): number => {
+        const clean = col.trim()
+        if (/^[a-zA-Z]+$/.test(clean)) {
+          let idx = 0
+          const upper = clean.toUpperCase()
+          for (let i = 0; i < upper.length; i++) {
+            idx = idx * 26 + (upper.charCodeAt(i) - 64)
+          }
+          return idx - 1
+        }
+        const headerIdx = headers.findIndex(h => h.toLowerCase().trim() === clean.toLowerCase())
+        return headerIdx
+      }
+
+      // Build row values array
+      const maxIndex = Math.max(...mappings.map(m => getColumnIndex(m.column)).filter(idx => idx >= 0), 0)
+      const rowValuesArr = new Array(maxIndex + 1).fill('')
+
+      for (const m of mappings) {
+        const idx = getColumnIndex(m.column)
+        if (idx >= 0) {
+          rowValuesArr[idx] = rowValues[m.column]
+        }
+      }
+
+      // Append row to sheet
+      const appendRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}:append?valueInputOption=USER_ENTERED`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            values: [rowValuesArr],
+          }),
+        }
+      )
+
+      const appendData = await appendRes.json()
+      if (!appendRes.ok) {
+        throw new Error(`Google Sheets append failed: ${appendData.error?.message || JSON.stringify(appendData)}`)
+      }
+
+      return `Saved row to Google Sheet (${sheetName})`
     }
 
     default:

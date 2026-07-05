@@ -394,7 +394,8 @@ export type AutomationStepType =
   | 'condition'
   | 'send_webhook'
   | 'close_conversation'
-  | 'ai_reply';
+  | 'ai_reply'
+  | 'save_to_google_sheet';
 
 export type AutomationLogStatus = 'success' | 'partial' | 'failed';
 
@@ -490,6 +491,12 @@ export interface AiReplyStepConfig {
   human_in_the_loop?: boolean;
 }
 
+export interface SaveToGoogleSheetStepConfig {
+  spreadsheet_id?: string;
+  sheet_name?: string;
+  mappings?: Array<{ field: string; column: string }>;
+}
+
 export type AutomationStepConfig =
   | SendMessageStepConfig
   | SendTemplateStepConfig
@@ -501,6 +508,7 @@ export type AutomationStepConfig =
   | ConditionStepConfig
   | SendWebhookStepConfig
   | AiReplyStepConfig
+  | SaveToGoogleSheetStepConfig
   | Record<string, never>
   | Record<string, unknown>;
 

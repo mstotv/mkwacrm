@@ -1,5 +1,6 @@
 import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { sendEvolutionTextMessage } from '@/lib/whatsapp/evolution-api'
+import { formatEvolutionTemplate } from '@/lib/whatsapp/evolution-formatter'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
   sanitizePhoneForMeta,
@@ -113,15 +114,32 @@ async function engineSend(input: SendInput): Promise<{ whatsapp_message_id: stri
       // there is no concept of pre-approved template sends.
       let textToSend = ''
       if (input.kind === 'template') {
-        // Build a human-readable text from the template name +
-        // any provided params, since we can't send a Meta-style
-        // template via Evolution.
-        const paramList = input.params?.length
-          ? ` (${input.params.join(', ')})`
-          : ''
-        textToSend = `[Template: ${input.templateName}]${paramList}`
+        // Load the template row from DB so we can use
+        // formatEvolutionTemplate — gives the customer the full
+        // formatted message with variables replaced, header/footer
+        // styled, and buttons converted to readable text.
+        const { data: tplRow } = await db
+          .from('message_templates')
+          .select('*')
+          .eq('name', input.templateName)
+          .eq('user_id', input.userId)
+          .maybeSingle()
+
+        if (tplRow) {
+          textToSend = formatEvolutionTemplate(
+            tplRow,
+            { body: input.params },
+            input.params,
+          )
+        } else {
+          // Fallback: template row not found locally — send raw name
+          const paramList = input.params?.length
+            ? ` (${input.params.join(', ')})`
+            : ''
+          textToSend = `[Template: ${input.templateName}]${paramList}`
+        }
         console.log(
-          '[automations] Evolution: template send_template rendered as text:',
+          '[automations] Evolution: template rendered as text:',
           input.templateName,
         )
       } else {

@@ -138,6 +138,9 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
     case 'ai_reply':
       // No strict validation required since local config can fall back to global config.
       break
+    case 'save_to_google_sheet':
+      // No strict validation, dynamic inputs will be validated at runtime
+      break
     default:
       issues.push({ path, message: `unknown step type: ${step.step_type}` })
   }
