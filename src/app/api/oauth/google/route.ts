@@ -13,6 +13,7 @@ export async function GET(request: Request) {
 
     const clientId = process.env.GOOGLE_CLIENT_ID
     if (!clientId) {
+      console.error('GOOGLE_CLIENT_ID is missing. Available env keys:', Object.keys(process.env))
       return NextResponse.json({ error: 'GOOGLE_CLIENT_ID is not configured in server environment' }, { status: 500 })
     }
 

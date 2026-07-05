@@ -17,6 +17,11 @@ export async function GET(request: Request) {
     const clientId = process.env.GOOGLE_CLIENT_ID
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET
     if (!clientId || !clientSecret) {
+      console.error('Google OAuth credentials missing in callback.', {
+        hasClientId: !!clientId,
+        hasClientSecret: !!clientSecret,
+        availableEnvs: Object.keys(process.env)
+      })
       return NextResponse.json({ error: 'Google OAuth credentials missing' }, { status: 500 })
     }
 
