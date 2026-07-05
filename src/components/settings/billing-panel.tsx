@@ -80,38 +80,8 @@ export function BillingPanel() {
 
   const handlePayCrypto = async (plan: Plan) => {
     if (!account?.id) return;
-    toast.loading(t('common.loading', 'جاري إنشاء الفاتورة...'));
-
-    try {
-      const price = billingPeriod === 'monthly' ? plan.price_monthly : plan.price_yearly;
-      // We will call Plisio API to create an invoice
-      // For now, we will create a mock invoice and update DB directly
-      // In a real production setup, this would hit an API route that connects to Plisio
-      const response = await fetch('/api/billing/plisio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accountId: account.id,
-          planId: plan.id,
-          amount: price,
-          billingPeriod,
-        }),
-      });
-
-      const resData = await response.json();
-      if (!response.ok) throw new Error(resData.error || 'Failed to create invoice');
-
-      toast.dismiss();
-      toast.success(t('common.success', 'تم إنشاء الفاتورة بنجاح!'));
-
-      // Redirect user to Plisio payment invoice page
-      if (resData.payment_url) {
-        window.open(resData.payment_url, '_blank');
-      }
-    } catch (err: any) {
-      toast.dismiss();
-      toast.error(err.message || t('common.error', 'حدث خطأ أثناء إنشاء الفاتورة'));
-    }
+    toast.loading(t('common.loading', 'جاري تحويلك لبوابة الدفع...'));
+    window.location.href = `/api/billing/plisio/create-invoice?planId=${plan.id}&billingPeriod=${billingPeriod}`;
   };
 
   const limitLabel = (key: string) => {

@@ -1,10 +1,40 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
+
+export const dynamic = 'force-dynamic';
+
+function verifyPlisioSignature(body: any, receivedHash: string, secretKey: string): boolean {
+  const data = { ...body };
+  delete data.verify_hash;
+
+  // 1. ksort equivalent: sort keys alphabetically
+  const sorted: any = {};
+  Object.keys(data).sort().forEach(key => {
+    sorted[key] = data[key];
+  });
+  const serializedSorted = JSON.stringify(sorted);
+  const hashSorted = crypto.createHmac('sha1', secretKey).update(serializedSorted).digest('hex');
+  if (hashSorted === receivedHash) return true;
+
+  // 2. Unsorted fallback
+  const serializedUnsorted = JSON.stringify(data);
+  const hashUnsorted = crypto.createHmac('sha1', secretKey).update(serializedUnsorted).digest('hex');
+  if (hashUnsorted === receivedHash) return true;
+
+  console.error('[Plisio Webhook] Signature verification failed.', {
+    receivedHash,
+    hashSorted,
+    hashUnsorted
+  });
+  return false;
+}
 
 export async function POST(request: Request) {
+  // Use service role client to bypass RLS policies for updates
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
       cookies: {
         getAll() { return []; },
@@ -14,109 +44,157 @@ export async function POST(request: Request) {
   );
 
   try {
-    let status = '';
-    let txn_id = '';
-    let order_number = '';
-
-    const contentType = request.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      const body = await request.json();
-      status = body.status || '';
-      txn_id = body.txn_id || '';
-      order_number = body.order_number || '';
-    } else {
-      const text = await request.text();
-      const params = new URLSearchParams(text);
-      status = params.get('status') || '';
-      txn_id = params.get('txn_id') || '';
-      order_number = params.get('order_number') || '';
+    const rawBody = await request.text();
+    let body: any = {};
+    
+    try {
+      body = JSON.parse(rawBody);
+    } catch (e) {
+      // Fallback if Plisio sends form-urlencoded (though json=true is passed)
+      const params = new URLSearchParams(rawBody);
+      params.forEach((val, key) => {
+        body[key] = val;
+      });
     }
 
-    if (!txn_id || !status) {
-      return NextResponse.json({ error: 'Missing webhook params' }, { status: 400 });
+    const verifyHash = body.verify_hash;
+    if (!verifyHash) {
+      console.warn('[Plisio Webhook] Missing verify_hash in payload');
+      return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
     }
 
-    // We only activate/process if status is completed ('completed' or 'confirmed')
-    if (status === 'completed' || status === 'confirmed') {
-      // Find the payment history record
-      const { data: paymentRecord, error: findError } = await supabase
-        .from('payment_history')
-        .select('*')
-        .eq('plisio_invoice_id', txn_id)
-        .maybeSingle();
+    const secretKey = process.env.PLISIO_SECRET_KEY;
+    if (!secretKey) {
+      console.error('[Plisio Webhook] PLISIO_SECRET_KEY is not defined in environment');
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    }
 
-      if (findError || !paymentRecord) {
-        console.error('Payment history not found for txn:', txn_id);
-        return NextResponse.json({ error: 'Payment record not found' }, { status: 404 });
-      }
+    // Verify signature
+    const isValid = verifyPlisioSignature(body, verifyHash, secretKey);
+    if (!isValid) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 422 });
+    }
 
-      if (paymentRecord.status !== 'paid') {
-        // Update payment history
+    const { status, txn_id, order_number } = body;
+    if (!order_number || !status) {
+      return NextResponse.json({ error: 'Missing status or order number' }, { status: 400 });
+    }
+
+    // Find the payment request in the DB
+    const { data: paymentRequest, error: reqError } = await supabase
+      .from('payment_requests')
+      .select('*')
+      .eq('order_number', order_number)
+      .maybeSingle();
+
+    if (reqError || !paymentRequest) {
+      console.warn(`[Plisio Webhook] Payment request not found for order: ${order_number}`);
+      return NextResponse.json({ error: 'Payment request not found' }, { status: 404 });
+    }
+
+    // Only process state changes if not already finalized
+    if (paymentRequest.status === 'pending') {
+      if (status === 'completed') {
+        // 1) Update payment request status
         await supabase
-          .from('payment_history')
-          .update({
-            status: 'paid',
-            paid_at: new Date().toISOString(),
-          })
-          .eq('id', paymentRecord.id);
+          .from('payment_requests')
+          .update({ status: 'completed', updated_at: new Date().toISOString() })
+          .eq('id', paymentRequest.id);
 
-        // Fetch corresponding plan and billing period from paymentRecord (or check descriptions for fallback)
-        const planId = paymentRecord.plan_id;
-        const isYearly = paymentRecord.billing_period === 'yearly' || paymentRecord.description?.includes('yearly') || false;
-        const periodEnd = new Date();
-        periodEnd.setDate(periodEnd.getDate() + (isYearly ? 365 : 30));
+        // 2) Find account_id for the user
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('account_id')
+          .eq('user_id', paymentRequest.user_id)
+          .maybeSingle();
 
-        let targetPlanId = planId;
+        if (profile?.account_id) {
+          const accountId = profile.account_id;
+          
+          // 3) Create or update account subscription
+          const periodEnd = new Date();
+          periodEnd.setDate(periodEnd.getDate() + (paymentRequest.billing_cycle === 'yearly' ? 365 : 30));
 
-        if (!targetPlanId) {
-          // Get default subscription plan named 'starter' to map, or whatever is stored
-          const { data: plan } = await supabase
-            .from('subscription_plans')
-            .select('id')
-            .eq('name', 'starter')
-            .single();
-          targetPlanId = plan?.id;
-        }
-
-        if (targetPlanId) {
-          // Update or insert subscription
           const { data: existingSub } = await supabase
             .from('account_subscriptions')
             .select('id')
-            .eq('account_id', paymentRecord.account_id)
+            .eq('account_id', accountId)
             .maybeSingle();
 
+          let subscriptionId = '';
+
           if (existingSub) {
-            await supabase
+            const { data: updatedSub } = await supabase
               .from('account_subscriptions')
               .update({
-                plan_id: targetPlanId,
+                plan_id: paymentRequest.plan_id,
                 status: 'active',
                 current_period_start: new Date().toISOString(),
                 current_period_end: periodEnd.toISOString(),
                 payment_method: 'plisio',
                 updated_at: new Date().toISOString(),
               })
-              .eq('account_id', paymentRecord.account_id);
+              .eq('account_id', accountId)
+              .select('id')
+              .single();
+            
+            subscriptionId = updatedSub?.id || '';
           } else {
-            await supabase
+            const { data: insertedSub } = await supabase
               .from('account_subscriptions')
               .insert({
-                account_id: paymentRecord.account_id,
-                plan_id: targetPlanId,
+                account_id: accountId,
+                plan_id: paymentRequest.plan_id,
                 status: 'active',
                 current_period_start: new Date().toISOString(),
                 current_period_end: periodEnd.toISOString(),
                 payment_method: 'plisio',
-              });
+              })
+              .select('id')
+              .single();
+            
+            subscriptionId = insertedSub?.id || '';
           }
+
+          // 4) Insert record into payment_history
+          await supabase
+            .from('payment_history')
+            .insert({
+              account_id: accountId,
+              subscription_id: subscriptionId || null,
+              amount: paymentRequest.amount,
+              currency: 'USD',
+              status: 'paid',
+              payment_method: 'plisio',
+              plisio_invoice_id: txn_id,
+              plan_id: paymentRequest.plan_id,
+              billing_period: paymentRequest.billing_cycle,
+              description: `Paid for Plan ${paymentRequest.plan_id} (${paymentRequest.billing_cycle}) via Plisio crypto invoice`,
+              paid_at: new Date().toISOString()
+            });
+
+          console.log(`[Plisio Webhook] Plan successfully activated for account: ${accountId}`);
+        } else {
+          console.error(`[Plisio Webhook] Account ID profile not found for user: ${paymentRequest.user_id}`);
         }
+
+      } else if (['error', 'cancelled', 'expired'].includes(status)) {
+        // Finalize payment request as failed
+        await supabase
+          .from('payment_requests')
+          .update({ status: 'failed', updated_at: new Date().toISOString() })
+          .eq('id', paymentRequest.id);
+
+        console.log(`[Plisio Webhook] Payment request failed with status: ${status}`);
+      } else {
+        // Other states (new, pending, pending internal)
+        console.log(`[Plisio Webhook] Payment request progress: ${status}`);
       }
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ success: true });
   } catch (err: any) {
-    console.error('Webhook error:', err);
-    return NextResponse.json({ error: err.message || 'Internal webhook error' }, { status: 500 });
+    console.error('[Plisio Webhook] Error:', err);
+    return NextResponse.json({ error: err.message || 'Webhook internal error' }, { status: 500 });
   }
 }
