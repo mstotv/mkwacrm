@@ -1304,6 +1304,10 @@ function StepEditor({
           .then((data) => {
             if (data.sheets) {
               setAvailableTabs(data.sheets)
+              const currentSheetName = cfg.sheet_name as string
+              if (data.sheets.length > 0 && (!currentSheetName || !data.sheets.includes(currentSheetName))) {
+                set({ sheet_name: data.sheets[0] })
+              }
             } else {
               setAvailableTabs([])
             }
