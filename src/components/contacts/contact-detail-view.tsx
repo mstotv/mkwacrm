@@ -62,6 +62,7 @@ export function ContactDetailView({
   const [editEmail, setEditEmail] = useState('');
   const [editCompany, setEditCompany] = useState('');
   const [editAddress, setEditAddress] = useState('');
+  const [editColor, setEditColor] = useState('#64748b');
   const [savingDetails, setSavingDetails] = useState(false);
 
   // Tags tab
@@ -102,6 +103,7 @@ export function ContactDetailView({
       setEditEmail(data.email ?? '');
       setEditCompany(data.company ?? '');
       setEditAddress(data.address ?? '');
+      setEditColor(data.color ?? '#64748b');
     }
     setLoading(false);
   }, [contactId, supabase]);
@@ -201,6 +203,7 @@ export function ContactDetailView({
         email: editEmail.trim() || null,
         company: editCompany.trim() || null,
         address: editAddress.trim() || null,
+        color: editColor.trim() || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', contactId);
@@ -346,8 +349,8 @@ export function ContactDetailView({
             {/* Header */}
             <SheetHeader className="p-4 border-b border-slate-700/50">
               <div className="flex items-center gap-3">
-                <Avatar className="size-12 bg-slate-800 border border-slate-700">
-                  <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
+                <Avatar className="size-12 bg-slate-800 border" style={{ borderColor: contact.color || '#334155' }}>
+                  <AvatarFallback className="text-sm font-medium" style={{ backgroundColor: contact.color ? `${contact.color}20` : undefined, color: contact.color || undefined }}>
                     {getInitials(contact.name)}
                   </AvatarFallback>
                 </Avatar>
@@ -473,6 +476,23 @@ export function ContactDetailView({
                       onChange={(e) => setEditAddress(e.target.value)}
                       className="bg-slate-800 border-slate-700 text-white h-8 text-sm"
                     />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-400 text-xs">Color</Label>
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        value={editColor}
+                        onChange={(e) => setEditColor(e.target.value)}
+                        className="bg-slate-800 border-slate-700 text-white h-8 text-sm flex-1"
+                        placeholder="#64748b"
+                      />
+                      <input
+                        type="color"
+                        value={editColor.startsWith('#') && editColor.length === 7 ? editColor : '#64748b'}
+                        onChange={(e) => setEditColor(e.target.value)}
+                        className="h-8 w-10 bg-slate-800 border border-slate-700 rounded cursor-pointer p-0.5"
+                      />
+                    </div>
                   </div>
                   <Button
                     onClick={saveDetails}

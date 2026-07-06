@@ -53,6 +53,7 @@ export function ContactForm({
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');
   const [address, setAddress] = useState('');
+  const [color, setColor] = useState('#64748b');
   const [saving, setSaving] = useState(false);
 
   // Duplicate-phone detection for NEW contacts. `exact` (same digits)
@@ -75,6 +76,7 @@ export function ContactForm({
       setEmail(contact?.email ?? '');
       setCompany(contact?.company ?? '');
       setAddress(contact?.address ?? '');
+      setColor(contact?.color ?? '#64748b');
       setSelectedTagIds(contactTags.map((ct) => ct.tag_id));
       setDupMatch(null);
       fetchTags();
@@ -157,6 +159,7 @@ export function ContactForm({
             email: email.trim() || null,
             company: company.trim() || null,
             address: address.trim() || null,
+            color: color.trim() || null,
             updated_at: new Date().toISOString(),
           })
           .eq('id', contactId);
@@ -172,6 +175,7 @@ export function ContactForm({
             email: email.trim() || null,
             company: company.trim() || null,
             address: address.trim() || null,
+            color: color.trim() || null,
           })
           .select('id')
           .single();
@@ -339,6 +343,27 @@ export function ContactForm({
               placeholder="123 Main St, City, Country"
               className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="cf-color" className="text-slate-300">
+              Contact Color
+            </Label>
+            <div className="flex gap-2 items-center">
+              <Input
+                id="cf-color"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                placeholder="#64748b"
+                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 flex-1"
+              />
+              <input
+                type="color"
+                value={color.startsWith('#') && color.length === 7 ? color : '#64748b'}
+                onChange={(e) => setColor(e.target.value)}
+                className="h-8 w-10 bg-slate-800 border border-slate-700 rounded cursor-pointer p-0.5"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">

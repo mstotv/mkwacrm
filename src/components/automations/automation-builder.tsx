@@ -1439,7 +1439,7 @@ function StepEditor({
                         {lang === 'ar' ? 'الحقل المصدر' : 'Source Field'}
                       </label>
                       <select
-                        value={m.field.startsWith('{{') ? m.field : m.field === 'contact.name' || m.field === 'contact.phone' || m.field === 'contact.email' || m.field === 'contact.address' || m.field === 'message.text' ? m.field : 'custom'}
+                        value={m.field.startsWith('{{') ? m.field : m.field === 'contact.name' || m.field === 'contact.phone' || m.field === 'contact.email' || m.field === 'contact.address' || m.field === 'contact.color' || m.field === 'message.text' ? m.field : 'custom'}
                         onChange={(e) => {
                           const val = e.target.value
                           if (val !== 'custom') {
@@ -1454,6 +1454,7 @@ function StepEditor({
                         <option value="contact.phone">{lang === 'ar' ? 'هاتف جهة الاتصال' : 'Contact Phone'}</option>
                         <option value="contact.email">{lang === 'ar' ? 'بريد جهة الاتصال' : 'Contact Email'}</option>
                         <option value="contact.address">{lang === 'ar' ? 'عنوان جهة الاتصال' : 'Contact Address'}</option>
+                        <option value="contact.color">{lang === 'ar' ? 'لون جهة الاتصال' : 'Contact Color'}</option>
                         <option value="message.text">{lang === 'ar' ? 'نص الرسالة الحالية' : 'Current Message Text'}</option>
                         <option value="{{ vars.ai_reply }}">{lang === 'ar' ? 'رد الذكاء الاصطناعي (AI Reply Output)' : 'AI Reply Output'}</option>
                         <option value="custom">{lang === 'ar' ? 'قالب مخصص / متغير...' : 'Custom Template / Key...'}</option>
@@ -1487,7 +1488,7 @@ function StepEditor({
                     </div>
                   </div>
 
-                  {(!['contact.name', 'contact.phone', 'contact.email', 'contact.address', 'message.text', '{{ vars.ai_reply }}'].includes(m.field) || m.field === '') && (
+                  {(!['contact.name', 'contact.phone', 'contact.email', 'contact.address', 'contact.color', 'message.text', '{{ vars.ai_reply }}'].includes(m.field) || m.field === '') && (
                     <div className="flex flex-col gap-1">
                       <label className="text-[10px] text-slate-500">
                         {lang === 'ar' ? 'مفتاح المتغير المخصص' : 'Custom Variable Key'}

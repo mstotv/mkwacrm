@@ -98,6 +98,7 @@ export interface Contact {
   email?: string;
   company?: string;
   address?: string;
+  color?: string;
   avatar_url?: string;
   created_at: string;
   updated_at: string;

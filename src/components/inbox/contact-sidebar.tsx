@@ -133,7 +133,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
         <div className="p-4">
           {/* Contact Info */}
           <div className="flex flex-col items-center text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-700 text-lg font-semibold text-white">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full text-lg font-semibold text-white" style={{ backgroundColor: contact.color || '#334155' }}>
               {contact.avatar_url ? (
                 <img
                   src={contact.avatar_url}
@@ -178,6 +178,13 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
               <div className="flex items-start gap-2 rounded-lg px-3 py-2 text-sm text-slate-300">
                 <MapPin className="h-4 w-4 text-slate-500 mt-0.5 shrink-0" />
                 <span className="break-words flex-1 text-left">{contact.address}</span>
+              </div>
+            )}
+
+            {contact.color && (
+              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300">
+                <div className="h-3.5 w-3.5 rounded-full border border-slate-700 shrink-0" style={{ backgroundColor: contact.color }} />
+                <span className="font-mono text-xs">{contact.color}</span>
               </div>
             )}
           </div>

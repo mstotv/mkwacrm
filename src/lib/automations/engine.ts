@@ -1103,6 +1103,10 @@ Only extract values that are explicitly provided in the text. If a value is not 
             case 'address':
               resolvedValue = contactData?.address || ''
               break
+            case 'contact.color':
+            case 'color':
+              resolvedValue = contactData?.color || ''
+              break
             case 'contact.company':
             case 'company':
               resolvedValue = contactData?.company || ''
