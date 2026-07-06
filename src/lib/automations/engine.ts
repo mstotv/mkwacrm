@@ -678,6 +678,24 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           return true;
         })
 
+      // Fetch calendar busy slots if a Google Account is connected
+      let calendarContext = ''
+      let googleToken = ''
+      let googleAccountId = ''
+      try {
+        const { accounts } = await getGoogleSheetsConfig(args.automation.account_id)
+        if (accounts && accounts.length > 0) {
+          googleAccountId = accounts[0].id
+          googleToken = await getFreshTokenForAccount(args.automation.account_id, googleAccountId)
+          const busySlotsText = await fetchCalendarBusySlots(args.automation.account_id, googleToken)
+          if (busySlotsText) {
+            calendarContext = `\n\n**معلومات المواعيد في تقويم Google Calendar (هام جداً):**\nتاريخ اليوم الحالي هو: ${new Date().toISOString().split('T')[0]}\n${busySlotsText}\n\n**تعليمات الحجز:**\n- لا تقترح على العميل أي موعد يقع في الأوقات المحجوزة أعلاه.\n- عندما يتفق العميل معك على موعد محدد ويؤكده بوضوح، قم بتأكيد الموعد وأرفق في نهاية ردك الوسم التالي بدقة متناهية: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss] حيث YYYY-MM-DDTHH:mm:ss هو تاريخ ووقت الموعد المتفق عليه بتنسيق ISO (مثال: [BOOK_APPOINTMENT: 2026-07-07T14:30:00]).`
+          }
+        }
+      } catch (calErr) {
+        console.error('[automations] Failed to load calendar context:', calErr)
+      }
+
       const systemPrompt =
         cfg.system_prompt ||
         aiConfig.system_prompt ||
@@ -685,7 +703,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
 
       // Append default brevity instruction to system prompt
       const brevityInstruction = '\n\n**تعليمات هامة لأسلوب الرد / Important reply instructions:**\n- أجب دائماً بإيجاز شديد (جملتين إلى ثلاث جمل كحد أقصى)، بما يكفي لإعطاء العميل المعلومة الكافية دون إطالة أو حشو.\n- Always answer very briefly (maximum 2 to 3 sentences), enough to give the customer sufficient information without lengthiness.'
-      const compiledSystemPrompt = `${systemPrompt}${brevityInstruction}`
+      const compiledSystemPrompt = `${systemPrompt}${calendarContext}${brevityInstruction}`
 
       const llmMessages = [
         { role: 'system', content: compiledSystemPrompt },
@@ -750,6 +768,46 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
 
       if (!replyText) {
         throw new Error('AI generated an empty reply.')
+      }
+
+      // Check if the AI returned a BOOK_APPOINTMENT tag and we have google tokens
+      const appointmentMatch = replyText.match(/\[BOOK_APPOINTMENT:\s*([^\]]+)\]/)
+      if (appointmentMatch && googleToken) {
+        const appointmentTime = appointmentMatch[1].trim()
+        try {
+          // Fetch contact details for event description
+          let contactName = 'عميل واتساب'
+          let contactPhone = ''
+          if (args.contactId) {
+            const { data: contactData } = await db
+              .from('contacts')
+              .select('name, phone')
+              .eq('id', args.contactId)
+              .maybeSingle()
+            if (contactData) {
+              contactName = contactData.name || contactName
+              contactPhone = contactData.phone || ''
+            }
+          }
+
+          const summary = `موعد مع العميل: ${contactName}`
+          const description = `تم الحجز تلقائياً عبر واتساب.\nالاسم: ${contactName}\nالهاتف: ${contactPhone}`
+
+          console.log('[Calendar] Attempting to book event at:', appointmentTime)
+          const eventId = await createCalendarEvent(
+            args.automation.account_id,
+            googleToken,
+            summary,
+            description,
+            appointmentTime
+          )
+          console.log('[Calendar] Booked event successfully. Event ID:', eventId)
+        } catch (bookErr: any) {
+          console.error('[Calendar] Auto booking failed:', bookErr)
+        }
+
+        // Clean the tag from the reply text so the customer doesn't see it
+        replyText = replyText.replace(/\[BOOK_APPOINTMENT:\s*[^\]]+\]/, '').trim()
       }
 
       // Save the AI reply to context variables so steps like google sheets can reference it
@@ -1084,4 +1142,98 @@ async function markPending(id: string, status: 'done' | 'failed') {
     .from('automation_pending_executions')
     .update({ status })
     .eq('id', id)
+}
+
+// ------------------------------------------------------------
+// Google Calendar Helpers
+// ------------------------------------------------------------
+
+async function fetchCalendarBusySlots(accountId: string, token: string): Promise<string> {
+  try {
+    const timeMin = new Date().toISOString()
+    const timeMax = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // next 7 days
+
+    const res = await fetch('https://www.googleapis.com/calendar/v3/freebusy', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        timeMin,
+        timeMax,
+        items: [{ id: 'primary' }],
+      }),
+    })
+
+    if (!res.ok) {
+      const errData = await res.json()
+      console.error('[Calendar] Freebusy request failed:', errData)
+      return ''
+    }
+
+    const data = await res.json()
+    const busySlots = data.calendars?.primary?.busy || []
+    if (busySlots.length === 0) {
+      return 'لا توجد مواعيد محجوزة حالياً (جميع الأوقات متاحة).'
+    }
+
+    const formatted = busySlots
+      .map((slot: any) => {
+        const start = new Date(slot.start)
+        const end = new Date(slot.end)
+        const formatDate = (d: Date) => {
+          const pad = (n: number) => String(n).padStart(2, '0')
+          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} الساعة ${pad(d.getHours())}:${pad(d.getMinutes())}`
+        }
+        return `- محجوز من: ${formatDate(start)} إلى: ${formatDate(end)}`
+      })
+      .join('\n')
+
+    return `الأوقات المحجوزة حالياً (غير المتاحة): \n${formatted}`
+  } catch (err) {
+    console.error('[Calendar] Error fetching busy slots:', err)
+    return ''
+  }
+}
+
+async function createCalendarEvent(
+  accountId: string,
+  token: string,
+  summary: string,
+  description: string,
+  startTimeIso: string
+): Promise<string> {
+  try {
+    const start = new Date(startTimeIso)
+    const end = new Date(start.getTime() + 60 * 60 * 1000) // default 1 hour duration
+
+    const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        summary,
+        description,
+        start: {
+          dateTime: start.toISOString(),
+        },
+        end: {
+          dateTime: end.toISOString(),
+        },
+      }),
+    })
+
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.error?.message || JSON.stringify(data))
+    }
+
+    return data.id
+  } catch (err: any) {
+    console.error('[Calendar] Event creation failed:', err)
+    throw new Error(`Failed to create Google Calendar event: ${err.message}`)
+  }
 }
