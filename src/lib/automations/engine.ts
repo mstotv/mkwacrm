@@ -752,6 +752,12 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         throw new Error('AI generated an empty reply.')
       }
 
+      // Save the AI reply to context variables so steps like google sheets can reference it
+      if (!args.context.vars) {
+        args.context.vars = {}
+      }
+      args.context.vars.ai_reply = replyText
+
       // 5) Send directly or create human-in-the-loop draft
       if (cfg.human_in_the_loop) {
         const draftId = `ai-draft-${crypto.randomUUID()}`
