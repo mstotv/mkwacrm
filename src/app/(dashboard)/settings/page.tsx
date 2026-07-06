@@ -14,6 +14,7 @@ import {
   CreditCard,
   Brain,
   FileSpreadsheet,
+  Calendar,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useCan } from '@/hooks/use-can';
@@ -31,6 +32,7 @@ import { CustomFieldsSettings } from '@/components/settings/custom-fields-settin
 import { BillingPanel } from '@/components/settings/billing-panel';
 import { AIPanel } from '@/components/settings/ai-panel';
 import { GoogleSheetsPanel } from '@/components/settings/google-sheets-panel';
+import { GoogleCalendarPanel } from '@/components/settings/google-calendar-panel';
 
 const TAB_VALUES = [
   'profile',
@@ -44,6 +46,7 @@ const TAB_VALUES = [
   'billing',
   'ai',
   'google-sheets',
+  'google-calendar',
 ] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 
@@ -170,6 +173,13 @@ function SettingsPageInner() {
             <FileSpreadsheet className="size-4" />
             Google Sheets
           </TabsTrigger>
+          <TabsTrigger
+            value="google-calendar"
+            className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
+          >
+            <Calendar className="size-4" />
+            Google Calendar
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="space-y-6">
@@ -218,6 +228,10 @@ function SettingsPageInner() {
 
         <TabsContent value="google-sheets">
           <GoogleSheetsPanel />
+        </TabsContent>
+
+        <TabsContent value="google-calendar">
+          <GoogleCalendarPanel />
         </TabsContent>
       </Tabs>
     </div>

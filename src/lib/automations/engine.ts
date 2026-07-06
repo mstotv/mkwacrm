@@ -682,12 +682,14 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       let calendarContext = ''
       let googleToken = ''
       let googleAccountId = ''
+      let calendarId = 'primary'
       try {
         const { accounts } = await getGoogleSheetsConfig(args.automation.account_id)
         if (accounts && accounts.length > 0) {
           googleAccountId = accounts[0].id
           googleToken = await getFreshTokenForAccount(args.automation.account_id, googleAccountId)
-          const busySlotsText = await fetchCalendarBusySlots(args.automation.account_id, googleToken)
+          calendarId = accounts[0].calendar_id || 'primary'
+          const busySlotsText = await fetchCalendarBusySlots(args.automation.account_id, googleToken, calendarId)
           if (busySlotsText) {
             calendarContext = `\n\n**معلومات المواعيد في تقويم Google Calendar (هام جداً):**\nتاريخ اليوم الحالي هو: ${new Date().toISOString().split('T')[0]}\n${busySlotsText}\n\n**تعليمات الحجز:**\n- لا تقترح على العميل أي موعد يقع في الأوقات المحجوزة أعلاه.\n- عندما يتفق العميل معك على موعد محدد ويؤكده بوضوح، قم بتأكيد الموعد وأرفق في نهاية ردك الوسم التالي بدقة متناهية: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss] حيث YYYY-MM-DDTHH:mm:ss هو تاريخ ووقت الموعد المتفق عليه بتنسيق ISO (مثال: [BOOK_APPOINTMENT: 2026-07-07T14:30:00]).`
           }
@@ -797,6 +799,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           const eventId = await createCalendarEvent(
             args.automation.account_id,
             googleToken,
+            calendarId,
             summary,
             description,
             appointmentTime
@@ -1148,12 +1151,12 @@ async function markPending(id: string, status: 'done' | 'failed') {
 // Google Calendar Helpers
 // ------------------------------------------------------------
 
-async function fetchCalendarBusySlots(accountId: string, token: string): Promise<string> {
+async function fetchCalendarBusySlots(accountId: string, token: string, calendarId: string): Promise<string> {
   try {
     const timeMin = new Date().toISOString()
     const timeMax = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // next 7 days
 
-    const res = await fetch('https://www.googleapis.com/calendar/v3/freebusy', {
+    const res = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -1162,7 +1165,7 @@ async function fetchCalendarBusySlots(accountId: string, token: string): Promise
       body: JSON.stringify({
         timeMin,
         timeMax,
-        items: [{ id: 'primary' }],
+        items: [{ id: calendarId }],
       }),
     })
 
@@ -1173,7 +1176,7 @@ async function fetchCalendarBusySlots(accountId: string, token: string): Promise
     }
 
     const data = await res.json()
-    const busySlots = data.calendars?.primary?.busy || []
+    const busySlots = data.calendars?.[calendarId]?.busy || []
     if (busySlots.length === 0) {
       return 'لا توجد مواعيد محجوزة حالياً (جميع الأوقات متاحة).'
     }
@@ -1200,6 +1203,7 @@ async function fetchCalendarBusySlots(accountId: string, token: string): Promise
 async function createCalendarEvent(
   accountId: string,
   token: string,
+  calendarId: string,
   summary: string,
   description: string,
   startTimeIso: string
@@ -1208,7 +1212,7 @@ async function createCalendarEvent(
     const start = new Date(startTimeIso)
     const end = new Date(start.getTime() + 60 * 60 * 1000) // default 1 hour duration
 
-    const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,

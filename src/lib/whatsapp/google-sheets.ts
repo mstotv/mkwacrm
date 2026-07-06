@@ -9,6 +9,7 @@ export interface GoogleAccount {
   access_token: string
   refresh_token: string
   expires_at: string
+  calendar_id?: string
 }
 
 export interface LinkedSpreadsheet {

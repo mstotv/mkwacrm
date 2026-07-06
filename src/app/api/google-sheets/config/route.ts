@@ -34,6 +34,7 @@ export async function GET() {
       name: a.name,
       avatar_url: a.avatar_url,
       connected: true,
+      calendar_id: a.calendar_id || 'primary'
     }))
 
     return NextResponse.json({
@@ -147,6 +148,20 @@ export async function POST(request: Request) {
       const updatedSheets = sheets.filter(s => s.id !== sheetId)
       await saveGoogleSheetsConfig(profile.account_id, accounts, updatedSheets)
       return NextResponse.json({ success: true })
+    }
+
+    if (action === 'save_calendar_id') {
+      const { googleAccountId, calendarId } = body
+      if (!googleAccountId || !calendarId) {
+        return NextResponse.json({ error: 'Google Account and Calendar ID are required' }, { status: 400 })
+      }
+      const accIdx = accounts.findIndex(a => a.id === googleAccountId)
+      if (accIdx !== -1) {
+        accounts[accIdx].calendar_id = calendarId
+        await saveGoogleSheetsConfig(profile.account_id, accounts, sheets)
+        return NextResponse.json({ success: true })
+      }
+      return NextResponse.json({ error: 'Account not found' }, { status: 404 })
     }
 
     if (action === 'unlink_account') {
