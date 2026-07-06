@@ -33,6 +33,7 @@ import {
   Save,
   X,
   DollarSign,
+  MapPin,
 } from 'lucide-react';
 
 interface ContactDetailViewProps {
@@ -60,6 +61,7 @@ export function ContactDetailView({
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editCompany, setEditCompany] = useState('');
+  const [editAddress, setEditAddress] = useState('');
   const [savingDetails, setSavingDetails] = useState(false);
 
   // Tags tab
@@ -99,6 +101,7 @@ export function ContactDetailView({
       setEditPhone(data.phone);
       setEditEmail(data.email ?? '');
       setEditCompany(data.company ?? '');
+      setEditAddress(data.address ?? '');
     }
     setLoading(false);
   }, [contactId, supabase]);
@@ -197,6 +200,7 @@ export function ContactDetailView({
         phone: editPhone.trim(),
         email: editEmail.trim() || null,
         company: editCompany.trim() || null,
+        address: editAddress.trim() || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', contactId);
@@ -379,6 +383,12 @@ export function ContactDetailView({
                         {contact.company}
                       </span>
                     )}
+                    {contact.address && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="size-3" />
+                        {contact.address}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -453,6 +463,14 @@ export function ContactDetailView({
                     <Input
                       value={editCompany}
                       onChange={(e) => setEditCompany(e.target.value)}
+                      className="bg-slate-800 border-slate-700 text-white h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-400 text-xs">Address</Label>
+                    <Input
+                      value={editAddress}
+                      onChange={(e) => setEditAddress(e.target.value)}
                       className="bg-slate-800 border-slate-700 text-white h-8 text-sm"
                     />
                   </div>

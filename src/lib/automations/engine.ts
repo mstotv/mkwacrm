@@ -15,6 +15,7 @@ import type {
   AssignConversationStepConfig,
   AiReplyStepConfig,
   SaveToGoogleSheetStepConfig,
+  AiExtractInfoStepConfig,
 } from '@/types'
 import { supabaseAdmin } from './admin-client'
 import { engineSendText, engineSendTemplate } from './meta-send'
@@ -845,6 +846,192 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         return `AI reply sent (${whatsapp_message_id})`
       }
     }
+    case 'ai_extract_info': {
+      const cfg = step.step_config as AiExtractInfoStepConfig
+
+      // 1) Verify subscription status or admin status
+      const { data: profile, error: profileErr } = await db
+        .from('profiles')
+        .select('platform_role')
+        .eq('user_id', args.automation.user_id)
+        .maybeSingle()
+
+      if (profileErr) {
+        console.error('[automations] Failed to check admin status:', profileErr)
+      }
+
+      const platformRole = profile?.platform_role
+      const isAdmin = platformRole === 'super_admin' || platformRole === 'assistant_admin'
+
+      const { data: subscription, error: subErr } = await db
+        .from('account_subscriptions')
+        .select(`
+          status,
+          plan:subscription_plans(name, price_monthly)
+        `)
+        .eq('account_id', args.automation.account_id)
+        .maybeSingle()
+
+      if (subErr) {
+        throw new Error(`Failed to check subscription: ${subErr.message}`)
+      }
+
+      const planName = (subscription as any)?.plan?.name;
+      const planPrice = Number((subscription as any)?.plan?.price_monthly ?? 0);
+      const isPaid = subscription?.status === 'active' && planName !== 'free' && planPrice > 0;
+      const hasAccess = isAdmin || isPaid;
+
+      if (!hasAccess) {
+        throw new Error('AI Information Extraction is only available for active paid subscriptions.')
+      }
+
+      // 2) Get AI Configuration (provider, API key, system prompt)
+      const { data: aiConfig, error: aiErr } = await db
+        .from('ai_config')
+        .select('*')
+        .eq('account_id', args.automation.account_id)
+        .maybeSingle()
+
+      if (aiErr) {
+        throw new Error(`Failed to load AI configuration: ${aiErr.message}`)
+      }
+      if (!aiConfig || !aiConfig.api_key) {
+        throw new Error('AI assistant is not configured. Please configure your API key in AI settings.')
+      }
+
+      // 3) Parse incoming message text
+      const messageToParse = args.context?.message_text || ''
+      if (!messageToParse) {
+        return 'No message content available to parse'
+      }
+
+      // 4) Construct Prompt for parsing contact details
+      const systemPrompt = `You are a precise data extraction assistant. Your job is to extract contact information from the user's message.
+Return the extracted information in JSON format with the following keys. Do NOT include any markdown formatting, code block markers, or extra text. Just raw JSON.
+Keys:
+- name: The person's full name (if mentioned).
+- email: The email address (if mentioned).
+- phone: The phone number (if mentioned).
+- address: The physical address / location / delivery address (if mentioned).
+- company: The company name (if mentioned).
+
+Only extract values that are explicitly provided in the text. If a value is not mentioned, use null.
+`
+      let customInstructions = cfg.instructions || ''
+      if (customInstructions) {
+        customInstructions = `\n\nAdditional instructions:\n${customInstructions}`
+      }
+      const compiledSystemPrompt = `${systemPrompt}${customInstructions}`
+      const userMessage = `Extract contact information from the following text:\n\n"${messageToParse}"`
+
+      let parsedJson: any = {}
+      if (aiConfig.provider === 'openai') {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${aiConfig.api_key}`,
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: compiledSystemPrompt },
+              { role: 'user', content: userMessage }
+            ],
+            response_format: { type: 'json_object' },
+            max_tokens: 500,
+          }),
+        })
+
+        const resData = await response.json()
+        if (response.ok && resData.choices?.[0]?.message?.content) {
+          parsedJson = JSON.parse(resData.choices[0].message.content.trim())
+        } else {
+          throw new Error(`OpenAI API error during extraction: ${resData.error?.message || JSON.stringify(resData)}`)
+        }
+      } else if (aiConfig.provider === 'deepseek') {
+        const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${aiConfig.api_key}`,
+          },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [
+              { role: 'system', content: compiledSystemPrompt },
+              { role: 'user', content: userMessage }
+            ],
+            response_format: { type: 'json_object' },
+            max_tokens: 500,
+          }),
+        })
+
+        const resData = await response.json()
+        if (response.ok && resData.choices?.[0]?.message?.content) {
+          parsedJson = JSON.parse(resData.choices[0].message.content.trim())
+        } else {
+          throw new Error(`DeepSeek API error during extraction: ${resData.error?.message || JSON.stringify(resData)}`)
+        }
+      } else {
+        throw new Error(`Unsupported AI provider: ${aiConfig.provider}`)
+      }
+
+      // 5) Update database contact record if enabled
+      const updatedFields: string[] = []
+      if (cfg.update_contact !== false && args.contactId) {
+        const updatePayload: Record<string, any> = {}
+        if (parsedJson.name) {
+          updatePayload.name = String(parsedJson.name).trim()
+          updatedFields.push('name')
+        }
+        if (parsedJson.email) {
+          updatePayload.email = String(parsedJson.email).trim()
+          updatedFields.push('email')
+        }
+        if (parsedJson.phone) {
+          updatePayload.phone = String(parsedJson.phone).trim()
+          updatedFields.push('phone')
+        }
+        if (parsedJson.address) {
+          updatePayload.address = String(parsedJson.address).trim()
+          updatedFields.push('address')
+        }
+        if (parsedJson.company) {
+          updatePayload.company = String(parsedJson.company).trim()
+          updatedFields.push('company')
+        }
+
+        if (Object.keys(updatePayload).length > 0) {
+          updatePayload.updated_at = new Date().toISOString()
+          const { error: dbErr } = await db
+            .from('contacts')
+            .update(updatePayload)
+            .eq('id', args.contactId)
+            .eq('account_id', args.automation.account_id)
+          
+          if (dbErr) {
+            console.error('[automations] Failed to update contact with extracted info:', dbErr)
+          }
+        }
+      }
+
+      // 6) Store parsed results in automation run variables context
+      if (!args.context.vars) {
+        args.context.vars = {}
+      }
+      args.context.vars.extracted_name = parsedJson.name || ''
+      args.context.vars.extracted_email = parsedJson.email || ''
+      args.context.vars.extracted_phone = parsedJson.phone || ''
+      args.context.vars.extracted_address = parsedJson.address || ''
+      args.context.vars.extracted_company = parsedJson.company || ''
+
+      const statusMsg = updatedFields.length > 0
+        ? `Extracted and updated fields: ${updatedFields.join(', ')}`
+        : 'Extracted variables stored in vars'
+      
+      return statusMsg
+    }
     case 'save_to_google_sheet': {
       const cfg = step.step_config as SaveToGoogleSheetStepConfig
       
@@ -911,6 +1098,10 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
             case 'contact.email':
             case 'email':
               resolvedValue = contactData?.email || ''
+              break
+            case 'contact.address':
+            case 'address':
+              resolvedValue = contactData?.address || ''
               break
             case 'contact.company':
             case 'company':

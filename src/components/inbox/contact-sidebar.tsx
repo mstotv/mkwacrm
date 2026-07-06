@@ -15,6 +15,7 @@ import {
   DollarSign,
   StickyNote,
   Plus,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -170,6 +171,13 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
               <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300">
                 <Mail className="h-4 w-4 text-slate-500" />
                 <span className="truncate">{contact.email}</span>
+              </div>
+            )}
+
+            {contact.address && (
+              <div className="flex items-start gap-2 rounded-lg px-3 py-2 text-sm text-slate-300">
+                <MapPin className="h-4 w-4 text-slate-500 mt-0.5 shrink-0" />
+                <span className="break-words flex-1 text-left">{contact.address}</span>
               </div>
             )}
           </div>

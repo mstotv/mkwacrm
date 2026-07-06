@@ -138,6 +138,9 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
     case 'ai_reply':
       // No strict validation required since local config can fall back to global config.
       break
+    case 'ai_extract_info':
+      // No strict validation required.
+      break
     case 'save_to_google_sheet':
       if (!nonEmpty(c.spreadsheet_id)) {
         issues.push({ path: `${path}.spreadsheet_id`, message: 'Google Spreadsheet is required' })

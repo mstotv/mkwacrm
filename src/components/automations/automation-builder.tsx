@@ -33,6 +33,7 @@ import {
   ArrowUp,
   Sparkles,
   FileSpreadsheet,
+  Brain,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -103,6 +104,7 @@ const STEP_META: Record<AutomationStepType, StepMeta> = {
   send_webhook: { label: "Send Webhook", icon: Webhook, border: "border-l-primary" },
   close_conversation: { label: "Close Conversation", icon: CircleSlash, border: "border-l-primary" },
   ai_reply: { label: "AI Reply", icon: Sparkles, border: "border-l-amber-500" },
+  ai_extract_info: { label: "Extract Info with AI", icon: Brain, border: "border-l-purple-500" },
   save_to_google_sheet: { label: "Send data to Google Sheets", icon: FileSpreadsheet, border: "border-l-emerald-500" },
 }
 
@@ -119,6 +121,7 @@ const ADDABLE_STEPS: AutomationStepType[] = [
   "send_webhook",
   "close_conversation",
   "ai_reply",
+  "ai_extract_info",
   "save_to_google_sheet",
 ]
 
@@ -170,6 +173,8 @@ function blankConfig(type: AutomationStepType): Record<string, unknown> {
       return {}
     case "ai_reply":
       return { system_prompt: "", human_in_the_loop: false }
+    case "ai_extract_info":
+      return { instructions: "", update_contact: true }
     case "save_to_google_sheet":
       return { spreadsheet_id: "", sheet_name: "Sheet1", mappings: [] }
     default:
@@ -847,6 +852,7 @@ function StepRenderer({
   parentScope: ParentScope
   parentPath: StepPath
 } & Omit<StepListProps, "steps" | "parentPath">) {
+  const { language: lang } = useLanguage()
   const path: StepPath = [
     ...parentPath,
     parentScope.kind === "root"
@@ -887,7 +893,7 @@ function StepRenderer({
                 {isCondition ? "Condition" : step.step_type === "wait" ? "Wait" : "Action"}
               </div>
               <div className="truncate text-sm font-medium text-white">{meta.label}</div>
-              <div className="truncate text-[11px] text-slate-500">{previewFor(step)}</div>
+              <div className="truncate text-[11px] text-slate-500">{previewFor(step, lang)}</div>
             </div>
             <ChevronDown
               className={cn("h-4 w-4 text-slate-400 transition-transform", expanded && "rotate-180")}
@@ -1265,6 +1271,33 @@ function StepEditor({
           </div>
         </>
       )
+    case "ai_extract_info":
+      return (
+        <>
+          <p className="text-xs text-slate-400 mb-3 leading-relaxed">
+            {lang === 'ar'
+              ? 'يستخدم هذا الإجراء الذكاء الاصطناعي لاستخراج معلومات الاتصال (مثل الاسم والعنوان والبريد الإلكتروني والهاتف والشركة) من نص الرسالة تلقائياً وتحديث جهة الاتصال.'
+              : 'This action uses AI to parse contact details (Name, Address, Email, Phone, Company) from the message text and automatically update the contact.'}
+          </p>
+          <FieldBlock label={lang === 'ar' ? 'تعليمات إضافية للاستخراج (اختياري)' : 'Additional Extraction Guidance (Optional)'}>
+            <Textarea
+              value={(cfg.instructions as string) ?? ""}
+              onChange={(e) => set({ instructions: e.target.value })}
+              placeholder={lang === 'ar' ? 'مثال: استخرج العنوان فقط إذا كان في السعودية...' : 'e.g., Only extract address if it contains a city name...'}
+              className="min-h-20 bg-slate-800 text-white"
+            />
+          </FieldBlock>
+          <div className="mt-3 flex items-center justify-between">
+            <label className="text-xs font-medium text-slate-400">
+              {lang === 'ar' ? 'تحديث بطاقة العميل مباشرة بالبيانات المستخرجة' : 'Update contact record directly with extracted data'}
+            </label>
+            <Switch
+              checked={(cfg.update_contact as boolean) !== false}
+              onCheckedChange={(v) => set({ update_contact: !!v })}
+            />
+          </div>
+        </>
+      )
     case "save_to_google_sheet": {
       const mappings = (cfg.mappings as Array<{ field: string; column: string }>) ?? []
       const [accounts, setAccounts] = useState<any[]>([])
@@ -1406,7 +1439,7 @@ function StepEditor({
                         {lang === 'ar' ? 'الحقل المصدر' : 'Source Field'}
                       </label>
                       <select
-                        value={m.field.startsWith('{{') ? m.field : m.field === 'contact.name' || m.field === 'contact.phone' || m.field === 'contact.email' || m.field === 'message.text' ? m.field : 'custom'}
+                        value={m.field.startsWith('{{') ? m.field : m.field === 'contact.name' || m.field === 'contact.phone' || m.field === 'contact.email' || m.field === 'contact.address' || m.field === 'message.text' ? m.field : 'custom'}
                         onChange={(e) => {
                           const val = e.target.value
                           if (val !== 'custom') {
@@ -1420,6 +1453,7 @@ function StepEditor({
                         <option value="contact.name">{lang === 'ar' ? 'اسم جهة الاتصال' : 'Contact Name'}</option>
                         <option value="contact.phone">{lang === 'ar' ? 'هاتف جهة الاتصال' : 'Contact Phone'}</option>
                         <option value="contact.email">{lang === 'ar' ? 'بريد جهة الاتصال' : 'Contact Email'}</option>
+                        <option value="contact.address">{lang === 'ar' ? 'عنوان جهة الاتصال' : 'Contact Address'}</option>
                         <option value="message.text">{lang === 'ar' ? 'نص الرسالة الحالية' : 'Current Message Text'}</option>
                         <option value="{{ vars.ai_reply }}">{lang === 'ar' ? 'رد الذكاء الاصطناعي (AI Reply Output)' : 'AI Reply Output'}</option>
                         <option value="custom">{lang === 'ar' ? 'قالب مخصص / متغير...' : 'Custom Template / Key...'}</option>
@@ -1453,7 +1487,7 @@ function StepEditor({
                     </div>
                   </div>
 
-                  {(!['contact.name', 'contact.phone', 'contact.email', 'message.text', '{{ vars.ai_reply }}'].includes(m.field) || m.field === '') && (
+                  {(!['contact.name', 'contact.phone', 'contact.email', 'contact.address', 'message.text', '{{ vars.ai_reply }}'].includes(m.field) || m.field === '') && (
                     <div className="flex flex-col gap-1">
                       <label className="text-[10px] text-slate-500">
                         {lang === 'ar' ? 'مفتاح المتغير المخصص' : 'Custom Variable Key'}
@@ -1508,7 +1542,7 @@ function FieldBlock({
   )
 }
 
-function previewFor(step: BuilderStep): string {
+function previewFor(step: BuilderStep, lang?: string): string {
   switch (step.step_type) {
     case "send_message":
       return (step.step_config.text as string) || "no text yet"
@@ -1522,6 +1556,8 @@ function previewFor(step: BuilderStep): string {
       return (step.step_config.url as string) || "no url"
     case "ai_reply":
       return `AI Reply: ${(step.step_config.system_prompt as string)?.slice(0, 30) || "system settings"}`
+    case "ai_extract_info":
+      return lang === 'ar' ? 'استخراج البيانات بالذكاء الاصطناعي' : "Extract Info with AI"
     case "save_to_google_sheet":
       return `Save to Sheet: ${step.step_config.sheet_name ?? "Sheet1"}`
     default:

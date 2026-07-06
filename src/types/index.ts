@@ -97,6 +97,7 @@ export interface Contact {
   name?: string;
   email?: string;
   company?: string;
+  address?: string;
   avatar_url?: string;
   created_at: string;
   updated_at: string;
@@ -395,6 +396,7 @@ export type AutomationStepType =
   | 'send_webhook'
   | 'close_conversation'
   | 'ai_reply'
+  | 'ai_extract_info'
   | 'save_to_google_sheet';
 
 export type AutomationLogStatus = 'success' | 'partial' | 'failed';
@@ -497,6 +499,11 @@ export interface SaveToGoogleSheetStepConfig {
   mappings?: Array<{ field: string; column: string }>;
 }
 
+export interface AiExtractInfoStepConfig {
+  instructions?: string;
+  update_contact?: boolean;
+}
+
 export type AutomationStepConfig =
   | SendMessageStepConfig
   | SendTemplateStepConfig
@@ -508,6 +515,7 @@ export type AutomationStepConfig =
   | ConditionStepConfig
   | SendWebhookStepConfig
   | AiReplyStepConfig
+  | AiExtractInfoStepConfig
   | SaveToGoogleSheetStepConfig
   | Record<string, never>
   | Record<string, unknown>;

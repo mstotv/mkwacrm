@@ -110,7 +110,7 @@ export default function ContactsPage() {
 
     if (search.trim()) {
       const term = `%${search.trim()}%`;
-      query = query.or(`name.ilike.${term},phone.ilike.${term},email.ilike.${term}`);
+      query = query.or(`name.ilike.${term},phone.ilike.${term},email.ilike.${term},address.ilike.${term}`);
     }
 
     const { data, count, error } = await query;
@@ -327,7 +327,7 @@ export default function ContactsPage() {
             // set shrinks/grows, page N may no longer be valid.
             setPage(0);
           }}
-          placeholder="Search by name, phone, or email..."
+          placeholder="Search by name, phone, email, or address..."
           className="pl-8 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
         />
       </div>
