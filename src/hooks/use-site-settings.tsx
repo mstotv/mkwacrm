@@ -9,6 +9,10 @@ export interface SiteSettings {
   primary_color: string;
   secondary_color: string;
   accent_color: string;
+  support_whatsapp_number: string;
+  support_whatsapp_enabled: boolean;
+  support_telegram_username: string;
+  support_telegram_enabled: boolean;
 }
 
 interface SiteSettingsContextType {

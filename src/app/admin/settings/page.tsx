@@ -41,6 +41,12 @@ export default function AdminSettingsPage() {
   const [accentColor, setAccentColor] = useState('#0f172a');
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
+  // Support Floating Buttons
+  const [supportWhatsappNumber, setSupportWhatsappNumber] = useState('');
+  const [supportWhatsappEnabled, setSupportWhatsappEnabled] = useState(false);
+  const [supportTelegramUsername, setSupportTelegramUsername] = useState('');
+  const [supportTelegramEnabled, setSupportTelegramEnabled] = useState(false);
+
   // Landing Page Header Details
   const [badgeAr, setBadgeAr] = useState('');
   const [badgeEn, setBadgeEn] = useState('');
@@ -98,11 +104,16 @@ export default function AdminSettingsPage() {
       if (siteError) throw siteError;
 
       if (siteData) {
-        setSiteName(siteData.site_name || 'WaCRM');
+        setSiteName(siteData.site_name || '');
         setLogoUrl(siteData.logo_url || '');
         setPrimaryColor(siteData.primary_color || '#8B5CF6');
         setSecondaryColor(siteData.secondary_color || '#1e293b');
         setAccentColor(siteData.accent_color || '#0f172a');
+        
+        setSupportWhatsappNumber(siteData.support_whatsapp_number || '');
+        setSupportWhatsappEnabled(!!siteData.support_whatsapp_enabled);
+        setSupportTelegramUsername(siteData.support_telegram_username || '');
+        setSupportTelegramEnabled(!!siteData.support_telegram_enabled);
       }
 
       // 2. Load Landing Page settings
@@ -188,6 +199,10 @@ export default function AdminSettingsPage() {
           primary_color: primaryColor,
           secondary_color: secondaryColor,
           accent_color: accentColor,
+          support_whatsapp_number: supportWhatsappNumber,
+          support_whatsapp_enabled: supportWhatsappEnabled,
+          support_telegram_username: supportTelegramUsername,
+          support_telegram_enabled: supportTelegramEnabled,
           updated_at: new Date().toISOString(),
         });
 
@@ -504,6 +519,68 @@ export default function AdminSettingsPage() {
                       className="flex-1 rounded-lg border border-slate-700 bg-slate-850 px-2.5 text-xs text-white focus:border-violet-500 focus:outline-none font-mono"
                     />
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* New Section for Support */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-6 mt-6">
+            <h2 className="text-lg font-bold flex items-center gap-2 text-violet-400 border-b border-slate-800 pb-3">
+              <span className="text-xl">💬</span> أزرار التواصل والدعم الفني (Support Buttons)
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4 bg-slate-950/20 p-5 rounded-xl border border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-slate-300">زر واتساب العائم (WhatsApp)</label>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={supportWhatsappEnabled}
+                      onChange={(e) => setSupportWhatsappEnabled(e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1.5">رقم الواتساب للتواصل (بالصيغة الدولية بدون +)</label>
+                  <input
+                    type="text"
+                    value={supportWhatsappNumber}
+                    onChange={(e) => setSupportWhatsappNumber(e.target.value)}
+                    placeholder="مثال: 966500000000"
+                    disabled={!supportWhatsappEnabled}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-850 px-3 py-2 text-sm text-white focus:border-green-500 focus:outline-none disabled:opacity-50"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">سيظهر الزر في الزاوية اليمنى السفلية للمنصة.</p>
+                </div>
+              </div>
+
+              <div className="space-y-4 bg-slate-950/20 p-5 rounded-xl border border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-slate-300">زر تليجرام العائم (Telegram)</label>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={supportTelegramEnabled}
+                      onChange={(e) => setSupportTelegramEnabled(e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1.5">معرف تليجرام (Username بدون @)</label>
+                  <input
+                    type="text"
+                    value={supportTelegramUsername}
+                    onChange={(e) => setSupportTelegramUsername(e.target.value)}
+                    placeholder="مثال: wacrm_support"
+                    disabled={!supportTelegramEnabled}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-850 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">سيظهر الزر في الزاوية اليسرى السفلية للمنصة.</p>
                 </div>
               </div>
             </div>

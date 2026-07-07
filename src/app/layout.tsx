@@ -9,6 +9,7 @@ import { DEFAULT_THEME, STORAGE_KEY, THEME_IDS } from "@/lib/themes";
 import { createClient } from "@/lib/supabase/server";
 import { SiteSettingsProvider } from "@/hooks/use-site-settings";
 import { ImpersonationBanner } from "@/components/auth/impersonation-banner";
+import { SupportFloatingButtons } from "@/components/layout/support-floating-buttons";
 
 const MODE_STORAGE_KEY = "wacrm.colorMode";
 
@@ -107,7 +108,11 @@ export default async function RootLayout({
     logo_url: '',
     primary_color: '#8B5CF6',
     secondary_color: '#1e293b',
-    accent_color: '#0f172a'
+    accent_color: '#0f172a',
+    support_whatsapp_number: '',
+    support_whatsapp_enabled: false,
+    support_telegram_username: '',
+    support_telegram_enabled: false,
   };
 
   let settings = defaultSettings;
@@ -153,6 +158,7 @@ export default async function RootLayout({
             <SiteSettingsProvider initialSettings={settings}>
               <ImpersonationBanner />
               {children}
+              <SupportFloatingButtons />
             </SiteSettingsProvider>
             <Toaster
               theme="dark"

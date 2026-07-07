@@ -12,7 +12,6 @@ import {
   Settings,
   ChevronRight,
   Zap,
-  LifeBuoy,
   FileText,
 } from 'lucide-react';
 
@@ -20,7 +19,6 @@ const NAV_ITEMS = [
   { href: '/admin', label: 'لوحة التحكم', icon: LayoutDashboard, exact: true },
   { href: '/admin/users', label: 'إدارة المستخدمين', icon: Users },
   { href: '/admin/subscriptions', label: 'الاشتراكات', icon: CreditCard },
-  { href: '/admin/tickets', label: 'تذاكر الدعم الفني', icon: LifeBuoy },
   { href: '/admin/pending-templates', label: 'القوالب المعلقة', icon: FileText },
   { href: '/admin/analytics', label: 'الإحصائيات', icon: BarChart3 },
   { href: '/admin/settings', label: 'إعدادات المنصة', icon: Settings },
@@ -33,10 +31,10 @@ export function AdminSidebar() {
 
   const role = profile?.platform_role;
 
-  // Assistant admin only sees Support Tickets
+  // Assistant admin has no specific routes left after removing tickets, so they see nothing or just the dashboard
   const filteredItems = NAV_ITEMS.filter((item) => {
     if (role === 'assistant_admin') {
-      return item.href === '/admin/tickets';
+      return false; // Or return item.href === '/admin' if you want them to see the dashboard
     }
     return true;
   });
