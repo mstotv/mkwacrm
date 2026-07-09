@@ -30,12 +30,10 @@ export default function BillingSuccessPage() {
           .limit(1)
           .maybeSingle();
 
-        // Also query the active subscription status in database
-        const { data: subscription } = await supabase
-          .from('account_subscriptions')
-          .select('status')
-          .eq('account_id', profile.account_id)
-          .maybeSingle();
+        // Also query the active subscription status in database via secure API to bypass RLS select limitations
+        const resSub = await fetch('/api/billing/subscription');
+        const resSubData = await resSub.json();
+        const subscription = resSubData.subscription || null;
 
         if (latestRequest?.status === 'completed' || subscription?.status === 'active') {
           setActivated(true);

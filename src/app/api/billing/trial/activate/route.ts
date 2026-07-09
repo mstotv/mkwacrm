@@ -1,8 +1,22 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
+
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  );
+}
 
 export async function POST(request: Request) {
   try {
@@ -78,13 +92,14 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // 4) Activate free trial
+    // 4) Activate free trial using admin client to bypass RLS write limitations
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
+    const supabaseAdmin = getSupabaseAdmin();
 
     let result;
     if (existingSub) {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('account_subscriptions')
         .update({
           plan_id: planId,
@@ -101,7 +116,7 @@ export async function POST(request: Request) {
       if (error) throw error;
       result = data;
     } else {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('account_subscriptions')
         .insert({
           account_id: accountId,
