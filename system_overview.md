@@ -167,6 +167,7 @@ wacrm/
 * **مشكلة قراءة الاشتراكات (RLS Select Block):** تم حل مشكلة ظهور الباقات المرقّاة كـ "Free / Inactive" للمستخدمين بسبب سياسات RLS على جدول `account_subscriptions` التي تمنع الـ Client-side query. تم إنشاء مسار API خلفي آمن `/api/billing/subscription` يستعلم بـ `service_role` ويتحقق من JWT لجلسة العميل لخدمة شريط التنقل والفوترة وإعدادات الذكاء الاصطناعي وصوت نجاح الدفع [success/page.tsx](file:///c:/Users/Mustafa/Desktop/wacrm/src/app/billing/success/page.tsx).
 * **مشكلة الترقية اليدوية (RLS Write Block):** تم إصلاح شاشات الترقية اليدوية بالأدمن بانل (في صفحة الحسابات وصفحة الاشتراكات) لتتم الكتابة ويسجل تاريخ الدفع `payment_history` عبر طلبات API آمنة موحدة بدلاً من كتابة Supabase مباشرة من المتصفح التي كانت تفشل بصمت بسبب RLS.
 * **مشكلة تفعيل الفترة التجريبية المجانية (Trial RLS Block):** تم تعديل مسار تفعيل التجربة المجانية `/api/billing/trial/activate` ليكتب التحديثات في جدول الاشتراكات باستخدام الـ `service_role` بعد التحقق من أحقية المالك والـ JWT بدلاً من طلبات الـ client-side التي كانت تفشل بصمت.
+* **أداة الفحص التشخيصي:** تم توفير سكريبت اختبار وصلاحيات [diagnose_subs.js](file:///c:/Users/Mustafa/Desktop/wacrm/diagnose_subs.js) لمحاكاة دخول المستخدمين وفحص استجابة RLS.
 * **إصلاح تحذيرات CSS الكاذبة:** تم إنشاء إعدادات لمنع التحذيرات الكاذبة لـ Tailwind CSS v4 في VS Code عبر `.vscode/settings.json`.
 
 ---
