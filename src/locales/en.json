@@ -12,7 +12,9 @@
     "adminConsole": "Admin Console",
     "backToApp": "Back to App",
     "signOut": "Sign Out",
-    "profile": "Profile"
+    "profile": "Profile",
+    "lightMode": "Light Mode",
+    "darkMode": "Dark Mode"
   },
   "common": {
     "save": "Save",

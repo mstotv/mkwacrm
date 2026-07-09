@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useSiteSettings } from '@/hooks/use-site-settings'
+import { useTheme } from '@/hooks/use-theme'
+import { useLanguage } from '@/hooks/use-language'
 import {
   MessageSquare,
   Bot,
@@ -18,6 +20,8 @@ import {
   Sparkles,
   Menu,
   X,
+  Sun,
+  Moon,
 } from 'lucide-react'
 
 /* ================================================================
@@ -167,7 +171,7 @@ const translations = {
       signup: 'ابدأ مجاناً',
     },
     hero: {
-      badge: '🚀 منصة واتساب CRM الأولى للأعمال النامية',
+      badge: '🚀 منصة إدارة علاقات عملاء واتساب (CRM) الأولى للأعمال النامية',
       title: 'طوّر أعمالك عبر',
       titleHighlight: 'واتساب بزنس',
       subtitle:
@@ -186,28 +190,28 @@ const translations = {
       subtitle: 'مصمم للفرق التي تريد تحويل واتساب إلى قناة إيرادات.',
       items: [
         {
-          title: 'رد ذكي بالـ AI',
-          desc: 'اربط OpenAI أو DeepSeek للرد التلقائي على العملاء بردود ذكية ومتعلقة بالسياق على مدار الساعة.',
+          title: 'الرد التلقائي بالذكاء الاصطناعي (AI)',
+          desc: 'اربط OpenAI أو DeepSeek للرد التلقائي على العملاء بردود ذكية ومتوافقة مع السياق على مدار الساعة.',
         },
         {
           title: 'محادثات ذكية',
-          desc: 'بوتات الكلمات المفتاحية، جدولة الرسائل، وقوالب مخصصة — محادثاتك تعمل تلقائياً.',
+          desc: 'بوتات الكلمات المفتاحية، جدولة الرسائل، وقوانين مخصصة — محادثاتك تعمل تلقائياً.',
         },
         {
-          title: 'CRM متقدم',
-          desc: 'استيراد/تصدير جهات الاتصال، تقييم VIP، حقول مخصصة، وسجل تفاعل كامل لكل عمال.',
+          title: 'إدارة علاقات عملاء (CRM) متقدمة',
+          desc: 'استيراد وتصدير جهات الاتصال، تقييم العملاء المميزين (VIP)، حقول مخصصة، وسجل تفاعل كامل لكل عميل.',
         },
         {
-          title: 'حملات البث',
-          desc: 'أرسل رسائل جماعية بقوالب معتمدة، وتابع التسليم والقراءة والردود في الوقت الفعلي.',
+          title: 'حملات البث الجماعي',
+          desc: 'أرسل رسائل جماعية باستخدام قوالب معتمدة، وتابع نسب التسليم والقراءة والردود في الوقت الفعلي.',
         },
         {
-          title: 'متعدد اللغات',
-          desc: 'دعم كامل للعربية والإنجليزية مع تخطيط RTL. خدمة العملاء بلغتهم بسهولة.',
+          title: 'دعم متعدد اللغات',
+          desc: 'دعم كامل للغتين العربية والإنجليزية مع تخطيط متوافق مع اتجاه الكتابة (RTL). اخدم عملائك بلغتهم المفضلة دون عناء.',
         },
         {
           title: 'آمن وموثوق',
-          desc: 'تشفير كامل، صلاحيات متدرجة، وبنية تحتية على مستوى المؤسسات لحماية بياناتك.',
+          desc: 'تشفير كامل للبيانات، صلاحيات وصول مستندة إلى الأدوار، وبنية تحتية قوية لحماية بياناتك.',
         },
       ],
     },
@@ -222,55 +226,55 @@ const translations = {
       ctaEnterprise: 'تواصل معنا',
       plans: [
         {
-          name: 'المبتدئ',
+          name: 'الخطة الأساسية',
           price: '$19',
           priceYearly: '$15',
           period: '/شهر',
-          desc: 'مثالي للأعمال الصغيرة التي تبدأ للتو.',
+          desc: 'مثالية للمشاريع الصغيرة التي تبدأ للتو.',
           popular: false,
           features: [
             'رقم واتساب واحد',
-            '1,000 رسالة/شهر',
+            '1,000 رسالة شهرياً',
             '500 جهة اتصال',
             'رد تلقائي بالكلمات المفتاحية',
-            'استيراد/تصدير CSV',
-            'دعم بالبريد الإلكتروني',
+            'استيراد وتصدير ملفات CSV',
+            'دعم فني عبر البريد الإلكتروني',
           ],
         },
         {
-          name: 'الاحترافي',
+          name: 'الخطة الاحترافية',
           price: '$49',
           priceYearly: '$39',
           period: '/شهر',
-          desc: 'للفرق النامية التي تحتاج الأتمتة.',
+          desc: 'للفرق المتنامية التي تحتاج إلى أتمتة متكاملة.',
           features: [
             '3 أرقام واتساب',
-            '10,000 رسالة/شهر',
+            '10,000 رسالة شهرياً',
             '5,000 جهة اتصال',
-            'رد ذكي بالذكاء الاصطناعي',
-            'حملات البث الجماعي',
-            'جدولة الرسائل',
-            'مزامنة Google Sheets',
-            'دعم ذو أولوية',
+            'رد تلقائي ذكي بالذكاء الاصطناعي (OpenAI/DeepSeek)',
+            'حملات البث الجماعي المتقدمة',
+            'جدولة وإرسال الرسائل المؤتمتة',
+            'مزامنة مع Google Sheets',
+            'دعم فني ذو أولوية',
           ],
           popular: true,
         },
         {
-          name: 'المؤسسات',
+          name: 'خطة المؤسسات',
           price: '$149',
           priceYearly: '$119',
           period: '/شهر',
-          desc: 'قوة غير محدودة للمنظمات الكبيرة.',
+          desc: 'قوة وأتمتة غير محدودة للمؤسسات والشركات الكبيرة.',
           popular: false,
           features: [
-            'أرقام غير محدودة',
+            'أرقام واتساب غير محدودة',
             'رسائل غير محدودة',
             'جهات اتصال غير محدودة',
-            'تدريب AI متقدم',
-            'تكاملات مخصصة',
-            'مدير حساب مخصص',
-            'ضمان SLA',
-            'خيار العلامة البيضاء',
+            'تدريب وتخصيص متقدم للذكاء الاصطناعي',
+            'ربط وتكامل مخصص مع الأنظمة الأخرى',
+            'مدير حساب فني مخصص',
+            'اتفاقية مستوى الخدمة وضمان التشغيل (SLA)',
+            'خيار العلامة البيضاء (White-Label)',
           ],
         },
       ],
@@ -299,10 +303,26 @@ type Lang = 'en' | 'ar'
 
 const featureIcons = [Bot, MessageSquare, Users, Zap, Globe, Shield]
 
+const marqueeBrands = [
+  'Meta',
+  'Evolution API',
+  'WhatsApp',
+  'Supabase',
+  'ChatGPT',
+  'DeepSeek',
+  'Google',
+  'Google Sheets',
+  'Google Calendar',
+  'Plisio',
+  'Bitcoin',
+  'USDT'
+]
+
 /* ================================================================ */
 export default function LandingPage() {
   const { settings } = useSiteSettings()
-  const [lang, setLang] = useState<Lang>('en')
+  const { language, setLanguage } = useLanguage()
+  const { colorMode, toggleColorMode } = useTheme()
   const [isYearly, setIsYearly] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
@@ -310,18 +330,13 @@ export default function LandingPage() {
   const [dbSettings, setDbSettings] = useState<any>(null)
   const [dbPlans, setDbPlans] = useState<any[]>([])
 
+  const lang = language
   const isRtl = lang === 'ar'
 
-  useEffect(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('wacrm_lang') : null
-    if (saved === 'ar' || saved === 'en') setLang(saved)
-  }, [])
-
   const toggleLang = useCallback(() => {
-    const next = lang === 'en' ? 'ar' : 'en'
-    setLang(next)
-    localStorage.setItem('wacrm_lang', next)
-  }, [lang])
+    const next = language === 'en' ? 'ar' : 'en'
+    setLanguage(next)
+  }, [language, setLanguage])
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20)
@@ -423,7 +438,7 @@ export default function LandingPage() {
           --ld-bg: #ffffff;
           --ld-bg-subtle: #f8fafc;
           --ld-card: #ffffff;
-          --ld-card-hover: #ffffff;
+          --ld-card-hover: #f1f5f9;
           --ld-text: #0f172a;
           --ld-text-muted: #475569;
           --ld-border: #e2e8f0;
@@ -436,6 +451,18 @@ export default function LandingPage() {
           min-height: 100vh;
           overflow-x: hidden;
           font-family: 'Inter', 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+          transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
+
+        html[data-mode="dark"] .landing-root,
+        html.dark .landing-root {
+          --ld-bg: #090d16;
+          --ld-bg-subtle: #0f172a;
+          --ld-card: #0f172a;
+          --ld-card-hover: #1e293b;
+          --ld-text: #f8fafc;
+          --ld-text-muted: #94a3b8;
+          --ld-border: #1e293b;
         }
 
         /* ===== NAV ===== */
@@ -459,6 +486,12 @@ export default function LandingPage() {
           border-bottom: 1px solid rgba(226, 232, 240, 0.8);
           padding: 0.85rem 2rem;
           box-shadow: 0 4px 30px rgba(0, 0, 0, 0.02);
+        }
+        html[data-mode="dark"] .ld-nav.scrolled,
+        html.dark .ld-nav.scrolled {
+          background: rgba(11, 15, 22, 0.85);
+          border-bottom: 1px solid rgba(30, 41, 59, 0.8);
+          box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
         }
         .ld-nav-logo {
           font-size: 1.5rem;
@@ -520,7 +553,7 @@ export default function LandingPage() {
           gap: 0.5rem;
           padding: 0.65rem 1.5rem;
           border-radius: 9999px;
-          background: white;
+          background: var(--ld-card);
           color: var(--ld-text) !important;
           font-weight: 700;
           font-size: 0.9rem;
@@ -590,7 +623,7 @@ export default function LandingPage() {
           line-height: 1.15;
           margin-bottom: 1.5rem;
           letter-spacing: -0.03em;
-          color: #0f172a;
+          color: var(--ld-text);
           max-width: 900px;
         }
         .ld-hero h1 span {
@@ -621,7 +654,7 @@ export default function LandingPage() {
           padding: 0.85rem 2rem;
           font-size: 1rem;
         }
-
+ 
         /* ===== MOCKUP SHOWCASE ===== */
         .ld-hero-mockup-wrapper {
           position: relative;
@@ -630,13 +663,53 @@ export default function LandingPage() {
           margin: 0 auto 5rem;
         }
         .ld-hero-mockup {
-          background: #ffffff;
+          background: var(--ld-card);
           border-radius: 20px;
-          border: 1px solid rgba(226, 232, 240, 0.8);
+          border: 1px solid var(--ld-border);
           box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.12), 0 0 50px rgba(16, 185, 129, 0.04);
           padding: 6px;
           overflow: hidden;
           transition: transform 0.5s ease;
+        }
+        .ld-hero-mockup:hover {
+          transform: translateY(-4px);
+        }
+        .ld-hero-mockup-header {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1rem;
+          background: var(--ld-bg-subtle);
+          border-bottom: 1px solid var(--ld-border);
+          border-top-left-radius: 14px;
+          border-top-right-radius: 14px;
+        }
+        .ld-mockup-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+        }
+        .ld-mockup-dot.red { background: #ef4444; }
+        .ld-mockup-dot.yellow { background: #f59e0b; }
+        .ld-mockup-dot.green { background: #10b981; }
+        .ld-mockup-address {
+          flex-grow: 1;
+          max-width: 480px;
+          margin: 0 auto;
+          background: var(--ld-bg);
+          border: 1px solid var(--ld-border);
+          border-radius: 6px;
+          font-size: 0.75rem;
+          color: var(--ld-text-muted);
+          padding: 0.2rem 1rem;
+          text-align: center;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.25rem;
         }
         .ld-hero-mockup:hover {
           transform: translateY(-4px);
@@ -717,6 +790,72 @@ export default function LandingPage() {
           color: var(--ld-text-muted);
         }
 
+        /* ===== LOGO MARQUEE ===== */
+        .ld-marquee-wrapper {
+          width: 100%;
+          overflow: hidden;
+          padding: 4rem 0 1.5rem;
+          position: relative;
+          max-width: 900px;
+          margin: 0 auto;
+        }
+        .ld-marquee-wrapper::before, .ld-marquee-wrapper::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          width: 100px;
+          z-index: 2;
+          pointer-events: none;
+        }
+        .ld-marquee-wrapper::before {
+          left: 0;
+          background: linear-gradient(to right, var(--ld-bg), transparent);
+        }
+        .ld-marquee-wrapper::after {
+          right: 0;
+          background: linear-gradient(to left, var(--ld-bg), transparent);
+        }
+        .ld-marquee-content {
+          display: flex;
+          gap: 3.5rem;
+          width: max-content;
+          animation: marquee 30s linear infinite;
+        }
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        [dir="rtl"] .ld-marquee-content {
+          animation: marquee-rtl 30s linear infinite;
+        }
+        @keyframes marquee-rtl {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(50%); }
+        }
+        .ld-marquee-item {
+          display: flex;
+          align-items: center;
+          gap: 0.6rem;
+          font-size: 1.1rem;
+          font-weight: 700;
+          color: var(--ld-text-muted);
+          white-space: nowrap;
+          opacity: 0.65;
+          transition: opacity 0.2s, color 0.2s;
+        }
+        .ld-marquee-item:hover {
+          opacity: 1;
+          color: var(--ld-primary);
+        }
+        .ld-marquee-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--ld-primary);
+          opacity: 0.8;
+        }
+
         /* ===== FEATURES ===== */
         .ld-features {
           padding: 7rem 2rem;
@@ -751,7 +890,7 @@ export default function LandingPage() {
           font-weight: 900;
           margin-bottom: 1.25rem;
           letter-spacing: -0.03em;
-          color: #0f172a;
+          color: var(--ld-text);
           max-width: 800px;
         }
         .ld-section-header p {
@@ -810,7 +949,7 @@ export default function LandingPage() {
           font-size: 1.3rem;
           font-weight: 850;
           margin-bottom: 0.75rem;
-          color: #0f172a;
+          color: var(--ld-text);
         }
         .ld-feature-card p {
           font-size: 0.95rem;
@@ -852,6 +991,10 @@ export default function LandingPage() {
           border: none;
           padding: 0;
           box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        }
+        html[data-mode="dark"] .ld-toggle-track,
+        html.dark .ld-toggle-track {
+          background: #334155;
         }
         .ld-toggle-track.on {
           background: var(--ld-primary);
@@ -896,7 +1039,7 @@ export default function LandingPage() {
         }
         .ld-plan-card.popular {
           border-color: var(--ld-primary);
-          background: linear-gradient(180deg, rgba(16, 185, 129, 0.03), #ffffff);
+          background: linear-gradient(180deg, rgba(16, 185, 129, 0.03), var(--ld-card));
           transform: scale(1.04);
           box-shadow: 0 20px 40px rgba(16, 185, 129, 0.08);
           border-width: 2px;
@@ -926,7 +1069,7 @@ export default function LandingPage() {
         .ld-plan-name {
           font-size: 1.25rem;
           font-weight: 700;
-          color: #0f172a;
+          color: var(--ld-text);
           margin-bottom: 0.75rem;
         }
         .ld-plan-price {
@@ -934,7 +1077,7 @@ export default function LandingPage() {
           font-weight: 900;
           margin-bottom: 0.5rem;
           line-height: 1;
-          color: #0f172a;
+          color: var(--ld-text);
           display: flex;
           align-items: baseline;
         }
@@ -1013,7 +1156,7 @@ export default function LandingPage() {
         .ld-footer {
           border-top: 1px solid var(--ld-border);
           padding: 6rem 2rem 3rem;
-          background: #f8fafc;
+          background: var(--ld-bg-subtle);
           width: 100%;
         }
         .ld-footer-container {
@@ -1049,7 +1192,7 @@ export default function LandingPage() {
           text-transform: uppercase;
           letter-spacing: 0.08em;
           margin-bottom: 1.25rem;
-          color: #0f172a;
+          color: var(--ld-text);
         }
         .ld-footer-col a {
           display: block;
@@ -1079,7 +1222,8 @@ export default function LandingPage() {
           right: 0;
           bottom: 0;
           z-index: 200;
-          background: rgba(255, 255, 255, 0.98);
+          background: var(--ld-bg);
+          opacity: 0.98;
           backdrop-filter: blur(20px);
           flex-direction: column;
           align-items: center;
@@ -1177,6 +1321,9 @@ export default function LandingPage() {
           <button onClick={toggleLang} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
             <Globe size={16} /> {lang === 'en' ? 'العربية' : 'English'}
           </button>
+          <button onClick={toggleColorMode} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ld-text-muted)', padding: '0.25rem' }} title={colorMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            {colorMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
           <Link href="/login" className="ld-btn-outline">{t.nav.login}</Link>
           <Link href="/signup" className="ld-btn-primary">{t.nav.signup} <ArrowRight size={16} /></Link>
         </div>
@@ -1192,8 +1339,11 @@ export default function LandingPage() {
         </button>
         <a href="#features" onClick={() => setMobileMenuOpen(false)}>{t.nav.features}</a>
         <a href="#pricing" onClick={() => setMobileMenuOpen(false)}>{t.nav.pricing}</a>
-        <button onClick={() => { toggleLang(); setMobileMenuOpen(false); }}>
+        <button onClick={() => { toggleLang(); setMobileMenuOpen(false); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
           <Globe size={20} /> {lang === 'en' ? 'العربية' : 'English'}
+        </button>
+        <button onClick={() => { toggleColorMode(); setMobileMenuOpen(false); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+          {colorMode === 'dark' ? <Sun size={20} /> : <Moon size={20} />} {colorMode === 'dark' ? (lang === 'ar' ? 'الوضع الفاتح' : 'Light Mode') : (lang === 'ar' ? 'الوضع الداكن' : 'Dark Mode')}
         </button>
         <Link href="/login" onClick={() => setMobileMenuOpen(false)}>{t.nav.login}</Link>
         <Link href="/signup" className="ld-btn-primary" onClick={() => setMobileMenuOpen(false)}>
@@ -1242,6 +1392,25 @@ export default function LandingPage() {
             </div>
           ))}
         </div>
+
+        {/* Logo Marquee Slider */}
+        <div className="ld-marquee-wrapper ld-animate ld-animate-d6">
+          <div className="ld-marquee-content">
+            {marqueeBrands.map((b, i) => (
+              <div key={i} className="ld-marquee-item">
+                <span className="ld-marquee-dot" />
+                <span>{b}</span>
+              </div>
+            ))}
+            {/* Duplicated list for infinite looping */}
+            {marqueeBrands.map((b, i) => (
+              <div key={`dup-${i}`} className="ld-marquee-item">
+                <span className="ld-marquee-dot" />
+                <span>{b}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* ====== FEATURES ====== */}
@@ -1286,7 +1455,11 @@ export default function LandingPage() {
               <div className="ld-plan-name">{plan.name}</div>
               <div className="ld-plan-price">
                 {isYearly ? plan.priceYearly : plan.price}
-                <small>{plan.period}</small>
+                <small>
+                  {isYearly 
+                    ? (lang === 'ar' ? ' / سنوياً' : ' / year') 
+                    : (lang === 'ar' ? ' / شهرياً' : ' / month')}
+                </small>
               </div>
               <div className="ld-plan-desc">{plan.desc}</div>
               <ul className="ld-plan-features">

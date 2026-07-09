@@ -17,6 +17,7 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit'
+import { hasFeatureAccess } from '@/lib/auth/features'
 
 interface BroadcastResult {
   phone: string
@@ -94,6 +95,14 @@ export async function POST(request: Request) {
     if (!accountId) {
       return NextResponse.json(
         { error: 'Your profile is not linked to an account.' },
+        { status: 403 },
+      )
+    }
+
+    const hasAccess = await hasFeatureAccess(supabase, accountId, 'broadcast', user.id)
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: 'الباقة الحالية لا تدعم ميزة حملات البث الجماعي (Broadcast).' },
         { status: 403 },
       )
     }

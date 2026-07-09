@@ -12,7 +12,9 @@
     "adminConsole": "لوحة الإدارة",
     "backToApp": "العودة للتطبيق",
     "signOut": "تسجيل الخروج",
-    "profile": "الملف الشخصي"
+    "profile": "الملف الشخصي",
+    "lightMode": "الوضع الفاتح",
+    "darkMode": "الوضع الداكن"
   },
   "common": {
     "save": "حفظ",

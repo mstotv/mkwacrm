@@ -398,7 +398,8 @@ export type AutomationStepType =
   | 'close_conversation'
   | 'ai_reply'
   | 'ai_extract_info'
-  | 'save_to_google_sheet';
+  | 'save_to_google_sheet'
+  | 'question_sequence';
 
 export type AutomationLogStatus = 'success' | 'partial' | 'failed';
 
@@ -505,6 +506,14 @@ export interface AiExtractInfoStepConfig {
   update_contact?: boolean;
 }
 
+export interface QuestionSequenceStepConfig {
+  questions: Array<{
+    question_text: string;
+    field_name: string;
+    expected_type?: 'text' | 'number' | 'media';
+  }>;
+}
+
 export type AutomationStepConfig =
   | SendMessageStepConfig
   | SendTemplateStepConfig
@@ -518,6 +527,7 @@ export type AutomationStepConfig =
   | AiReplyStepConfig
   | AiExtractInfoStepConfig
   | SaveToGoogleSheetStepConfig
+  | QuestionSequenceStepConfig
   | Record<string, never>
   | Record<string, unknown>;
 

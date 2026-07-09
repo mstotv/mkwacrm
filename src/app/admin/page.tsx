@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import AdminWrapper from '@/components/admin/admin-wrapper';
 import { createClient } from '@/lib/supabase/client';
 import {
   Users,
@@ -33,6 +34,44 @@ export default function AdminDashboardPage() {
   });
   const [recentAccounts, setRecentAccounts] = useState<RecentAccount[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // أضف عملية التحقق من الصلاحيات
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel('admin-payload')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: 'account_role=eq.admin' },
+        () => {
+          // إعادة التحقق من الصلاحيات عند تغييرات حسابات الإدمن
+          checkAdminRole();
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const checkAdminRole = async () => {
+    // نشاط إعادة الحساب (الاحتمالات تشمل)
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('account_role')
+        .eq('user_id', user.id)
+        .single();
+      
+      // لو الدور أقل من ADMIN، قم بإغلاق الجلسة
+      if (!profile?.account_role || profile.account_role !== 'admin') {
+        await supabase.auth.signOut();
+        window.location.href = '/login';
+      }
+    }
+  };
 
   useEffect(() => {
     const supabase = createClient();
@@ -128,14 +167,15 @@ export default function AdminDashboardPage() {
   };
 
   return (
-    <div className="p-8 space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">لوحة تحكم الإدارة</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          نظرة عامة على منصة MitaKurd for WhatsApp Auto
-        </p>
-      </div>
+    <AdminWrapper>
+      <div className="p-8 space-y-8">
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-bold text-white">لوحة تحكم الإدارة</h1>
+          <p className="mt-1 text-sm text-slate-400">
+            نظرة عامة على منصة MitaKurd for WhatsApp Auto
+          </p>
+        </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -208,5 +248,6 @@ export default function AdminDashboardPage() {
         </div>
       </div>
     </div>
+    </AdminWrapper>
   );
 }

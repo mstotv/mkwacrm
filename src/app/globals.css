@@ -518,4 +518,12 @@ html[data-mode="light"] body { background-color: var(--background); color: var(-
   html {
     @apply font-sans;
   }
+  select option {
+    background-color: #1e293b !important;
+    color: #ffffff !important;
+  }
+  html[data-mode="light"] select option {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
 }

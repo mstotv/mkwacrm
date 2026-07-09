@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { normalizePhone } from '@/lib/whatsapp/phone-utils';
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
-import { runAutomationsForTrigger } from '@/lib/automations/engine';
+import { runAutomationsForTrigger, handleQnaSessionResponse } from '@/lib/automations/engine';
 import { runAutoResponder } from '@/lib/whatsapp/auto-responder';
 
 let _adminClient: any = null;
@@ -324,13 +324,26 @@ export async function POST(request: Request) {
           })
           .eq('id', conversation.id);
 
+        // Try to dispatch to Q&A Session first
+        const mediaUrl = msg.imageMessage?.url || msg.videoMessage?.url || msg.documentMessage?.url || msg.audioMessage?.url || null;
+        const qnaConsumed = await handleQnaSessionResponse(
+          accountId,
+          contactRecord.id,
+          contentText || '',
+          mediaUrl || undefined
+        );
+
         // Dispatch triggers and automations
         const automationTriggers: (
           | 'new_contact_created'
           | 'first_inbound_message'
           | 'new_message_received'
           | 'keyword_match'
-        )[] = ['new_message_received', 'keyword_match'];
+        )[] = [];
+
+        if (!qnaConsumed) {
+          automationTriggers.push('new_message_received', 'keyword_match');
+        }
 
         if (contactOutcome.wasCreated) {
           automationTriggers.unshift('new_contact_created');
@@ -352,17 +365,19 @@ export async function POST(request: Request) {
         }
 
         // Run auto responder
-        runAutoResponder({
-          accountId,
-          contactId: contactRecord.id,
-          conversationId: conversation.id,
-          messageText: contentText,
-          senderPhone: senderPhone,
-          phoneNumberId: instanceName, // maps to instance name
-          accessToken,
-          configOwnerUserId,
-          parentMessageId: key.id,
-        }).catch((err) => console.error('[Evolution Webhook AutoResponder] failed:', err));
+        if (!qnaConsumed) {
+          runAutoResponder({
+            accountId,
+            contactId: contactRecord.id,
+            conversationId: conversation.id,
+            messageText: contentText,
+            senderPhone: senderPhone,
+            phoneNumberId: instanceName, // maps to instance name
+            accessToken,
+            configOwnerUserId,
+            parentMessageId: key.id,
+          }).catch((err) => console.error('[Evolution Webhook AutoResponder] failed:', err));
+        }
       }
     }
 

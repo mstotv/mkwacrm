@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Plus, Check, Pencil, AlertCircle, Save, Loader2 } from 'lucide-react';
+import { Plus, Check, Pencil, AlertCircle, Save, Loader2, Key, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Plan {
@@ -15,6 +15,8 @@ interface Plan {
   is_active: boolean;
   features_ar?: string[];
   features_en?: string[];
+  trial_period_days?: number;
+  billing_options?: Array<{ type: string; price: number; days?: number }>;
 }
 
 export default function AdminSubscriptionsPage() {
@@ -38,18 +40,92 @@ export default function AdminSubscriptionsPage() {
   const [newFeatureEn, setNewFeatureEn] = useState('');
   const [savingPlan, setSavingPlan] = useState(false);
 
+  // Free Trial and Billing Options states
+  const [trialEnabled, setTrialEnabled] = useState(false);
+  const [trialPeriodDays, setTrialPeriodDays] = useState(7);
+  const [billingOptions, setBillingOptions] = useState<Array<{ type: string; price: number; days?: number }>>([]);
+  const [newOptionType, setNewOptionType] = useState('monthly');
+  const [newOptionPrice, setNewOptionPrice] = useState(0);
+  const [newOptionDays, setNewOptionDays] = useState(30);
+
+  // Feature Keys library states
+  const [showKeysModal, setShowKeysModal] = useState(false);
+  const [libraryFeatures, setLibraryFeatures] = useState<any[]>([]);
+  const [loadingFeatures, setLoadingFeatures] = useState(false);
+  const [savingFeatures, setSavingFeatures] = useState(false);
+  const [editingKeys, setEditingKeys] = useState<Record<string, string>>({});
+
   // Manual activation states
   const [manualAccountId, setManualAccountId] = useState('');
   const [manualPlanId, setManualPlanId] = useState('');
   const [manualPaymentMethod, setManualPaymentMethod] = useState('manual');
-  const [manualDuration, setManualDuration] = useState<'monthly' | 'yearly'>('monthly');
+  const [manualDuration, setManualDuration] = useState<string>('monthly');
   const [activating, setActivating] = useState(false);
 
   const supabase = createClient();
 
+  async function loadLibraryFeatures() {
+    try {
+      setLoadingFeatures(true);
+      const res = await fetch('/api/admin/features');
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setLibraryFeatures(data.features || []);
+      
+      const initialKeys: Record<string, string> = {};
+      (data.features || []).forEach((f: any) => {
+        initialKeys[f.id] = f.feature_key || '';
+      });
+      setEditingKeys(initialKeys);
+    } catch (err: any) {
+      toast.error('فشل تحميل رموز المزايا: ' + err.message);
+    } finally {
+      setLoadingFeatures(false);
+    }
+  }
+
+  async function handleSaveFeatureKeys(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      setSavingFeatures(true);
+      const updates = Object.entries(editingKeys).map(([id, key]) => ({
+        id,
+        feature_key: key,
+      }));
+
+      const res = await fetch('/api/admin/features', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || 'Failed to update keys');
+
+      toast.success('تم تحديث رموز المزايا بنجاح');
+      setShowKeysModal(false);
+    } catch (err: any) {
+      toast.error(err.message || 'حدث خطأ أثناء حفظ رموز المزايا');
+    } finally {
+      setSavingFeatures(false);
+    }
+  }
+
   useEffect(() => {
     loadPlans();
   }, []);
+
+  useEffect(() => {
+    if (!manualPlanId || plans.length === 0) return;
+    const plan = plans.find(p => p.id === manualPlanId);
+    const opts = plan?.billing_options || [];
+    if (opts.length > 0) {
+      const first = opts[0];
+      setManualDuration(first.type === 'custom_days' ? `custom_days_${first.days}` : first.type);
+    } else {
+      setManualDuration('monthly');
+    }
+  }, [manualPlanId, plans]);
 
   async function loadPlans() {
     try {
@@ -88,7 +164,7 @@ export default function AdminSubscriptionsPage() {
     }
   };
 
-  const openPlanModal = (plan: Plan | null) => {
+  const openPlanModal = (plan: Plan | any) => {
     setEditingPlan(plan);
     if (plan) {
       setPlanName(plan.name);
@@ -101,6 +177,20 @@ export default function AdminSubscriptionsPage() {
       setLimitAutomations(plan.limits.automations ?? 5);
       setFeaturesAr(plan.features_ar || []);
       setFeaturesEn(plan.features_en || []);
+
+      const trialDays = plan.trial_period_days || 0;
+      setTrialEnabled(trialDays > 0);
+      setTrialPeriodDays(trialDays > 0 ? trialDays : 7);
+
+      const opts = plan.billing_options || [];
+      if (opts.length > 0) {
+        setBillingOptions(opts);
+      } else {
+        setBillingOptions([
+          { type: 'monthly', price: plan.price_monthly },
+          { type: 'yearly', price: plan.price_yearly }
+        ]);
+      }
     } else {
       setPlanName('');
       setPlanDisplayName('');
@@ -112,6 +202,9 @@ export default function AdminSubscriptionsPage() {
       setLimitAutomations(5);
       setFeaturesAr([]);
       setFeaturesEn([]);
+      setTrialEnabled(false);
+      setTrialPeriodDays(7);
+      setBillingOptions([]);
     }
     setShowPlanModal(true);
   };
@@ -145,11 +238,28 @@ export default function AdminSubscriptionsPage() {
 
     try {
       setSavingPlan(true);
+      let monthlyPrice = Number(planPriceMonthly);
+      let yearlyPrice = Number(planPriceYearly);
+      
+      const finalOptions = billingOptions.length > 0
+        ? billingOptions
+        : [
+            { type: 'monthly', price: Number(planPriceMonthly) },
+            { type: 'yearly', price: Number(planPriceYearly) }
+          ];
+
+      const monthlyOpt = finalOptions.find(o => o.type === 'monthly');
+      const yearlyOpt = finalOptions.find(o => o.type === 'yearly');
+      if (monthlyOpt) monthlyPrice = Number(monthlyOpt.price);
+      if (yearlyOpt) yearlyPrice = Number(yearlyOpt.price);
+
       const planPayload = {
         name: planName.trim().toLowerCase(),
         display_name: planDisplayName.trim(),
-        price_monthly: Number(planPriceMonthly),
-        price_yearly: Number(planPriceYearly),
+        price_monthly: monthlyPrice,
+        price_yearly: yearlyPrice,
+        trial_period_days: trialEnabled ? Number(trialPeriodDays) : 0,
+        billing_options: finalOptions,
         limits: {
           contacts: Number(limitContacts),
           broadcasts: Number(limitBroadcasts),
@@ -211,12 +321,44 @@ export default function AdminSubscriptionsPage() {
         return;
       }
 
-      const periodEnd = new Date();
-      periodEnd.setDate(periodEnd.getDate() + (manualDuration === 'yearly' ? 365 : 30));
-
       // Get target plan details for price logging
       const selectedPlanData = plans.find(p => p.id === manualPlanId);
-      const price = manualDuration === 'yearly' ? selectedPlanData?.price_yearly : selectedPlanData?.price_monthly;
+
+      let periodEnd: string | null = null;
+      if (manualDuration === 'yearly') {
+        const d = new Date();
+        d.setDate(d.getDate() + 365);
+        periodEnd = d.toISOString();
+      } else if (manualDuration === 'monthly') {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        periodEnd = d.toISOString();
+      } else if (manualDuration === 'lifetime') {
+        periodEnd = null;
+      } else if (manualDuration.startsWith('custom_days_')) {
+        const days = parseInt(manualDuration.replace('custom_days_', ''), 10);
+        const d = new Date();
+        d.setDate(d.getDate() + (isNaN(days) ? 30 : days));
+        periodEnd = d.toISOString();
+      } else {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        periodEnd = d.toISOString();
+      }
+
+      let price = 0;
+      const opts = (selectedPlanData?.billing_options || []) as Array<{ type: string; price: number; days?: number }>;
+      const matched = opts.find(o => {
+        if (o.type === 'custom_days') {
+          return manualDuration === `custom_days_${o.days}`;
+        }
+        return o.type === manualDuration;
+      });
+      if (matched) {
+        price = Number(matched.price);
+      } else {
+        price = manualDuration === 'yearly' ? Number(selectedPlanData?.price_yearly || 0) : Number(selectedPlanData?.price_monthly || 0);
+      }
 
       // 1. Create / Update subscription
       const { data: existingSub } = await supabase
@@ -234,7 +376,7 @@ export default function AdminSubscriptionsPage() {
             plan_id: manualPlanId,
             status: 'active',
             current_period_start: new Date().toISOString(),
-            current_period_end: periodEnd.toISOString(),
+            current_period_end: periodEnd,
             payment_method: manualPaymentMethod,
             updated_at: new Date().toISOString(),
           })
@@ -252,7 +394,7 @@ export default function AdminSubscriptionsPage() {
             plan_id: manualPlanId,
             status: 'active',
             current_period_start: new Date().toISOString(),
-            current_period_end: periodEnd.toISOString(),
+            current_period_end: periodEnd,
             payment_method: manualPaymentMethod,
           })
           .select()
@@ -306,12 +448,23 @@ export default function AdminSubscriptionsPage() {
           <h1 className="text-2xl font-bold text-white">الاشتراكات وخطط الأسعار</h1>
           <p className="mt-1 text-sm text-slate-400">إدارة خطط أسعار SaaS، المزايا، وحدود استخدام كل خطة</p>
         </div>
-        <button
-          onClick={() => openPlanModal(null)}
-          className="flex items-center gap-2 rounded-lg bg-violet-650 hover:bg-violet-600 px-4 py-2 text-sm font-medium text-white transition shadow-lg"
-        >
-          <Plus className="h-4.5 w-4.5" /> إضافة خطة جديدة
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              setShowKeysModal(true);
+              loadLibraryFeatures();
+            }}
+            className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-750 px-4 py-2 text-sm font-medium text-slate-200 transition shadow-md"
+          >
+            <Key className="h-4 w-4 text-violet-400" /> مكتبة رموز المزايا
+          </button>
+          <button
+            onClick={() => openPlanModal(null)}
+            className="flex items-center gap-2 rounded-lg bg-violet-650 hover:bg-violet-600 px-4 py-2 text-sm font-medium text-white transition shadow-lg"
+          >
+            <Plus className="h-4.5 w-4.5" /> إضافة خطة جديدة
+          </button>
+        </div>
       </div>
 
       {/* Plans list */}
@@ -344,10 +497,10 @@ export default function AdminSubscriptionsPage() {
 
                 <div className="mt-2 flex items-end gap-1">
                   <span className="text-3xl font-extrabold text-white">${plan.price_monthly}</span>
-                  <span className="mb-1 text-slate-400 text-sm">/شهر</span>
+                  <span className="mb-1 text-slate-400 text-sm">/ شهرياً</span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
-                  ${plan.price_yearly}/سنوياً
+                  ${plan.price_yearly} / سنوياً
                 </p>
 
                 {/* Limits list */}
@@ -440,11 +593,34 @@ export default function AdminSubscriptionsPage() {
             <label className="block text-xs text-slate-400 mb-1.5">مدة الاشتراك</label>
             <select
               value={manualDuration}
-              onChange={(e) => setManualDuration(e.target.value as any)}
+              onChange={(e) => setManualDuration(e.target.value)}
               className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
             >
-              <option value="monthly">شهري (30 يوم)</option>
-              <option value="yearly">سنوي (365 يوم)</option>
+              {(() => {
+                const selectedPlan = plans.find(p => p.id === manualPlanId) || plans[0];
+                const opts = selectedPlan?.billing_options || [];
+                if (opts.length > 0) {
+                  return opts.map((opt: any, idx: number) => {
+                    const val = opt.type === 'custom_days' ? `custom_days_${opt.days}` : opt.type;
+                    let label = '';
+                    if (opt.type === 'monthly') label = `شهري (30 يوم) - ${opt.price}$`;
+                    else if (opt.type === 'yearly') label = `سنوي (365 يوم) - ${opt.price}$`;
+                    else if (opt.type === 'lifetime') label = `مدى الحياة - ${opt.price}$`;
+                    else if (opt.type === 'custom_days') label = `كل ${opt.days} يوم - ${opt.price}$`;
+                    return (
+                      <option key={idx} value={val}>
+                        {label}
+                      </option>
+                    );
+                  });
+                }
+                return (
+                  <>
+                    <option value="monthly">شهري (30 يوم)</option>
+                    <option value="yearly">سنوي (365 يوم)</option>
+                  </>
+                );
+              })()}
             </select>
           </div>
           <button
@@ -514,6 +690,126 @@ export default function AdminSubscriptionsPage() {
                     onChange={(e) => setPlanPriceYearly(Number(e.target.value))}
                     className="w-full rounded-xl border border-slate-755 bg-slate-800 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none font-mono"
                   />
+                </div>
+              </div>
+
+              {/* Free Trial Settings */}
+              <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={trialEnabled}
+                      onChange={(e) => setTrialEnabled(e.target.checked)}
+                      className="rounded border-slate-700 bg-slate-800 text-violet-500 focus:ring-violet-500"
+                    />
+                    تفعيل فترة تجريبية مجانية (Free Trial)
+                  </label>
+                </div>
+                {trialEnabled && (
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">عدد أيام الفترة التجريبية</label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      value={trialPeriodDays}
+                      onChange={(e) => setTrialPeriodDays(Number(e.target.value))}
+                      className="w-32 rounded-lg border border-slate-755 bg-slate-800 px-3 py-1.5 text-xs text-white focus:border-violet-500 focus:outline-none font-mono"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Billing Options Editor */}
+              <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4 space-y-3">
+                <h4 className="text-xs font-bold text-violet-400 uppercase tracking-wide">دورات الفوترة المتقدمة (الخيارات المتاحة للدفع)</h4>
+                <p className="text-[10px] text-slate-500 leading-normal">
+                  تتيح هذه الإعدادات للمسؤولين تحديد خيارات دفع مرنة للمستخدم (شهري، سنوي، مدى الحياة، أيام مخصصة).
+                </p>
+
+                {/* Billing options list */}
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {billingOptions.map((opt: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between bg-slate-950/40 p-2.5 rounded-lg border border-slate-850 text-xs">
+                      <div>
+                        <span className="font-semibold text-white">
+                          {opt.type === 'monthly' ? 'شهرياً' :
+                           opt.type === 'yearly' ? 'سنوياً' :
+                           opt.type === 'lifetime' ? 'مدى الحياة' :
+                           `كل ${opt.days} يوم`}
+                        </span>
+                        <span className="text-slate-400 font-mono ml-2">({opt.price}$)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setBillingOptions(prev => prev.filter((_: any, i: number) => i !== idx))}
+                        className="text-red-500 hover:text-red-400 font-bold"
+                      >
+                        إزالة
+                      </button>
+                    </div>
+                  ))}
+                  {billingOptions.length === 0 && (
+                    <p className="text-xs text-slate-650 text-center py-2">لا توجد دورات فوترة مخصصة مضافة حالياً.</p>
+                  )}
+                </div>
+
+                {/* Add new option form */}
+                <div className="flex gap-2 items-end pt-2 border-t border-slate-850">
+                  <div className="flex-1">
+                    <label className="block text-[10px] text-slate-400 mb-1">النوع</label>
+                    <select
+                      value={newOptionType}
+                      onChange={(e) => setNewOptionType(e.target.value)}
+                      className="w-full rounded-lg border border-slate-755 bg-slate-800 px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
+                    >
+                      <option value="monthly">شهري</option>
+                      <option value="yearly">سنوي</option>
+                      <option value="lifetime">مدى الحياة (Lifetime)</option>
+                      <option value="custom_days">أيام مخصصة</option>
+                    </select>
+                  </div>
+
+                  {newOptionType === 'custom_days' && (
+                    <div className="w-20">
+                      <label className="block text-[10px] text-slate-400 mb-1">الأيام</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={newOptionDays}
+                        onChange={(e) => setNewOptionDays(Number(e.target.value))}
+                        className="w-full rounded-lg border border-slate-755 bg-slate-800 px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500 font-mono"
+                      />
+                    </div>
+                  )}
+
+                  <div className="w-24">
+                    <label className="block text-[10px] text-slate-400 mb-1">السعر ($)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={newOptionPrice}
+                      onChange={(e) => setNewOptionPrice(Number(e.target.value))}
+                      className="w-full rounded-lg border border-slate-755 bg-slate-800 px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500 font-mono"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newOptionPrice < 0) return;
+                      const newOpt = {
+                        type: newOptionType,
+                        price: Number(newOptionPrice),
+                        ...(newOptionType === 'custom_days' ? { days: Number(newOptionDays) } : {})
+                      };
+                      setBillingOptions(prev => [...prev, newOpt]);
+                    }}
+                    className="bg-violet-650 hover:bg-violet-600 text-white rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+                  >
+                    إضافة
+                  </button>
                 </div>
               </div>
 
@@ -665,6 +961,77 @@ export default function AdminSubscriptionsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: FEATURE KEYS LIBRARY ================= */}
+      {showKeysModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setShowKeysModal(false)}
+              className="absolute left-4 top-4 text-slate-400 hover:text-white"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
+              <Key className="h-5 w-5 text-violet-400" /> مكتبة رموز ومفاتيح المزايا البرمجية
+            </h3>
+            <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+              اربط كل ميزة نصية بمفتاح برمجي فريد (مثال: <code className="bg-slate-950 px-1 py-0.5 rounded text-violet-300">ai_reply</code> أو <code className="bg-slate-950 px-1 py-0.5 rounded text-violet-300">google_sheets</code>) لتفعيل أو حظر الميزة برمجياً للحسابات المشتركة.
+            </p>
+
+            {loadingFeatures ? (
+              <div className="text-center py-12 text-slate-500">
+                <Loader2 className="h-6 w-6 animate-spin text-violet-400 mx-auto" />
+                <p className="mt-2 text-xs">جاري تحميل المميزات...</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveFeatureKeys} className="space-y-4">
+                <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                  {libraryFeatures.map((feat) => (
+                    <div key={feat.id} className="grid grid-cols-2 gap-4 items-center bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                      <div>
+                        <div className="text-xs font-semibold text-white truncate">{feat.name_ar}</div>
+                        <div className="text-[10px] text-slate-400 truncate">{feat.name_en}</div>
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="مثال: ai_reply"
+                          value={editingKeys[feat.id] || ''}
+                          onChange={(e) => setEditingKeys(prev => ({ ...prev, [feat.id]: e.target.value }))}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-850 px-3 py-1.5 text-xs text-white focus:border-violet-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  {libraryFeatures.length === 0 && (
+                    <p className="text-xs text-slate-650 text-center py-4">لم يتم العثور على مزايا في المكتبة</p>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowKeysModal(false)}
+                    className="rounded-lg bg-slate-800 hover:bg-slate-750 px-4 py-2 text-sm text-slate-300 transition"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingFeatures}
+                    className="flex items-center gap-1.5 rounded-lg bg-violet-650 hover:bg-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-lg transition disabled:bg-slate-800 disabled:text-slate-500"
+                  >
+                    <Save className="h-4 w-4" />
+                    {savingFeatures ? 'جاري الحفظ...' : 'حفظ الرموز'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

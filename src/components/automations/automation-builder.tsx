@@ -34,6 +34,7 @@ import {
   Sparkles,
   FileSpreadsheet,
   Brain,
+  HelpCircle,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -106,6 +107,7 @@ const STEP_META: Record<AutomationStepType, StepMeta> = {
   ai_reply: { label: "AI Reply", icon: Sparkles, border: "border-l-amber-500" },
   ai_extract_info: { label: "Extract Info with AI", icon: Brain, border: "border-l-purple-500" },
   save_to_google_sheet: { label: "Send data to Google Sheets", icon: FileSpreadsheet, border: "border-l-emerald-500" },
+  question_sequence: { label: "User Input Flow", icon: HelpCircle, border: "border-l-indigo-500" },
 }
 
 const ADDABLE_STEPS: AutomationStepType[] = [
@@ -123,6 +125,7 @@ const ADDABLE_STEPS: AutomationStepType[] = [
   "ai_reply",
   "ai_extract_info",
   "save_to_google_sheet",
+  "question_sequence",
 ]
 
 const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string; hint: string }[] = [
@@ -177,6 +180,8 @@ function blankConfig(type: AutomationStepType): Record<string, unknown> {
       return { instructions: "", update_contact: true }
     case "save_to_google_sheet":
       return { spreadsheet_id: "", sheet_name: "Sheet1", mappings: [] }
+    case "question_sequence":
+      return { questions: [] }
     default:
       return {}
   }
@@ -1298,6 +1303,113 @@ function StepEditor({
           </div>
         </>
       )
+    case "question_sequence": {
+      const questions = (cfg.questions as Array<{
+        question_text: string;
+        field_name: string;
+        expected_type?: 'text' | 'number' | 'media';
+      }>) ?? []
+
+      const handleAddQuestion = () => {
+        const newQ = { question_text: "", field_name: `field_${questions.length + 1}`, expected_type: "text" as const }
+        set({ questions: [...questions, newQ] })
+      }
+
+      const handleRemoveQuestion = (idx: number) => {
+        set({ questions: questions.filter((_, i) => i !== idx) })
+      }
+
+      const handleUpdateQuestion = (idx: number, patch: Partial<(typeof questions)[number]>) => {
+        const updated = questions.map((q, i) => (i === idx ? { ...q, ...patch } : q))
+        set({ questions: updated })
+      }
+
+      return (
+        <div className="space-y-4">
+          <p className="text-xs text-slate-400 leading-relaxed font-semibold">
+            {lang === 'ar'
+              ? 'قم ببناء تسلسل من الأسئلة ليتم إرسالها للعميل خطوة بخطوة. سيقوم النظام بجمع الإجابات وحفظها في متغيرات لاستخدامها لاحقاً.'
+              : 'Build a sequence of questions to be sent to the customer step by step. The system gathers replies into variables.'}
+          </p>
+
+          <div className="space-y-3">
+            {questions.map((q, idx) => (
+              <div key={idx} className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2 relative">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-violet-400">
+                    {lang === 'ar' ? `السؤال ${idx + 1}` : `Question ${idx + 1}`}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveQuestion(idx)}
+                    className="h-6 w-6 text-red-500 hover:text-red-400 hover:bg-slate-800"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-1">
+                    {lang === 'ar' ? 'نص السؤال المرسل للعميل' : 'Question text sent to customer'}
+                  </label>
+                  <Input
+                    value={q.question_text}
+                    onChange={(e) => handleUpdateQuestion(idx, { question_text: e.target.value })}
+                    placeholder={lang === 'ar' ? 'مثال: ما هو مقاس الحذاء؟' : 'e.g., What is your size?'}
+                    className="bg-slate-850 border-slate-750 text-white text-xs h-8"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">
+                      {lang === 'ar' ? 'اسم الحقل/المتغير' : 'Field / Variable Name'}
+                    </label>
+                    <Input
+                      value={q.field_name}
+                      onChange={(e) => handleUpdateQuestion(idx, { field_name: e.target.value.trim().toLowerCase() })}
+                      placeholder="e.g., size"
+                      className="bg-slate-850 border-slate-750 text-white text-xs h-8 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">
+                      {lang === 'ar' ? 'نوع الرد المتوقع' : 'Expected Response Type'}
+                    </label>
+                    <select
+                      value={q.expected_type || "text"}
+                      onChange={(e) => handleUpdateQuestion(idx, { expected_type: e.target.value as any })}
+                      className="w-full rounded-lg border border-slate-750 bg-slate-850 px-2 py-1 text-xs text-white h-8 focus:border-violet-500 focus:outline-none"
+                    >
+                      <option value="text">{lang === 'ar' ? 'نص حر' : 'Free Text'}</option>
+                      <option value="number">{lang === 'ar' ? 'رقم' : 'Number'}</option>
+                      <option value="media">{lang === 'ar' ? 'صورة / ملف' : 'Media / Attachment'}</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {questions.length === 0 && (
+              <p className="text-xs text-slate-650 text-center py-4 border border-dashed border-slate-800 rounded-xl">
+                {lang === 'ar' ? 'لا توجد أسئلة مضافة بعد. انقر على الزر أدناه للبدء.' : 'No questions added yet. Click the button below to start.'}
+              </p>
+            )}
+          </div>
+
+          <Button
+            type="button"
+            onClick={handleAddQuestion}
+            className="w-full flex items-center justify-center gap-1 bg-slate-850 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs h-8 rounded-lg"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {lang === 'ar' ? 'إضافة خطوة سؤال جديدة' : 'Add New Question Step'}
+          </Button>
+        </div>
+      )
+    }
     case "save_to_google_sheet": {
       const mappings = (cfg.mappings as Array<{ field: string; column: string }>) ?? []
       const [accounts, setAccounts] = useState<any[]>([])
@@ -1561,6 +1673,10 @@ function previewFor(step: BuilderStep, lang?: string): string {
       return lang === 'ar' ? 'استخراج البيانات بالذكاء الاصطناعي' : "Extract Info with AI"
     case "save_to_google_sheet":
       return `Save to Sheet: ${step.step_config.sheet_name ?? "Sheet1"}`
+    case "question_sequence": {
+      const qCount = (step.step_config.questions as any[])?.length || 0
+      return lang === 'ar' ? `مسار أسئلة (${qCount} أسئلة)` : `User Input Flow (${qCount} Qs)`
+    }
     default:
       return ""
   }

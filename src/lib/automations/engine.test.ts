@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 // Shared mock state for the service-role client. Lives in a hoisted block
 // so the vi.mock factory below can close over it.
@@ -100,6 +100,7 @@ import { runAutomationsForTrigger } from "./engine";
 const ACCOUNT = "acct-1";
 
 beforeEach(() => {
+  vi.useFakeTimers();
   h.state.owned = null;
   h.state.ownedCustomField = null;
   h.state.automations = [];
@@ -107,6 +108,10 @@ beforeEach(() => {
   h.state.fromCalls = [];
   h.state.updateCalls = [];
   h.state.upsertCalls = [];
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("runAutomationsForTrigger — tenant isolation", () => {
@@ -123,6 +128,7 @@ describe("runAutomationsForTrigger — tenant isolation", () => {
       contactId: "victim-contact-uuid",
       context: { message_text: "manual trigger" },
     });
+    await vi.runAllTimersAsync();
 
     // Bailed at the guard: never fetched automations, never wrote a contact.
     expect(h.state.fromCalls).toContain("contacts");
@@ -140,6 +146,7 @@ describe("runAutomationsForTrigger — tenant isolation", () => {
       contactId: "c1",
       context: {},
     });
+    await vi.runAllTimersAsync();
 
     expect(h.state.fromCalls).toContain("automations");
   });
@@ -155,6 +162,7 @@ describe("runAutomationsForTrigger — tenant isolation", () => {
       contactId: "c1",
       context: {},
     });
+    await vi.runAllTimersAsync();
 
     expect(h.state.updateCalls).toHaveLength(1);
     const filters = h.state.updateCalls[0].filters;
@@ -176,6 +184,7 @@ describe("update_contact_field — custom fields", () => {
       contactId: "c1",
       context: {},
     });
+    await vi.runAllTimersAsync();
 
     // No direct contacts column write for a custom field.
     expect(h.state.updateCalls).toHaveLength(0);
@@ -199,6 +208,7 @@ describe("update_contact_field — custom fields", () => {
       contactId: "c1",
       context: { vars: { source: "WhatsApp Ad" } },
     });
+    await vi.runAllTimersAsync();
 
     expect(h.state.upsertCalls).toHaveLength(1);
     expect(

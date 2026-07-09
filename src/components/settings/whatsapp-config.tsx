@@ -517,7 +517,7 @@ export function WhatsAppConfig() {
               : 'text-slate-400 hover:text-slate-350 hover:bg-slate-900/50'
           }`}
         >
-          Evolution API (الربط المباشر QR Code)
+          Evolution API (QR Code)
         </button>
       </div>
 

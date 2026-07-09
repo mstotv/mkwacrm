@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
@@ -117,8 +118,32 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const { settings } = useSiteSettings();
   const totalUnread = useTotalUnread();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { colorMode, toggleColorMode } = useTheme();
+
+  const [subscription, setSubscription] = useState<any>(null);
+
+  useEffect(() => {
+    if (!account?.id) return;
+    const supabase = createClient();
+    supabase
+      .from('account_subscriptions')
+      .select('status, current_period_end, plan:subscription_plans(display_name)')
+      .eq('account_id', account.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setSubscription(data);
+      });
+  }, [account?.id]);
+
+  const getTrialDaysLeft = () => {
+    if (subscription?.status !== 'trial' || !subscription.current_period_end) return null;
+    const end = new Date(subscription.current_period_end).getTime();
+    const now = new Date().getTime();
+    const diff = end - now;
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  };
+
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -316,7 +341,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 <Moon className="h-4 w-4" />
               )}
               <span className="flex-1">
-                {colorMode === 'dark' ? t('nav.lightMode', 'وضع فاتح') : t('nav.darkMode', 'وضع داكن')}
+                {colorMode === 'dark' ? t('nav.lightMode') : t('nav.darkMode')}
               </span>
               <span className={`h-5 w-9 rounded-full transition-colors relative ${
                 colorMode === 'dark' ? 'bg-slate-700' : 'bg-primary/30'
@@ -369,6 +394,40 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               ) : null}
             </div>
           ) : null}
+          {subscription?.status === 'trial' && (() => {
+            const daysLeft = getTrialDaysLeft();
+            if (daysLeft === null) return null;
+            const isUrgent = daysLeft <= 2;
+            return (
+              <div className={`mx-2 mb-3 p-3 rounded-xl border flex flex-col gap-1 transition ${
+                isUrgent 
+                  ? 'bg-red-500/10 border-red-500/30 text-red-200 shadow-md shadow-red-950/20' 
+                  : 'bg-violet-500/10 border-violet-500/30 text-violet-200 shadow-md shadow-violet-950/20'
+              }`}>
+                <div className="flex items-center gap-1.5 text-xs font-bold">
+                  <Zap className={`h-4 w-4 shrink-0 ${isUrgent ? 'text-red-400 animate-pulse' : 'text-violet-400'}`} />
+                  <span>{language === 'ar' ? 'فترة تجريبية مجانية' : 'Free Trial'}</span>
+                  <span className="mr-auto text-[10px] opacity-80">
+                    {daysLeft > 0 
+                      ? (language === 'ar' ? `متبقي ${daysLeft} يوم` : `${daysLeft}d left`)
+                      : (language === 'ar' ? 'تنتهي اليوم' : 'ends today')}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                  {language === 'ar' 
+                    ? 'اشترك الآن للاستمرار في استخدام المنصة دون انقطاع.' 
+                    : 'Upgrade your plan now to avoid service interruption.'}
+                </p>
+                <Link
+                  href="/settings?tab=billing"
+                  className="mt-2 text-center rounded-lg bg-violet-650 hover:bg-violet-600 px-2 py-1 text-[10px] font-semibold text-white transition block"
+                >
+                  {language === 'ar' ? 'ترقية الاشتراك' : 'Upgrade Plan'}
+                </Link>
+              </div>
+            );
+          })()}
+
           <DropdownMenu>
             <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-slate-800/60 focus:bg-slate-800/60 focus:outline-none data-popup-open:bg-slate-800/60">
               <Avatar className="size-8 shrink-0">
@@ -409,7 +468,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 }
               >
                 <User className="size-4" />
-                Profile
+                {t("nav.profile")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 render={
@@ -421,7 +480,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 }
               >
                 <Settings className="size-4" />
-                Settings
+                {t("nav.settings")}
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-slate-800" />
               <DropdownMenuItem
@@ -429,7 +488,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 className="text-slate-200 focus:bg-slate-800 focus:text-white"
               >
                 <LogOut className="size-4" />
-                Sign out
+                {t("nav.signOut")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

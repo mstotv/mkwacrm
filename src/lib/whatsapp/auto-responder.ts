@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { sendTextMessage } from './meta-api';
 import { sendEvolutionTextMessage } from './evolution-api';
 
+import { hasFeatureAccess } from '@/lib/auth/features';
+
 // Admin client to safely read configurations and update messages
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -75,31 +77,9 @@ export async function runAutoResponder(args: AutoResponderArgs) {
     }
 
     // 2) Second check: AI Auto Reply (OpenAI & DeepSeek) - only for Pro subscribers (admins bypass this)
-    const { data: profile, error: profileErr } = await adminSupabase
-      .from('profiles')
-      .select('platform_role')
-      .eq('user_id', configOwnerUserId)
-      .maybeSingle();
+    const hasAccess = await hasFeatureAccess(adminSupabase, accountId, 'ai_reply', configOwnerUserId);
 
-    if (profileErr) {
-      console.error('[AutoResponder] Failed to check admin status:', profileErr);
-    }
-
-    const platformRole = profile?.platform_role;
-    const isAdmin = platformRole === 'super_admin' || platformRole === 'assistant_admin';
-
-    const { data: subscription } = await adminSupabase
-      .from('account_subscriptions')
-      .select(`
-        status,
-        plan:subscription_plans(name)
-      `)
-      .eq('account_id', accountId)
-      .maybeSingle();
-
-    const isPro = isAdmin || ((subscription as any)?.status === 'active' && (subscription as any)?.plan?.name === 'pro');
-
-    if (isPro) {
+    if (hasAccess) {
       const { data: aiConfig } = await adminSupabase
         .from('ai_config')
         .select('*')

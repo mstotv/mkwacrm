@@ -16,10 +16,12 @@ import type {
   AiReplyStepConfig,
   SaveToGoogleSheetStepConfig,
   AiExtractInfoStepConfig,
+  QuestionSequenceStepConfig,
 } from '@/types'
 import { supabaseAdmin } from './admin-client'
 import { engineSendText, engineSendTemplate } from './meta-send'
 import { getFreshTokenForAccount, getGoogleSheetsConfig } from '@/lib/whatsapp/google-sheets'
+import { hasFeatureAccess } from '@/lib/auth/features'
 
 // ------------------------------------------------------------
 // Public API
@@ -339,6 +341,68 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
       return
     }
 
+    if (step.step_type === 'question_sequence') {
+      const cfg = step.step_config as QuestionSequenceStepConfig
+      const questions = cfg.questions || []
+      if (questions.length > 0) {
+        const { data: activeSession } = await db
+          .from('automation_qna_sessions')
+          .select('*')
+          .eq('contact_id', args.contactId)
+          .eq('status', 'pending')
+          .maybeSingle()
+
+        if (!activeSession) {
+          const firstQuestion = questions[0]
+          const conversationId = await resolveConversationId(args)
+          
+          await engineSendText({
+            accountId: args.automation.account_id,
+            userId: args.automation.user_id,
+            conversationId,
+            contactId: args.contactId || '',
+            text: firstQuestion.question_text,
+          })
+
+          await db.from('automation_qna_sessions').insert({
+            account_id: args.automation.account_id,
+            contact_id: args.contactId,
+            automation_id: args.automation.id,
+            log_id: args.logId,
+            parent_step_id: args.parentStepId,
+            branch: args.branch,
+            next_step_position: step.position + 1,
+            current_question_index: 0,
+            questions,
+            vars: {},
+            context: args.context,
+            status: 'pending',
+          })
+
+          results.push({
+            step_id: step.id,
+            step_type: step.step_type,
+            status: 'success',
+            detail: `Q&A Flow started. Paused waiting for response to: "${firstQuestion.question_text}"`,
+          })
+          
+          status = 'partial'
+          await appendResults(args.logId, results, status, errorMessage)
+          return
+        } else {
+          results.push({
+            step_id: step.id,
+            step_type: step.step_type,
+            status: 'success',
+            detail: `Q&A Session active. Waiting for response.`,
+          })
+          status = 'partial'
+          await appendResults(args.logId, results, status, errorMessage)
+          return
+        }
+      }
+    }
+
     try {
       if (step.step_type === 'condition') {
         const cfg = step.step_config as ConditionStepConfig
@@ -605,36 +669,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       const conversationId = await resolveConversationId(args)
 
       // 1) Verify active paid subscription or admin status
-      const { data: profile, error: profileErr } = await db
-        .from('profiles')
-        .select('platform_role')
-        .eq('user_id', args.automation.user_id)
-        .maybeSingle()
-
-      if (profileErr) {
-        console.error('[automations] Failed to check admin status:', profileErr)
-      }
-
-      const platformRole = profile?.platform_role
-      const isAdmin = platformRole === 'super_admin' || platformRole === 'assistant_admin'
-
-      const { data: subscription, error: subErr } = await db
-        .from('account_subscriptions')
-        .select(`
-          status,
-          plan:subscription_plans(name, price_monthly)
-        `)
-        .eq('account_id', args.automation.account_id)
-        .maybeSingle()
-
-      if (subErr) {
-        throw new Error(`Failed to check subscription: ${subErr.message}`)
-      }
-
-      const planName = (subscription as any)?.plan?.name;
-      const planPrice = Number((subscription as any)?.plan?.price_monthly ?? 0);
-      const isPaid = subscription?.status === 'active' && planName !== 'free' && planPrice > 0;
-      const hasAccess = isAdmin || isPaid;
+      const hasAccess = await hasFeatureAccess(db, args.automation.account_id, 'ai_reply', args.automation.user_id)
 
       if (!hasAccess) {
         throw new Error('AI Reply action is only available for active paid subscriptions.')
@@ -850,36 +885,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       const cfg = step.step_config as AiExtractInfoStepConfig
 
       // 1) Verify subscription status or admin status
-      const { data: profile, error: profileErr } = await db
-        .from('profiles')
-        .select('platform_role')
-        .eq('user_id', args.automation.user_id)
-        .maybeSingle()
-
-      if (profileErr) {
-        console.error('[automations] Failed to check admin status:', profileErr)
-      }
-
-      const platformRole = profile?.platform_role
-      const isAdmin = platformRole === 'super_admin' || platformRole === 'assistant_admin'
-
-      const { data: subscription, error: subErr } = await db
-        .from('account_subscriptions')
-        .select(`
-          status,
-          plan:subscription_plans(name, price_monthly)
-        `)
-        .eq('account_id', args.automation.account_id)
-        .maybeSingle()
-
-      if (subErr) {
-        throw new Error(`Failed to check subscription: ${subErr.message}`)
-      }
-
-      const planName = (subscription as any)?.plan?.name;
-      const planPrice = Number((subscription as any)?.plan?.price_monthly ?? 0);
-      const isPaid = subscription?.status === 'active' && planName !== 'free' && planPrice > 0;
-      const hasAccess = isAdmin || isPaid;
+      const hasAccess = await hasFeatureAccess(db, args.automation.account_id, 'ai_reply', args.automation.user_id)
 
       if (!hasAccess) {
         throw new Error('AI Information Extraction is only available for active paid subscriptions.')
@@ -1035,6 +1041,12 @@ Only extract values that are explicitly provided in the text. If a value is not 
     case 'save_to_google_sheet': {
       const cfg = step.step_config as SaveToGoogleSheetStepConfig
       
+      // 1) Verify Google Sheets feature access or admin status
+      const hasAccess = await hasFeatureAccess(db, args.automation.account_id, 'google_sheets', args.automation.user_id)
+      if (!hasAccess) {
+        throw new Error('Google Sheets Integration is not available under your plan. Please upgrade.')
+      }
+
       const spreadsheetId = cfg.spreadsheet_id
       if (!spreadsheetId) {
         throw new Error('No Google Spreadsheet selected in workflow step.')
@@ -1435,4 +1447,118 @@ async function createCalendarEvent(
     console.error('[Calendar] Event creation failed:', err)
     throw new Error(`Failed to create Google Calendar event: ${err.message}`)
   }
+}
+
+export async function handleQnaSessionResponse(
+  accountId: string,
+  contactId: string,
+  messageText: string,
+  mediaUrl?: string
+): Promise<boolean> {
+  const db = supabaseAdmin()
+
+  const { data: session, error } = await db
+    .from('automation_qna_sessions')
+    .select('*')
+    .eq('contact_id', contactId)
+    .eq('status', 'pending')
+    .maybeSingle()
+
+  if (error || !session) {
+    return false
+  }
+
+  const questions = (session.questions || []) as Array<{
+    question_text: string;
+    field_name: string;
+    expected_type?: 'text' | 'number' | 'media';
+  }>
+  const currentIndex = session.current_question_index
+  const currentQuestion = questions[currentIndex]
+
+  if (!currentQuestion) {
+    await db.from('automation_qna_sessions').delete().eq('id', session.id)
+    return false
+  }
+
+  let responseVal = messageText
+  if (currentQuestion.expected_type === 'number') {
+    const num = parseFloat(messageText.replace(/[^\d.-]/g, ''))
+    if (!isNaN(num)) {
+      responseVal = String(num)
+    }
+  } else if (currentQuestion.expected_type === 'media' && mediaUrl) {
+    responseVal = mediaUrl
+  }
+
+  const updatedVars = {
+    ...(session.vars || {}),
+    [currentQuestion.field_name]: responseVal,
+  }
+
+  const nextIndex = currentIndex + 1
+
+  if (nextIndex < questions.length) {
+    const nextQuestion = questions[nextIndex]
+    
+    let conversationId = session.context?.conversation_id
+    if (!conversationId) {
+      const { data: conv } = await db
+        .from('conversations')
+        .select('id')
+        .eq('contact_id', session.contact_id)
+        .eq('account_id', session.account_id)
+        .maybeSingle()
+      conversationId = conv?.id
+    }
+
+    await engineSendText({
+      accountId: session.account_id,
+      userId: session.context?.user_id || session.account_id,
+      conversationId: conversationId || '',
+      contactId: session.contact_id,
+      text: nextQuestion.question_text,
+    })
+
+    await db
+      .from('automation_qna_sessions')
+      .update({
+        current_question_index: nextIndex,
+        vars: updatedVars,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', session.id)
+
+  } else {
+    await db.from('automation_qna_sessions').delete().eq('id', session.id)
+
+    const { data: automation } = await db
+      .from('automations')
+      .select('*')
+      .eq('id', session.automation_id)
+      .maybeSingle()
+
+    if (automation) {
+      const currentVars = session.context?.vars || {}
+      const mergedVars = { ...currentVars, ...updatedVars }
+      const updatedContext = {
+        ...(session.context || {}),
+        vars: mergedVars,
+        message_text: messageText,
+      }
+
+      await executeStepsFrom({
+        automation: automation as Automation,
+        contactId: session.contact_id,
+        context: updatedContext,
+        parentStepId: session.parent_step_id,
+        branch: session.branch,
+        startPosition: session.next_step_position,
+        logId: session.log_id,
+        triggerEvent: 'resumed_qna',
+      })
+    }
+  }
+
+  return true
 }

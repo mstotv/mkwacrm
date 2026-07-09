@@ -12,14 +12,12 @@ import {
   Settings,
   ChevronRight,
   Zap,
-  FileText,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/admin', label: 'لوحة التحكم', icon: LayoutDashboard, exact: true },
   { href: '/admin/users', label: 'إدارة المستخدمين', icon: Users },
   { href: '/admin/subscriptions', label: 'الاشتراكات', icon: CreditCard },
-  { href: '/admin/pending-templates', label: 'القوالب المعلقة', icon: FileText },
   { href: '/admin/analytics', label: 'الإحصائيات', icon: BarChart3 },
   { href: '/admin/settings', label: 'إعدادات المنصة', icon: Settings },
 ];

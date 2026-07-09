@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const planId = searchParams.get('planId');
   const billingPeriod = searchParams.get('billingPeriod'); // 'monthly' or 'yearly'
 
-  if (!planId || !billingPeriod || (billingPeriod !== 'monthly' && billingPeriod !== 'yearly')) {
+  if (!planId || !billingPeriod) {
     return new Response('Invalid request parameters', { status: 400 });
   }
 
@@ -43,7 +43,22 @@ export async function GET(request: Request) {
     return new Response('Subscription plan not found', { status: 404 });
   }
 
-  const price = billingPeriod === 'yearly' ? plan.price_yearly : plan.price_monthly;
+  // Find price from billing_options
+  let price = 0;
+  const options = (plan.billing_options || []) as Array<{ type: string; price: number; days?: number }>;
+  const matchedOpt = options.find((opt) => {
+    if (opt.type === 'custom_days') {
+      return billingPeriod === `custom_days_${opt.days}`;
+    }
+    return opt.type === billingPeriod;
+  });
+
+  if (matchedOpt) {
+    price = Number(matchedOpt.price);
+  } else {
+    price = billingPeriod === 'yearly' ? Number(plan.price_yearly) : Number(plan.price_monthly);
+  }
+
   const orderNumber = `sub_${user.id}_${plan.id}_${Date.now()}`;
 
   // 1) Save payment request in DB
@@ -75,7 +90,7 @@ export async function GET(request: Request) {
 
   const plisioParams = new URLSearchParams({
     api_key: plisioSecretKey,
-    order_name: `${plan.display_name} Plan - ${billingPeriod === 'yearly' ? 'Yearly' : 'Monthly'}`,
+    order_name: `${plan.display_name} Plan - ${billingPeriod}`,
     order_number: orderNumber,
     source_currency: 'USD',
     source_amount: price.toString(),

@@ -5,7 +5,7 @@ import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
-import { runAutomationsForTrigger } from '@/lib/automations/engine'
+import { runAutomationsForTrigger, handleQnaSessionResponse } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { runAutoResponder } from '@/lib/whatsapp/auto-responder'
 import {
@@ -680,21 +680,31 @@ async function processMessage(
   })
   const flowConsumed = flowResult.consumed
 
+  let qnaConsumed = false
+  const inboundText = contentText ?? message.text?.body ?? ''
+  if (!flowConsumed) {
+    qnaConsumed = await handleQnaSessionResponse(
+      accountId,
+      contactRecord.id,
+      inboundText,
+      mediaUrl || undefined
+    )
+  }
+
   // Fire any automations that react to this webhook event. All dispatches
   // run here (not earlier) so the contact, conversation, and inbound
   // message all exist before any step — including send_message — runs.
   // Fire-and-forget: a slow or failing automation must not block the
   // webhook's 200 OK response to Meta.
-  const inboundText = contentText ?? message.text?.body ?? ''
   const automationTriggers: (
     | 'new_contact_created'
     | 'first_inbound_message'
     | 'new_message_received'
     | 'keyword_match'
   )[] = []
-  // Content-level triggers are suppressed when a flow consumed the
-  // message — see the comment block above.
-  if (!flowConsumed) {
+  // Content-level triggers are suppressed when a flow or Q&A session consumed the
+  // message.
+  if (!flowConsumed && !qnaConsumed) {
     automationTriggers.push('new_message_received', 'keyword_match')
   }
   // new_contact_created fires only when the webhook just auto-created the
@@ -718,17 +728,19 @@ async function processMessage(
   }
 
   // Run Auto Responder (Keywords & AI response logic)
-  runAutoResponder({
-    accountId,
-    contactId: contactRecord.id,
-    conversationId: conversation.id,
-    messageText: inboundText,
-    senderPhone,
-    phoneNumberId,
-    accessToken,
-    configOwnerUserId,
-    parentMessageId: message.id,
-  }).catch((err) => console.error('[AutoResponder] execution failed:', err))
+  if (!flowConsumed && !qnaConsumed) {
+    runAutoResponder({
+      accountId,
+      contactId: contactRecord.id,
+      conversationId: conversation.id,
+      messageText: inboundText,
+      senderPhone,
+      phoneNumberId,
+      accessToken,
+      configOwnerUserId,
+      parentMessageId: message.id,
+    }).catch((err) => console.error('[AutoResponder] execution failed:', err))
+  }
 }
 
 async function parseMessageContent(

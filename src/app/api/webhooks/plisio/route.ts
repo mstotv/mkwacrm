@@ -112,8 +112,22 @@ export async function POST(request: Request) {
           const accountId = profile.account_id;
           
           // 3) Create or update account subscription
-          const periodEnd = new Date();
-          periodEnd.setDate(periodEnd.getDate() + (paymentRequest.billing_cycle === 'yearly' ? 365 : 30));
+          let periodEnd: string | null = null;
+          const cycle = paymentRequest.billing_cycle || 'monthly';
+          if (cycle !== 'lifetime') {
+            const date = new Date();
+            if (cycle === 'yearly') {
+              date.setDate(date.getDate() + 365);
+            } else if (cycle === 'monthly') {
+              date.setDate(date.getDate() + 30);
+            } else if (cycle.startsWith('custom_days_')) {
+              const days = parseInt(cycle.replace('custom_days_', ''), 10);
+              date.setDate(date.getDate() + (isNaN(days) ? 30 : days));
+            } else {
+              date.setDate(date.getDate() + 30);
+            }
+            periodEnd = date.toISOString();
+          }
 
           const { data: existingSub } = await supabase
             .from('account_subscriptions')
@@ -130,7 +144,7 @@ export async function POST(request: Request) {
                 plan_id: paymentRequest.plan_id,
                 status: 'active',
                 current_period_start: new Date().toISOString(),
-                current_period_end: periodEnd.toISOString(),
+                current_period_end: periodEnd,
                 payment_method: 'plisio',
                 updated_at: new Date().toISOString(),
               })
@@ -147,7 +161,7 @@ export async function POST(request: Request) {
                 plan_id: paymentRequest.plan_id,
                 status: 'active',
                 current_period_start: new Date().toISOString(),
-                current_period_end: periodEnd.toISOString(),
+                current_period_end: periodEnd,
                 payment_method: 'plisio',
               })
               .select('id')

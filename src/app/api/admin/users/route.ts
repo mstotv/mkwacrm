@@ -257,7 +257,7 @@ export async function POST(request: Request) {
           payment_method: 'manual',
           current_period_end: expiresAt || '2099-12-31T23:59:59Z',
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'account_id' });
 
       if (subError) throw subError;
 
