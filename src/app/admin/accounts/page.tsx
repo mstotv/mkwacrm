@@ -235,44 +235,29 @@ export default function AdminAccountsPage() {
         ? new Date(editPeriodEnd).toISOString()
         : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-      // Check if account already has a subscription row
-      const { data: subExists } = await supabase
-        .from('account_subscriptions')
-        .select('id')
-        .eq('account_id', editingAccount.id)
-        .maybeSingle();
+      // Use the API route with service_role key to bypass RLS
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_plan',
+          accountId: editingAccount.id,
+          planId: editPlanId,
+          expiresAt: formattedDate,
+          targetUserId: editingAccount.owner_user_id,
+          targetEmail: editingAccount.owner_email,
+        }),
+      });
 
-      if (subExists) {
-        const { error } = await supabase
-          .from('account_subscriptions')
-          .update({
-            plan_id: editPlanId,
-            current_period_end: formattedDate,
-            status: 'active',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('account_id', editingAccount.id);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('account_subscriptions')
-          .insert({
-            account_id: editingAccount.id,
-            plan_id: editPlanId,
-            current_period_end: formattedDate,
-            status: 'active',
-            payment_method: 'manual',
-          });
-
-        if (error) throw error;
-      }
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || 'Failed to update plan');
 
       toast.success('تم تحديث خطة الاشتراك بنجاح');
       setShowEditModal(false);
       loadAccounts();
     } catch (err: any) {
-      toast.error('حدث خطأ أثناء تعديل الاشتراك');
+      toast.error('حدث خطأ أثناء تعديل الاشتراك: ' + (err.message || ''));
+      console.error('Update plan error:', err);
     } finally {
       setUpdatingPlan(false);
     }

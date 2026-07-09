@@ -324,6 +324,62 @@ export async function POST(request: Request) {
     if (action === 'delete') {
       if (!targetUserId) return NextResponse.json({ error: 'Missing target user parameter' }, { status: 400 });
 
+      // Find the user's profile to get their account_id
+      const { data: targetProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('account_id')
+        .eq('user_id', targetUserId)
+        .maybeSingle();
+
+      const targetAccountId = targetProfile?.account_id;
+
+      // Delete related data in correct order to satisfy FK constraints
+      if (targetAccountId) {
+        // 7a) Delete account subscriptions (FK to accounts)
+        await supabaseAdmin
+          .from('account_subscriptions')
+          .delete()
+          .eq('account_id', targetAccountId);
+
+        // 7b) Delete payment history (FK to accounts)
+        await supabaseAdmin
+          .from('payment_history')
+          .delete()
+          .eq('account_id', targetAccountId);
+
+        // 7c) Delete account members (FK to accounts)
+        await supabaseAdmin
+          .from('account_members')
+          .delete()
+          .eq('account_id', targetAccountId);
+
+        // 7d) Delete invitations (FK to accounts — cascade exists but clean up explicitly)
+        await supabaseAdmin
+          .from('account_invitations')
+          .delete()
+          .eq('account_id', targetAccountId);
+
+        // 7e) Delete the account itself (has ON DELETE RESTRICT on owner_user_id)
+        const { error: accDeleteError } = await supabaseAdmin
+          .from('accounts')
+          .delete()
+          .eq('id', targetAccountId);
+
+        if (accDeleteError) {
+          console.error('[Admin Delete] Error deleting account:', accDeleteError);
+          // If account deletion fails, try to nullify owner reference first
+          // This handles cases where other FKs might still exist
+          throw new Error('فشل حذف الحساب: ' + accDeleteError.message);
+        }
+      }
+
+      // 7f) Delete the profile (FK to auth.users with ON DELETE CASCADE, but remove explicitly)
+      await supabaseAdmin
+        .from('profiles')
+        .delete()
+        .eq('user_id', targetUserId);
+
+      // 7g) Finally delete the auth user
       const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
       if (deleteError) throw deleteError;
 
@@ -333,7 +389,7 @@ export async function POST(request: Request) {
         target_user_id: targetUserId,
         target_email: targetEmail || null,
         action: 'delete_account',
-        metadata: { ip }
+        metadata: { ip, deleted_account_id: targetAccountId }
       });
 
       return NextResponse.json({ success: true });
