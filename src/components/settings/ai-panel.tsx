@@ -18,6 +18,16 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getEffectiveSubscriptionPlanLabel, isActiveSubscription } from '@/lib/auth/subscription';
+
+function normalizeSubscription(subscription: any) {
+  if (!subscription) return null;
+  const normalized = { ...subscription };
+  if (Array.isArray(normalized.plan)) {
+    normalized.plan = normalized.plan[0] ?? null;
+  }
+  return normalized;
+}
 
 interface AIConfig {
   id?: string;
@@ -93,21 +103,19 @@ export function AIPanel() {
     }
     const accountId = account.id;
     const supabase = createClient();
+    let isMounted = true;
 
     async function loadAIConfigAndSub() {
       try {
-        // Load active subscription and plan
-        const { data: subData } = await supabase
-          .from('account_subscriptions')
-          .select(`
-            status,
-            plan:subscription_plans(*)
-          `)
-          .eq('account_id', accountId)
-          .maybeSingle();
+        // Load active subscription and plan via API to bypass RLS select issues
+        const resSub = await fetch('/api/billing/subscription');
+        const resSubData = await resSub.json();
+        const subData = resSubData.subscription || null;
+
+        if (!isMounted) return;
 
         if (subData) {
-          setSubscription(subData);
+          setSubscription(normalizeSubscription(subData));
         }
 
         // Load AI Config
@@ -116,6 +124,8 @@ export function AIPanel() {
           .select('*')
           .eq('account_id', accountId)
           .maybeSingle();
+
+        if (!isMounted) return;
 
         if (data) {
           setConfig({
@@ -133,11 +143,34 @@ export function AIPanel() {
       } catch (err) {
         console.error('Error loading AI config and subscription:', err);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
-    loadAIConfigAndSub();
+    void loadAIConfigAndSub();
+
+    const channel = supabase
+      .channel(`ai-subscription-${accountId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'account_subscriptions',
+          filter: `account_id=eq.${accountId}`,
+        },
+        () => {
+          void loadAIConfigAndSub();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
   }, [account?.id, profileLoading]);
 
   // Parse training Q&A from system_prompt (marked with special delimiters)
@@ -348,7 +381,8 @@ export function AIPanel() {
   }
 
   const isOwnerOrAdmin = accountRole === 'owner' || accountRole === 'admin';
-  const isProPlan = subscription?.status === 'active' && subscription?.plan?.name === 'pro';
+  const isProPlan = isActiveSubscription(subscription) && subscription?.plan?.name === 'pro';
+  const planLabel = getEffectiveSubscriptionPlanLabel(subscription);
 
   return (
     <div className="space-y-6">
@@ -358,7 +392,7 @@ export function AIPanel() {
           <AlertCircle className="h-5 w-5 shrink-0 text-amber-400 mt-0.5" />
           <div className="space-y-1">
             <span className="font-bold text-amber-400 block">ميزة الردود التلقائية بالذكاء الاصطناعي معطلة للمستقبلين</span>
-            المجيب التلقائي الذكي (OpenAI / DeepSeek) متاح فقط للمشتركين في الباقة الاحترافية (Pro). باقتك الحالية هي: <strong className="text-white">({subscription?.plan?.display_name || 'Free المجانية'})</strong>.
+            المجيب التلقائي الذكي (OpenAI / DeepSeek) متاح فقط للمشتركين في الباقة الاحترافية (Pro). باقتك الحالية هي: <strong className="text-white">({planLabel || 'Free المجانية'})</strong>.
             يمكنك إدخال وتجربة المفتاح وفحص الاتصال، ولكن لن يقوم البوت بالرد التلقائي على الواتساب للعملاء إلا بعد ترقية باقة الاشتراك.
           </div>
         </div>

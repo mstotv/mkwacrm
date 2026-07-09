@@ -243,23 +243,88 @@ export async function POST(request: Request) {
 
     // 4) UPDATE PLAN
     if (action === 'update_plan') {
-      if (!accountId || !planId) {
-        return NextResponse.json({ error: 'Missing account or plan parameters' }, { status: 400 });
+      if (!planId) {
+        return NextResponse.json({ error: 'Missing plan parameter' }, { status: 400 });
       }
 
-      // Update or create subscription row
-      const { error: subError } = await supabaseAdmin
+      let effectiveAccountId = accountId;
+      if (!effectiveAccountId && targetUserId) {
+        const { data: targetProfile, error: targetProfileError } = await supabaseAdmin
+          .from('profiles')
+          .select('account_id')
+          .eq('user_id', targetUserId)
+          .maybeSingle();
+
+        if (targetProfileError) throw targetProfileError;
+        effectiveAccountId = targetProfile?.account_id || null;
+      }
+
+      if (!effectiveAccountId) {
+        return NextResponse.json({ error: 'Missing account parameter' }, { status: 400 });
+      }
+
+      const { data: accountRow, error: accountError } = await supabaseAdmin
+          .from('accounts')
+          .select('id')
+          .eq('id', effectiveAccountId)
+          .maybeSingle();
+
+      if (accountError) throw accountError;
+      if (!accountRow) {
+        return NextResponse.json({ error: 'Account not found' }, { status: 404 });
+      }
+
+      const { data: planRow, error: planError } = await supabaseAdmin
+        .from('subscription_plans')
+        .select('id, name, display_name')
+        .eq('id', planId)
+        .maybeSingle();
+
+      if (planError) throw planError;
+      if (!planRow) {
+        return NextResponse.json({ error: 'Subscription plan not found' }, { status: 404 });
+      }
+
+      const expiresAtValue = expiresAt?.trim() ? expiresAt.trim() : '2099-12-31T23:59:59Z';
+      const actualPaymentMethod = body.paymentMethod || 'manual';
+
+      const { data: upsertedSub, error: subError } = await supabaseAdmin
         .from('account_subscriptions')
         .upsert({
-          account_id: accountId,
+          account_id: effectiveAccountId,
           plan_id: planId,
           status: 'active',
-          payment_method: 'manual',
-          current_period_end: expiresAt || '2099-12-31T23:59:59Z',
+          payment_method: actualPaymentMethod,
+          current_period_start: new Date().toISOString(),
+          current_period_end: expiresAtValue,
+          trial_ends_at: null,
+          cancelled_at: null,
           updated_at: new Date().toISOString()
-        }, { onConflict: 'account_id' });
+        }, { onConflict: 'account_id' })
+        .select('id')
+        .single();
 
       if (subError) throw subError;
+
+      // Optional payment history logging if price is provided (manual activation via subscriptions screen)
+      if (body.price !== undefined) {
+        const { error: payError } = await supabaseAdmin
+          .from('payment_history')
+          .insert({
+            account_id: effectiveAccountId,
+            subscription_id: upsertedSub.id,
+            amount: Number(body.price) || 0,
+            currency: 'USD',
+            status: 'paid',
+            payment_method: actualPaymentMethod,
+            description: body.description || `Manual activation by Super Admin. Plan: ${planRow.display_name}`,
+            paid_at: new Date().toISOString(),
+          });
+
+        if (payError) {
+          console.error('[Subscription API Update] Payment history insert failed:', payError);
+        }
+      }
 
       // Log action to audit log
       await supabaseAdmin.from('admin_audit_logs').insert({
@@ -268,7 +333,16 @@ export async function POST(request: Request) {
         target_user_id: targetUserId || null,
         target_email: targetEmail || null,
         action: 'manual_plan_update',
-        metadata: { planId, expiresAt, ip }
+        metadata: {
+          accountId: effectiveAccountId,
+          planId,
+          planName: planRow.name,
+          planDisplayName: planRow.display_name,
+          expiresAt: expiresAtValue,
+          price: body.price,
+          paymentMethod: actualPaymentMethod,
+          ip,
+        },
       });
 
       return NextResponse.json({ success: true });

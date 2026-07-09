@@ -6,6 +6,16 @@ import { useAuth } from '@/hooks/use-auth';
 import { useLanguage } from '@/hooks/use-language';
 import { CreditCard, Check, ShieldAlert, Cpu, ExternalLink, Bot, Loader2, Zap, Gift } from 'lucide-react';
 import { toast } from 'sonner';
+import { isActiveSubscription } from '@/lib/auth/subscription';
+
+function normalizeSubscription(subscription: any) {
+  if (!subscription) return null;
+  const normalized = { ...subscription };
+  if (Array.isArray(normalized.plan)) {
+    normalized.plan = normalized.plan[0] ?? null;
+  }
+  return normalized;
+}
 
 interface Plan {
   id: string;
@@ -43,6 +53,7 @@ export function BillingPanel() {
     }
     const accountId = account.id;
     const supabase = createClient();
+    let isMounted = true;
 
     async function loadBillingData() {
       try {
@@ -53,17 +64,12 @@ export function BillingPanel() {
           .eq('is_active', true)
           .order('price_monthly', { ascending: true });
 
-        // Load current subscription
-        const { data: subData } = await supabase
-          .from('account_subscriptions')
-          .select(`
-            status,
-            current_period_end,
-            trial_ends_at,
-            plan:subscription_plans(*)
-          `)
-          .eq('account_id', accountId)
-          .maybeSingle();
+        // Load current subscription via API to bypass RLS select limitations
+        const resSub = await fetch('/api/billing/subscription');
+        const resSubData = await resSub.json();
+        const subData = resSubData.subscription || null;
+
+        if (!isMounted) return;
 
         const loadedPlans = (plansData as Plan[]) ?? [];
         setPlans(loadedPlans);
@@ -82,16 +88,54 @@ export function BillingPanel() {
         setSelectedCycles(initialCycles);
 
         if (subData) {
-          setSubscription(subData as any);
+          setSubscription(normalizeSubscription(subData));
         }
       } catch (err) {
         console.error('Error loading billing:', err);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
-    loadBillingData();
+    void loadBillingData();
+
+    const channel = supabase
+      .channel(`billing-subscription-${accountId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'account_subscriptions',
+          filter: `account_id=eq.${accountId}`,
+        },
+        () => {
+          void loadBillingData();
+        }
+      )
+      .subscribe();
+
+    const handleFocus = () => {
+      void loadBillingData();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void loadBillingData();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [account?.id, profileLoading]);
 
   const handlePayCrypto = async (plan: Plan) => {
@@ -200,14 +244,14 @@ export function BillingPanel() {
           </div>
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider ${
-              subscription?.status === 'active'
+              isActiveSubscription(subscription)
                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                 : subscription?.status === 'trial'
                 ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
                 : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
             }`}>
-              {subscription?.status === 'active' 
-                ? (language === 'ar' ? 'نشط' : 'Active') 
+              {isActiveSubscription(subscription)
+                ? (language === 'ar' ? 'نشط' : 'Active')
                 : subscription?.status === 'trial'
                 ? (language === 'ar' ? 'فترة تجريبية' : 'Free Trial')
                 : (language === 'ar' ? 'غير نشط' : 'Inactive')}

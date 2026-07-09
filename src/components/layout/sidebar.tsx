@@ -123,17 +123,25 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
   const [subscription, setSubscription] = useState<any>(null);
 
+  function normalizeSubscription(subscription: any) {
+    if (!subscription) return null;
+    const normalized = { ...subscription };
+    if (Array.isArray(normalized.plan)) {
+      normalized.plan = normalized.plan[0] ?? null;
+    }
+    return normalized;
+  }
+
   useEffect(() => {
     if (!account?.id) return;
-    const supabase = createClient();
-    supabase
-      .from('account_subscriptions')
-      .select('status, current_period_end, plan:subscription_plans(display_name)')
-      .eq('account_id', account.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setSubscription(data);
-      });
+    fetch('/api/billing/subscription')
+      .then(res => res.json())
+      .then(data => {
+        if (data.subscription) {
+          setSubscription(normalizeSubscription(data.subscription));
+        }
+      })
+      .catch(err => console.error('Error fetching subscription:', err));
   }, [account?.id]);
 
   const getTrialDaysLeft = () => {

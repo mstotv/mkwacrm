@@ -360,67 +360,24 @@ export default function AdminSubscriptionsPage() {
         price = manualDuration === 'yearly' ? Number(selectedPlanData?.price_yearly || 0) : Number(selectedPlanData?.price_monthly || 0);
       }
 
-      // 1. Create / Update subscription
-      const { data: existingSub } = await supabase
-        .from('account_subscriptions')
-        .select('id')
-        .eq('account_id', manualAccountId.trim())
-        .maybeSingle();
-
-      let subId = '';
-
-      if (existingSub) {
-        const { data: updatedSub, error: subError } = await supabase
-          .from('account_subscriptions')
-          .update({
-            plan_id: manualPlanId,
-            status: 'active',
-            current_period_start: new Date().toISOString(),
-            current_period_end: periodEnd,
-            payment_method: manualPaymentMethod,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('account_id', manualAccountId.trim())
-          .select()
-          .single();
-
-        if (subError) throw subError;
-        subId = updatedSub.id;
-      } else {
-        const { data: insertedSub, error: subError } = await supabase
-          .from('account_subscriptions')
-          .insert({
-            account_id: manualAccountId.trim(),
-            plan_id: manualPlanId,
-            status: 'active',
-            current_period_start: new Date().toISOString(),
-            current_period_end: periodEnd,
-            payment_method: manualPaymentMethod,
-          })
-          .select()
-          .single();
-
-        if (subError) throw subError;
-        subId = insertedSub.id;
-      }
-
-      // 2. Insert into payment history
-      const { error: payError } = await supabase
-        .from('payment_history')
-        .insert({
-          account_id: manualAccountId.trim(),
-          subscription_id: subId,
-          amount: price || 0,
-          currency: 'USD',
-          status: 'paid',
-          payment_method: manualPaymentMethod,
-          plan_id: manualPlanId,
-          billing_period: manualDuration,
-          paid_at: new Date().toISOString(),
+      // Call the secure admin API to upsert subscription and log payment
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_plan',
+          accountId: manualAccountId.trim(),
+          planId: manualPlanId,
+          expiresAt: periodEnd,
+          price: price,
+          paymentMethod: manualPaymentMethod,
+          billingPeriod: manualDuration,
           description: `Manual activation by Super Admin. Plan: ${selectedPlanData?.display_name} (${manualDuration})`,
-        });
+        }),
+      });
 
-      if (payError) throw payError;
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || 'Failed to activate plan');
 
       toast.success('تم تفعيل الاشتراك يدويًا بنجاح وتوثيق عملية الدفع');
       setManualAccountId('');
