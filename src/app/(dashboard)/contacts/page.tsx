@@ -64,7 +64,7 @@ export default function ContactsPage() {
   const supabase = createClient();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const [contacts, setContacts] = useState<ContactWithTags[]>([]);
   const [loading, setLoading] = useState(true);
@@ -198,9 +198,9 @@ export default function ContactsPage() {
       .eq('id', deleteTarget.id);
 
     if (error) {
-      toast.error('Failed to delete contact');
+      toast.error(language === 'ar' ? 'فشل حذف جهة الاتصال' : 'Failed to delete contact');
     } else {
-      toast.success('Contact deleted');
+      toast.success(language === 'ar' ? 'تم حذف جهة الاتصال' : 'Contact deleted');
       fetchContacts();
     }
 
@@ -252,7 +252,7 @@ export default function ContactsPage() {
   const hasPrev = page > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -269,15 +269,15 @@ export default function ContactsPage() {
               className="border-slate-700 text-slate-300 hover:bg-slate-800"
             >
               <SlidersHorizontal className="size-4" />
-              Custom fields
+              {language === 'ar' ? 'الحقول المخصصة' : 'Custom fields'}
             </Button>
           )}
           
           {/* Google Sheets Sync */}
           <Button
-            variant="outline"
-            onClick={handleSheetsSync}
-            className="border-slate-700 text-slate-300 hover:bg-slate-800"
+              variant="outline"
+              onClick={handleSheetsSync}
+              className="border-slate-700 text-slate-300 hover:bg-slate-800"
           >
             <CloudLightning className="size-4 text-emerald-400" />
             {t('contacts.sheetsSync')}
@@ -285,29 +285,29 @@ export default function ContactsPage() {
 
           {/* Export CSV */}
           <Button
-            variant="outline"
-            onClick={handleExportCSV}
-            className="border-slate-700 text-slate-300 hover:bg-slate-800"
+              variant="outline"
+              onClick={handleExportCSV}
+              className="border-slate-700 text-slate-300 hover:bg-slate-800"
           >
             <Download className="size-4 text-violet-400" />
             {t('contacts.export')}
           </Button>
 
           <GatedButton
-            variant="outline"
-            canAct={canEdit}
-            gateReason="add or import contacts"
-            onClick={() => setImportOpen(true)}
-            className="border-slate-700 text-slate-300 hover:bg-slate-800"
+              variant="outline"
+              canAct={canEdit}
+              gateReason="add or import contacts"
+              onClick={() => setImportOpen(true)}
+              className="border-slate-700 text-slate-300 hover:bg-slate-800"
           >
             <Upload className="size-4" />
             {t('contacts.import')}
           </GatedButton>
           <GatedButton
-            canAct={canEdit}
-            gateReason="add or import contacts"
-            onClick={openAddForm}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              canAct={canEdit}
+              gateReason="add or import contacts"
+              onClick={openAddForm}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             <Plus className="size-4" />
             {t('contacts.addContact')}
@@ -318,33 +318,33 @@ export default function ContactsPage() {
 
       {/* Search */}
       <div className="relative max-w-sm">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
+        <Search className={`absolute ${language === 'ar' ? 'right-2.5' : 'left-2.5'} top-1/2 -translate-y-1/2 size-4 text-slate-500`} />
         <Input
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            // Reset pagination when the query changes — the result
-            // set shrinks/grows, page N may no longer be valid.
-            setPage(0);
-          }}
-          placeholder="Search by name, phone, email, or address..."
-          className="pl-8 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              // Reset pagination when the query changes — the result
+              // set shrinks/grows, page N may no longer be valid.
+              setPage(0);
+            }}
+            placeholder={language === 'ar' ? 'ابحث بالاسم، الهاتف، البريد، أو العنوان...' : 'Search by name, phone, email, or address...'}
+            className={`${language === 'ar' ? 'pr-8' : 'pl-8'} bg-slate-900 border-slate-700 text-white placeholder:text-slate-500`}
         />
       </div>
 
-       {/* Table */}
+      {/* Table */}
       <div className="rounded-lg border border-slate-800 overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="border-slate-800 hover:bg-transparent">
-              <TableHead className="text-slate-400">{t('common.name', 'Name')}</TableHead>
-              <TableHead className="text-slate-400">Phone</TableHead>
-              <TableHead className="text-slate-400 hidden md:table-cell">Email</TableHead>
-              <TableHead className="text-slate-400 hidden lg:table-cell">Company</TableHead>
-              <TableHead className="text-slate-400 hidden md:table-cell">{t('contacts.points')}</TableHead>
-              <TableHead className="text-slate-400 hidden md:table-cell">{t('contacts.segment')}</TableHead>
-              <TableHead className="text-slate-400 hidden md:table-cell">Tags</TableHead>
-              <TableHead className="text-slate-400 hidden lg:table-cell">Created</TableHead>
+              <TableHead className={`text-slate-400 ${language === 'ar' ? 'text-right' : 'text-left'}`}>{t('common.name', 'Name')}</TableHead>
+              <TableHead className={`text-slate-400 ${language === 'ar' ? 'text-right' : 'text-left'}`}>{language === 'ar' ? 'الهاتف' : 'Phone'}</TableHead>
+              <TableHead className={`text-slate-400 hidden md:table-cell ${language === 'ar' ? 'text-right' : 'text-left'}`}>{language === 'ar' ? 'البريد الإلكتروني' : 'Email'}</TableHead>
+              <TableHead className={`text-slate-400 hidden lg:table-cell ${language === 'ar' ? 'text-right' : 'text-left'}`}>{language === 'ar' ? 'الشركة' : 'Company'}</TableHead>
+              <TableHead className={`text-slate-400 hidden md:table-cell ${language === 'ar' ? 'text-right' : 'text-left'}`}>{t('contacts.points')}</TableHead>
+              <TableHead className={`text-slate-400 hidden md:table-cell ${language === 'ar' ? 'text-right' : 'text-left'}`}>{t('contacts.segment')}</TableHead>
+              <TableHead className={`text-slate-400 hidden md:table-cell ${language === 'ar' ? 'text-right' : 'text-left'}`}>{language === 'ar' ? 'الوسوم' : 'Tags'}</TableHead>
+              <TableHead className={`text-slate-400 hidden lg:table-cell ${language === 'ar' ? 'text-right' : 'text-left'}`}>{language === 'ar' ? 'تاريخ الإنشاء' : 'Created'}</TableHead>
               <TableHead className="text-slate-400 w-12" />
             </TableRow>
           </TableHeader>
@@ -354,7 +354,7 @@ export default function ContactsPage() {
                 <TableCell colSpan={9} className="text-center py-12">
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 className="size-6 animate-spin text-primary" />
-                    <p className="text-sm text-slate-500">Loading contacts...</p>
+                    <p className="text-sm text-slate-500">{language === 'ar' ? 'جاري تحميل جهات الاتصال...' : 'Loading contacts...'}</p>
                   </div>
                 </TableCell>
               </TableRow>
@@ -364,13 +364,16 @@ export default function ContactsPage() {
                   <div className="flex flex-col items-center gap-2">
                     <Users className="size-8 text-slate-600" />
                     <p className="text-sm text-slate-500">
-                      {search ? 'No contacts match your search.' : 'No contacts yet.'}
+                      {search
+                        ? (language === 'ar' ? 'لا توجد جهات اتصال تطابق بحثك.' : 'No contacts match your search.')
+                        : (language === 'ar' ? 'لا توجد جهات اتصال بعد.' : 'No contacts yet.')}
                     </p>
                     {!search && (
                       <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={openAddForm}
+                          variant="outline"
+                          size="sm"
+                          onClick={openAddForm}
+
                         className="mt-2 border-slate-700 text-slate-300 hover:bg-slate-800"
                       >
                         <Plus className="size-3.5" />
@@ -583,24 +586,38 @@ export default function ContactsPage() {
 
       {/* Delete Confirmation */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent className="bg-slate-900 border-slate-700 text-slate-200 sm:max-w-sm">
+        <DialogContent className="bg-slate-900 border-slate-700 text-slate-200 sm:max-w-sm" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
           <DialogHeader>
-            <DialogTitle className="text-white">Delete Contact</DialogTitle>
-            <DialogDescription className="text-slate-400">
-              Are you sure you want to delete{' '}
-              <span className="text-slate-200 font-medium">
-                {deleteTarget?.name || deleteTarget?.phone}
-              </span>
-              ? This action cannot be undone.
+            <DialogTitle className={`text-white ${language === 'ar' ? 'text-right' : 'text-left'}`}>
+              {language === 'ar' ? 'حذف جهة الاتصال' : 'Delete Contact'}
+            </DialogTitle>
+            <DialogDescription className={`text-slate-400 ${language === 'ar' ? 'text-right' : 'text-left'}`}>
+              {language === 'ar' ? (
+                <>
+                  هل أنت متأكد من رغبتك في حذف{' '}
+                  <span className="text-slate-200 font-medium">
+                    {deleteTarget?.name || deleteTarget?.phone}
+                  </span>
+                  ؟ لا يمكن التراجع عن هذا الإجراء.
+                </>
+              ) : (
+                <>
+                  Are you sure you want to delete{' '}
+                  <span className="text-slate-200 font-medium">
+                    {deleteTarget?.name || deleteTarget?.phone}
+                  </span>
+                  ? This action cannot be undone.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="bg-slate-900 border-slate-700">
+          <DialogFooter className="bg-slate-900 border-slate-700 flex gap-2">
             <Button
               variant="outline"
               onClick={() => setDeleteConfirmOpen(false)}
               className="border-slate-700 text-slate-300 hover:bg-slate-800"
             >
-              Cancel
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
             </Button>
             <Button
               variant="destructive"
@@ -608,11 +625,12 @@ export default function ContactsPage() {
               disabled={deleting}
             >
               {deleting && <Loader2 className="size-4 animate-spin" />}
-              Delete
+              {language === 'ar' ? 'حذف' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
+
   );
 }

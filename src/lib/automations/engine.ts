@@ -22,6 +22,11 @@ import { supabaseAdmin } from './admin-client'
 import { engineSendText, engineSendTemplate } from './meta-send'
 import { getFreshTokenForAccount, getGoogleSheetsConfig } from '@/lib/whatsapp/google-sheets'
 import { hasFeatureAccess } from '@/lib/auth/features'
+import {
+  notifyAccountViaTelegram,
+  formatAppointmentNotification,
+  formatOrderNotification,
+} from '@/lib/notifications/telegram'
 
 // ------------------------------------------------------------
 // Public API
@@ -734,6 +739,35 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         console.error('[automations] Failed to load calendar context:', calErr)
       }
 
+      // Fetch account details for follow-up settings
+      let followUpContext = ''
+      let accountData: any = null
+      try {
+        const { data: acct } = await db
+          .from('accounts')
+          .select('follow_up_action_type, follow_up_reminder_template, follow_up_default_time')
+          .eq('id', args.automation.account_id)
+          .maybeSingle()
+        accountData = acct
+
+        const currentDayTime = new Date().toLocaleString('ar-SA', {
+          timeZone: 'Asia/Riyadh',
+          dateStyle: 'full',
+          timeStyle: 'short'
+        })
+
+        followUpContext = `\n\n**معلومات المتابعة التلقائية (AI Follow-up):**
+تاريخ ووقت اليوم الحالي هو: ${currentDayTime} (تنسيق ISO: ${new Date().toISOString()}).
+إذا أبدى العميل رغبة في التفكير أو تأجيل اتخاذ القرار أو الموعد أو الشراء لوقت لاحق (مثال: "بفكر وأرد عليك بكرة"، "تواصل معي بعد يومين"، "بكلمك الأسبوع الجاي"، "سأعود لكم لاحقاً")، يجب عليك جدولة متابعة بإضافة التاج التالي بدقة متناهية في نهاية ردك:
+[SCHEDULE_FOLLOW_UP: السبب | الوقت النسبي | YYYY-MM-DD]
+حيث:
+- السبب: وصف مختصر جداً لسبب المتابعة باللغة العربية (مثال: أراد التفكير بعرض السعر).
+- الوقت النسبي: الوصف النسبي الذي ذكره العميل (مثال: غداً، بعد يومين، الأسبوع القادم).
+- YYYY-MM-DD: هو التاريخ الفعلي المحسوب للمتابعة بناءً على تاريخ ووقت اليوم الموضح أعلاه.`
+      } catch (acctErr) {
+        console.error('[automations] Failed to load account context for follow-up:', acctErr)
+      }
+
       const systemPrompt =
         cfg.system_prompt ||
         aiConfig.system_prompt ||
@@ -741,7 +775,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
 
       // Append default brevity instruction to system prompt
       const brevityInstruction = '\n\n**تعليمات هامة لأسلوب الرد / Important reply instructions:**\n- أجب دائماً بإيجاز شديد (جملتين إلى ثلاث جمل كحد أقصى)، بما يكفي لإعطاء العميل المعلومة الكافية دون إطالة أو حشو.\n- Always answer very briefly (maximum 2 to 3 sentences), enough to give the customer sufficient information without lengthiness.'
-      const compiledSystemPrompt = `${systemPrompt}${calendarContext}${brevityInstruction}`
+      const compiledSystemPrompt = `${systemPrompt}${calendarContext}${followUpContext}${brevityInstruction}`
 
       const llmMessages = [
         { role: 'system', content: compiledSystemPrompt },
@@ -818,10 +852,10 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           let contactPhone = ''
           if (args.contactId) {
             const { data: contactData } = await db
-              .from('contacts')
-              .select('name, phone')
-              .eq('id', args.contactId)
-              .maybeSingle()
+               .from('contacts')
+               .select('name, phone')
+               .eq('id', args.contactId)
+               .maybeSingle()
             if (contactData) {
               contactName = contactData.name || contactName
               contactPhone = contactData.phone || ''
@@ -841,12 +875,62 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
             appointmentTime
           )
           console.log('[Calendar] Booked event successfully. Event ID:', eventId)
+
+          // --- Telegram notification (fire-and-forget) ---
+          notifyAccountViaTelegram(
+            args.automation.account_id,
+            formatAppointmentNotification(contactName, contactPhone, appointmentTime, description)
+          ).catch(err => console.error('[Telegram] Appointment notification failed:', err))
         } catch (bookErr: any) {
           console.error('[Calendar] Auto booking failed:', bookErr)
         }
 
         // Clean the tag from the reply text so the customer doesn't see it
         replyText = replyText.replace(/\[BOOK_APPOINTMENT:\s*[^\]]+\]/, '').trim()
+      }
+
+      // Check if the AI returned a SCHEDULE_FOLLOW_UP tag
+      const followUpMatch = replyText.match(/\[SCHEDULE_FOLLOW_UP:\s*([^|]+)\|\s*([^|]+)\|\s*([^\]]+)\]/)
+      if (followUpMatch) {
+        const reason = followUpMatch[1].trim()
+        const relativeDesc = followUpMatch[2].trim()
+        const targetDateStr = followUpMatch[3].trim()
+
+        try {
+          // Parse date
+          let scheduledAt = new Date(targetDateStr)
+          if (isNaN(scheduledAt.getTime())) {
+            // fallback to tomorrow
+            scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+          }
+
+          // Apply account's default follow-up time (e.g. "10:00")
+          const defaultTimeStr = accountData?.follow_up_default_time || '10:00'
+          const [hours, minutes] = defaultTimeStr.split(':').map(Number)
+          scheduledAt.setHours(hours || 10, minutes || 0, 0, 0)
+
+          // Insert into follow_ups table
+          const { error: fupErr } = await db.from('follow_ups').insert({
+            account_id: args.automation.account_id,
+            contact_id: args.contactId,
+            conversation_id: conversationId,
+            reason,
+            scheduled_at: scheduledAt.toISOString(),
+            action_type: accountData?.follow_up_action_type || 'both',
+            status: 'pending'
+          })
+
+          if (fupErr) {
+            console.error('[Follow-up] Database insert failed:', fupErr.message)
+          } else {
+            console.log('[Follow-up] Scheduled follow-up successfully:', reason, scheduledAt)
+          }
+        } catch (err: any) {
+          console.error('[Follow-up] Error calculating/saving follow-up:', err.message)
+        }
+
+        // Clean the tag from the reply text so the customer doesn't see it
+        replyText = replyText.replace(/\[SCHEDULE_FOLLOW_UP:\s*[^\]]+\]/, '').trim()
       }
 
       // Save the AI reply to context variables so steps like google sheets can reference it
@@ -1545,6 +1629,29 @@ export async function handleQnaSessionResponse(
         ...(session.context || {}),
         vars: mergedVars,
         message_text: messageText,
+      }
+
+      // --- Telegram notification for completed Q&A (fire-and-forget) ---
+      try {
+        let qnaContactName = 'عميل واتساب'
+        let qnaContactPhone = ''
+        if (session.contact_id) {
+          const { data: cData } = await db
+            .from('contacts')
+            .select('name, phone')
+            .eq('id', session.contact_id)
+            .maybeSingle()
+          if (cData) {
+            qnaContactName = cData.name || qnaContactName
+            qnaContactPhone = cData.phone || ''
+          }
+        }
+        notifyAccountViaTelegram(
+          session.account_id,
+          formatOrderNotification(qnaContactName, qnaContactPhone, mergedVars)
+        ).catch(err => console.error('[Telegram] Order notification failed:', err))
+      } catch (tgErr) {
+        console.error('[Telegram] Failed to prepare order notification:', tgErr)
       }
 
       await executeStepsFrom({

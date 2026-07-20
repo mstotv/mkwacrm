@@ -28,6 +28,7 @@ import {
   X,
   Zap,
   LifeBuoy,
+  Clock,
 } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
 import type { AccountRole } from "@/lib/auth/roles";
@@ -101,6 +102,7 @@ const navItems: NavItem[] = [
   { href: "/broadcasts", label: "Broadcasts", icon: Radio },
   { href: "/automations", label: "Automations", icon: Zap },
   { href: "/flows", label: "Flows", icon: Workflow, beta: true },
+  { href: "/follow-ups", label: "Follow-ups", icon: Clock },
 ];
 
 const bottomNavItems = [

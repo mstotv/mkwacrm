@@ -14,7 +14,8 @@
     "signOut": "Sign Out",
     "profile": "Profile",
     "lightMode": "Light Mode",
-    "darkMode": "Dark Mode"
+    "darkMode": "Dark Mode",
+    "follow-ups": "Follow-ups"
   },
   "common": {
     "save": "Save",
@@ -115,11 +116,35 @@
     "billingTab": "Subscription & Billing",
     "whatsappTab": "WhatsApp Connection",
     "aiTab": "AI Settings",
-    "integrationsTab": "Other Integrations",
+    "integrationsTab": "Google & Integrations",
+    "templatesTab": "Message Templates",
+    "tagsTab": "Tags",
+    "customFieldsTab": "Custom Fields",
+    "dealsTab": "Deals",
+    "appearanceTab": "Appearance",
+    "membersTab": "Members",
     "languageLabel": "Interface Language",
     "currencyLabel": "Default Currency",
     "chooseLanguage": "Select system language",
     "arabic": "العربية (RTL)",
-    "english": "English (LTR)"
+    "english": "English (LTR)",
+    "telegramTab": "Telegram Notifications",
+    "telegramTitle": "Personal Telegram Notifications",
+    "telegramDescription": "Link your own Telegram bot to receive instant notifications when a new appointment booking or order arrives from your WhatsApp customers.",
+    "telegramBotToken": "Bot Token",
+    "telegramBotTokenPlaceholder": "Paste bot token from @BotFather",
+    "telegramChatId": "Chat ID",
+    "telegramChatIdPlaceholder": "Chat ID number (e.g. 123456789)",
+    "telegramEnabled": "Enable Telegram Notifications",
+    "telegramTestBtn": "Send Test Message",
+    "telegramTestSuccess": "Test message sent successfully! Check your Telegram.",
+    "telegramSaveSuccess": "Telegram settings saved successfully.",
+    "telegramDeleteSuccess": "Telegram settings deleted.",
+    "telegramSave": "Save Settings",
+    "telegramDelete": "Delete Settings",
+    "telegramHowTo": "How to get the details?",
+    "telegramHowToToken": "Open @BotFather on Telegram → Send /newbot → Copy the Token.",
+    "telegramHowToChatId": "Open @userinfobot on Telegram → Send any message → It will reply with your Chat ID.",
+    "telegramHowToStart": "⚠️ Make sure you started a conversation with the bot by pressing /start before testing."
   }
 }

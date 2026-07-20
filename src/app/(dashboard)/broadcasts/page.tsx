@@ -15,8 +15,10 @@ import {
 } from '@/components/ui/table';
 import { Radio, Plus, Loader2 } from 'lucide-react';
 import { useCan } from '@/hooks/use-can';
+import { useLanguage } from '@/hooks/use-language';
 import { GatedButton } from '@/components/ui/gated-button';
 import { getBroadcastStatus } from '@/lib/broadcast-status';
+
 
 /**
  * Poll cadence while any broadcast is sending. Kept modest so we don't
@@ -58,6 +60,7 @@ function RateCell({
 
 export default function BroadcastsPage() {
   const router = useRouter();
+  const { language } = useLanguage();
   const canCreate = useCan('send-messages');
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +80,7 @@ export default function BroadcastsPage() {
       if (fetchError) throw fetchError;
       setBroadcasts(data ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load broadcasts');
+      setError(err instanceof Error ? err.message : (language === 'ar' ? 'فشل تحميل حملات البث' : 'Failed to load broadcasts'));
     } finally {
       setLoading(false);
     }
@@ -128,6 +131,20 @@ export default function BroadcastsPage() {
     };
   }, [anySending]);
 
+  const getStatusLabel = (label: string) => {
+    if (language === 'ar') {
+      switch (label) {
+        case 'Draft': return 'مسودة'
+        case 'Scheduled': return 'مجدول'
+        case 'Sending': return 'جاري الإرسال'
+        case 'Sent': return 'تم الإرسال'
+        case 'Failed': return 'فشل'
+        default: return label
+      }
+    }
+    return label;
+  }
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -138,17 +155,17 @@ export default function BroadcastsPage() {
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-2">
+      <div className="flex h-64 flex-col items-center justify-center gap-2" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
         <p className="text-sm text-red-400">{error}</p>
         <Button variant="outline" onClick={() => window.location.reload()}>
-          Retry
+          {language === 'ar' ? 'إعادة المحاولة' : 'Retry'}
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
       {/* Top indeterminate progress bar: only visible while a broadcast
           is mid-send. Pure CSS animation so no extra deps. */}
       {anySending && (
@@ -179,9 +196,13 @@ export default function BroadcastsPage() {
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Broadcasts</h1>
+          <h1 className="text-2xl font-bold text-white">
+            {language === 'ar' ? 'حملات البث' : 'Broadcasts'}
+          </h1>
           <p className="mt-1 text-sm text-slate-400">
-            Send bulk messages to your contacts using approved templates.
+            {language === 'ar'
+              ? 'أرسل رسائل جماعية لجهات الاتصال الخاصة بك باستخدام القوالب المعتمدة.'
+              : 'Send bulk messages to your contacts using approved templates.'}
           </p>
         </div>
         <GatedButton
@@ -190,17 +211,19 @@ export default function BroadcastsPage() {
           onClick={() => router.push('/broadcasts/new')}
           className="bg-primary text-primary-foreground hover:bg-primary/90"
         >
-          <Plus className="h-4 w-4" />
-          New Broadcast
+          <Plus className={`${language === 'ar' ? 'ml-1' : 'mr-1'} h-4 w-4`} />
+          {language === 'ar' ? 'بث جديد' : 'New Broadcast'}
         </GatedButton>
       </div>
 
       {broadcasts.length === 0 ? (
         <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-900">
           <Radio className="mb-3 h-10 w-10 text-slate-600" />
-          <p className="text-sm font-medium text-white">No broadcasts yet</p>
+          <p className="text-sm font-medium text-white">{language === 'ar' ? 'لا توجد حملات بث بعد' : 'No broadcasts yet'}</p>
           <p className="mt-1 text-xs text-slate-400">
-            Create your first broadcast to reach your contacts at scale.
+            {language === 'ar'
+              ? 'أنشئ أول حملة بث للوصول إلى جهات اتصالك على نطاق واسع.'
+              : 'Create your first broadcast to reach your contacts at scale.'}
           </p>
           <GatedButton
             canAct={canCreate}
@@ -208,8 +231,8 @@ export default function BroadcastsPage() {
             onClick={() => router.push('/broadcasts/new')}
             className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
           >
-            <Plus className="h-4 w-4" />
-            New Broadcast
+            <Plus className={`${language === 'ar' ? 'ml-1' : 'mr-1'} h-4 w-4`} />
+            {language === 'ar' ? 'بث جديد' : 'New Broadcast'}
           </GatedButton>
         </div>
       ) : (
@@ -217,15 +240,15 @@ export default function BroadcastsPage() {
           <Table>
             <TableHeader>
               <TableRow className="border-slate-800 hover:bg-transparent">
-                <TableHead className="text-slate-400">Name</TableHead>
-                <TableHead className="hidden text-slate-400 md:table-cell">Template</TableHead>
-                <TableHead className="hidden text-right text-slate-400 sm:table-cell">
-                  Recipients
+                <TableHead className={`text-slate-400 ${language === 'ar' ? 'text-right' : 'text-left'}`}>{language === 'ar' ? 'الاسم' : 'Name'}</TableHead>
+                <TableHead className={`hidden text-slate-400 md:table-cell ${language === 'ar' ? 'text-right' : 'text-left'}`}>{language === 'ar' ? 'القالب' : 'Template'}</TableHead>
+                <TableHead className={`hidden ${language === 'ar' ? 'text-left' : 'text-right'} text-slate-400 sm:table-cell`}>
+                  {language === 'ar' ? 'المستلمون' : 'Recipients'}
                 </TableHead>
-                <TableHead className="hidden text-slate-400 lg:table-cell">Delivery</TableHead>
-                <TableHead className="hidden text-slate-400 lg:table-cell">Read</TableHead>
-                <TableHead className="text-slate-400">Status</TableHead>
-                <TableHead className="hidden text-slate-400 sm:table-cell">Date</TableHead>
+                <TableHead className={`hidden text-slate-400 lg:table-cell ${language === 'ar' ? 'text-right' : 'text-left'}`}>{language === 'ar' ? 'التسليم' : 'Delivery'}</TableHead>
+                <TableHead className={`hidden text-slate-400 lg:table-cell ${language === 'ar' ? 'text-right' : 'text-left'}`}>{language === 'ar' ? 'القراءة' : 'Read'}</TableHead>
+                <TableHead className={`text-slate-400 ${language === 'ar' ? 'text-right' : 'text-left'}`}>{language === 'ar' ? 'الحالة' : 'Status'}</TableHead>
+                <TableHead className={`hidden text-slate-400 sm:table-cell ${language === 'ar' ? 'text-right' : 'text-left'}`}>{language === 'ar' ? 'التاريخ' : 'Date'}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -237,13 +260,13 @@ export default function BroadcastsPage() {
                     className="cursor-pointer border-slate-800 hover:bg-slate-800/50"
                     onClick={() => router.push(`/broadcasts/${broadcast.id}`)}
                   >
-                    <TableCell className="font-medium text-white">
+                    <TableCell className={`font-medium text-white ${language === 'ar' ? 'text-right' : 'text-left'}`}>
                       {broadcast.name}
                     </TableCell>
-                    <TableCell className="hidden text-slate-300 md:table-cell">
+                    <TableCell className={`hidden text-slate-300 md:table-cell ${language === 'ar' ? 'text-right' : 'text-left'}`}>
                       {broadcast.template_name}
                     </TableCell>
-                    <TableCell className="hidden text-right text-slate-300 tabular-nums sm:table-cell">
+                    <TableCell className={`hidden ${language === 'ar' ? 'text-left' : 'text-right'} text-slate-300 tabular-nums sm:table-cell`}>
                       {broadcast.total_recipients}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
@@ -260,7 +283,7 @@ export default function BroadcastsPage() {
                         color="bg-blue-500"
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className={`${language === 'ar' ? 'text-right' : 'text-left'}`}>
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${status.classes}`}
                       >
@@ -270,11 +293,11 @@ export default function BroadcastsPage() {
                             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-yellow-400" />
                           </span>
                         )}
-                        {status.label}
+                        {getStatusLabel(status.label)}
                       </span>
                     </TableCell>
-                    <TableCell className="hidden text-slate-400 sm:table-cell">
-                      {new Date(broadcast.created_at).toLocaleDateString()}
+                    <TableCell className={`hidden text-slate-400 sm:table-cell ${language === 'ar' ? 'text-right' : 'text-left'}`}>
+                      {new Date(broadcast.created_at).toLocaleDateString(language === 'ar' ? 'ar-SA' : undefined)}
                     </TableCell>
                   </TableRow>
                 );
@@ -286,3 +309,4 @@ export default function BroadcastsPage() {
     </div>
   );
 }
+

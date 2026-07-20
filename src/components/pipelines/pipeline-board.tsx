@@ -19,7 +19,9 @@ import { DealCard } from "./deal-card";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/hooks/use-language";
 import { formatCurrency } from "@/lib/currency";
+
 
 interface PipelineBoardProps {
   stages: PipelineStage[];
@@ -37,7 +39,9 @@ export function PipelineBoard({
   onEditDeal,
 }: PipelineBoardProps) {
   const { defaultCurrency } = useAuth();
+  const { language } = useLanguage();
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
+
 
   const sortedStages = useMemo(
     () => [...stages].sort((a, b) => a.position - b.position),
@@ -118,6 +122,7 @@ export function PipelineBoard({
               currency={defaultCurrency}
               onAddDeal={onAddDeal}
               onEditDeal={onEditDeal}
+              language={language}
             />
           );
         })}
@@ -192,6 +197,7 @@ function StageColumn({
   currency,
   onAddDeal,
   onEditDeal,
+  language,
 }: {
   stage: PipelineStage;
   deals: Deal[];
@@ -199,6 +205,7 @@ function StageColumn({
   currency: string;
   onAddDeal: (stageId: string) => void;
   onEditDeal: (deal: Deal) => void;
+  language: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
 
@@ -209,7 +216,7 @@ function StageColumn({
     // restore the flex-1 share-the-row behavior. The droppable ref is
     // on the inner messages region below — intentionally NOT here, so
     // a drag over the column header doesn't highlight the whole column.
-    <div className="flex w-[85vw] min-w-[260px] max-w-[320px] shrink-0 snap-start flex-col rounded-xl border border-slate-800 bg-slate-900/60 p-4 lg:w-auto lg:max-w-none lg:flex-1 lg:basis-[260px] lg:shrink lg:snap-none">
+    <div className="flex w-[85vw] min-w-[260px] max-w-[320px] shrink-0 snap-start flex-col rounded-xl border border-slate-800 bg-slate-900/60 p-4 lg:w-auto lg:max-w-none lg:flex-1 lg:basis-[260px] lg:shrink lg:snap-none" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
       {/* 3px colored top border — sits above the column's padding */}
       <div
         className="-mx-4 -mt-4 h-[3px] rounded-t-xl"
@@ -223,7 +230,7 @@ function StageColumn({
           {deals.length}
         </span>
       </div>
-      <p className="text-xs text-slate-400">
+      <p className={`text-xs text-slate-400 ${language === 'ar' ? 'text-right' : 'text-left'}`}>
         {formatCurrency(totalValue, currency)}
       </p>
 
@@ -237,7 +244,7 @@ function StageColumn({
       >
         {deals.length === 0 ? (
           <div className="flex flex-1 items-center justify-center rounded-lg border-2 border-dashed border-slate-700 py-10 text-xs text-slate-500">
-            Drop a deal here
+            {language === 'ar' ? 'أفلت صفقة هنا' : 'Drop a deal here'}
           </div>
         ) : (
           deals.map((deal) => (
@@ -257,10 +264,11 @@ function StageColumn({
         onClick={() => onAddDeal(stage.id)}
         className="mt-3 w-full justify-start border border-dashed border-slate-700 bg-transparent text-slate-400 hover:border-slate-600 hover:bg-slate-800 hover:text-white"
       >
-        <Plus className="mr-1 h-3 w-3" />
-        Add Deal
+        <Plus className={`${language === 'ar' ? 'ml-1' : 'mr-1'} h-3 w-3`} />
+        {language === 'ar' ? 'إضافة صفقة' : 'Add Deal'}
       </Button>
     </div>
+
   );
 }
 

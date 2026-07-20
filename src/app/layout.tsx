@@ -22,7 +22,7 @@ const inter = Inter({
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata() {
-  const defaultSettings = { site_name: 'WaCRM', logo_url: '' };
+  const defaultSettings = { site_name: 'MKWhats', logo_url: '' };
   let settings = defaultSettings;
   try {
     const supabase = await createClient();
@@ -104,7 +104,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const defaultSettings = {
-    site_name: 'WaCRM',
+    site_name: 'MKWhats',
     logo_url: '',
     primary_color: '#8B5CF6',
     secondary_color: '#1e293b',

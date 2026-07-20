@@ -34,7 +34,7 @@ export default function AdminSettingsPage() {
   const [activeTab, setActiveTab] = useState<'site' | 'landing'>('site');
 
   // Site Settings (Visual Identity)
-  const [siteName, setSiteName] = useState('WaCRM');
+  const [siteName, setSiteName] = useState('MKWhats');
   const [logoUrl, setLogoUrl] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#8B5CF6');
   const [secondaryColor, setSecondaryColor] = useState('#1e293b');
@@ -194,7 +194,7 @@ export default function AdminSettingsPage() {
         .from('site_settings')
         .upsert({
           id: 'd3b07384-d113-48b6-b514-41d9c15e85c1',
-          site_name: siteName.trim() || 'WaCRM',
+          site_name: siteName.trim() || 'MKWhats',
           logo_url: logoUrl.trim(),
           primary_color: primaryColor,
           secondary_color: secondaryColor,
@@ -229,7 +229,7 @@ export default function AdminSettingsPage() {
         .from('site_settings')
         .upsert({
           id: 'd3b07384-d113-48b6-b514-41d9c15e85c1',
-          site_name: 'WaCRM',
+          site_name: 'MKWhats',
           logo_url: '',
           primary_color: '#8B5CF6',
           secondary_color: '#1e293b',
@@ -238,7 +238,7 @@ export default function AdminSettingsPage() {
         });
 
       if (error) throw error;
-      setSiteName('WaCRM');
+      setSiteName('MKWhats');
       setLogoUrl('');
       setPrimaryColor('#8B5CF6');
       setSecondaryColor('#1e293b');
@@ -399,7 +399,7 @@ export default function AdminSettingsPage() {
                     value={siteName}
                     onChange={(e) => setSiteName(e.target.value)}
                     required
-                    placeholder="مثال: WaCRM"
+                    placeholder="مثال: MKWhats"
                     className="w-full rounded-lg border border-slate-700 bg-slate-850 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">يظهر هذا الاسم في ترويسة الموقع، العناوين، الفوتر وفي علامة التبويب (Tab) للمتصفح.</p>

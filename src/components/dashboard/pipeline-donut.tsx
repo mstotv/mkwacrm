@@ -3,6 +3,7 @@
 import { GitBranch } from 'lucide-react'
 import type { PipelineDonutData } from '@/lib/dashboard/types'
 import { formatCurrencyShort } from '@/lib/currency'
+import { useLanguage } from '@/hooks/use-language'
 import { EmptyState } from './empty-state'
 import { Skeleton } from './skeleton'
 
@@ -14,12 +15,16 @@ interface PipelineDonutProps {
 }
 
 export function PipelineDonut({ data, loading, currency }: PipelineDonutProps) {
+  const { language } = useLanguage()
+
   return (
-    <section className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900">
+    <section className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
       <header className="border-b border-slate-800 px-5 py-4">
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Pipeline Value</h2>
-        <p className="mt-0.5 text-xs text-slate-500">
-          Open deals by stage
+        <h2 className={`text-sm font-semibold text-slate-900 dark:text-white ${language === 'ar' ? 'text-right' : 'text-left'}`}>
+          {language === 'ar' ? 'قيمة المبيعات' : 'Pipeline Value'}
+        </h2>
+        <p className={`mt-0.5 text-xs text-slate-500 ${language === 'ar' ? 'text-right' : 'text-left'}`}>
+          {language === 'ar' ? 'الصفقات المفتوحة حسب المرحلة' : 'Open deals by stage'}
         </p>
       </header>
 
@@ -29,12 +34,12 @@ export function PipelineDonut({ data, loading, currency }: PipelineDonutProps) {
         ) : data.stages.length === 0 ? (
           <EmptyState
             icon={GitBranch}
-            title="No open deals yet"
-            hint="Create deals in Pipelines to see stage breakdowns here."
+            title={language === 'ar' ? 'لا توجد صفقات مفتوحة بعد' : 'No open deals yet'}
+            hint={language === 'ar' ? 'أنشئ صفقات في قسم المبيعات لعرض تصنيف المراحل هنا.' : 'Create deals in Pipelines to see stage breakdowns here.'}
           />
         ) : (
           <>
-            <Donut data={data} currency={currency} />
+            <Donut data={data} currency={currency} language={language} />
             <ul className="mt-5 space-y-2">
               {data.stages.map((s) => (
                 <li key={s.id} className="flex items-center gap-3 text-xs">
@@ -43,11 +48,11 @@ export function PipelineDonut({ data, loading, currency }: PipelineDonutProps) {
                     style={{ background: s.color }}
                     aria-hidden
                   />
-                  <span className="flex-1 truncate text-slate-300">{s.name}</span>
+                  <span className={`flex-1 truncate text-slate-300 ${language === 'ar' ? 'text-right' : 'text-left'}`}>{s.name}</span>
                   <span className="text-slate-500 tabular-nums">
-                    {s.dealCount} deal{s.dealCount === 1 ? '' : 's'}
+                    {s.dealCount} {language === 'ar' ? 'صفقة' : (s.dealCount === 1 ? 'deal' : 'deals')}
                   </span>
-                  <span className="w-20 text-right text-slate-300 tabular-nums">
+                  <span className={`w-20 ${language === 'ar' ? 'text-left' : 'text-right'} text-slate-300 tabular-nums`}>
                     {formatCurrencyShort(s.totalValue, currency)}
                   </span>
                 </li>
@@ -66,7 +71,7 @@ export function PipelineDonut({ data, loading, currency }: PipelineDonutProps) {
 // between segments are implied by a thin slate-900 stroke between
 // them for a cleaner look.
 // ------------------------------------------------------------
-function Donut({ data, currency }: { data: PipelineDonutData; currency: string }) {
+function Donut({ data, currency, language }: { data: PipelineDonutData; currency: string; language: string }) {
   const size = 200
   const r = 80
   const ringWidth = 18
@@ -116,7 +121,7 @@ function Donut({ data, currency }: { data: PipelineDonutData; currency: string }
           textAnchor="middle"
           className="fill-slate-400 dark:fill-slate-500 text-[11px]"
         >
-          Total
+          {language === 'ar' ? 'الإجمالي' : 'Total'}
         </text>
         <text
           x={cx}

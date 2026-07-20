@@ -160,8 +160,9 @@ const translations = {
         privacy: 'Privacy Policy',
         terms: 'Terms of Service',
       },
-      copyright: '© 2026 WaCRM. All rights reserved.',
+      copyright: '© 2026 MKWhats. All rights reserved.',
     },
+
   },
   ar: {
     nav: {
@@ -294,8 +295,9 @@ const translations = {
         privacy: 'سياسة الخصوصية',
         terms: 'شروط الخدمة',
       },
-      copyright: '© 2026 WaCRM. جميع الحقوق محفوظة.',
+      copyright: '© 2026 MKWhats. جميع الحقوق محفوظة.',
     },
+
   },
 } as const
 
@@ -1377,8 +1379,9 @@ export default function LandingPage() {
               <span className="ld-mockup-dot green" />
               <div className="ld-mockup-address">
                 <Shield size={12} />
-                <span>{settings.site_name ? `${settings.site_name.toLowerCase().replace(/\s+/g, '')}.com/dashboard` : 'wacrm.com/dashboard'}</span>
+                <span>{settings.site_name ? `${settings.site_name.toLowerCase().replace(/\s+/g, '')}.com/dashboard` : 'mkwhats.com/dashboard'}</span>
               </div>
+
             </div>
             <img src="/dashboard_mockup.png" alt="Platform Dashboard Preview" />
           </div>
@@ -1510,8 +1513,35 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="ld-footer-bottom">
-            {t.footer.copyright.replace('WaCRM', settings.site_name)}
+            <span>
+              {language === 'ar' ? (
+                <>
+                  © 2026 {settings.site_name || 'MKWhats'}. جميع الحقوق محفوظة. تطوير{' '}
+                  <a
+                    href="https://instagram.com/Msto_viral"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline font-semibold"
+                  >
+                    @Msto_viral
+                  </a>
+                </>
+              ) : (
+                <>
+                  © 2026 {settings.site_name || 'MKWhats'}. All rights reserved. Developed by{' '}
+                  <a
+                    href="https://instagram.com/Msto_viral"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline font-semibold"
+                  >
+                    @Msto_viral
+                  </a>
+                </>
+              )}
+            </span>
           </div>
+
         </div>
       </footer>
     </div>

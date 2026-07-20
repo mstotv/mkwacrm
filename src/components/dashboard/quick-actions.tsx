@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { UserPlus, Briefcase, Radio, Zap } from 'lucide-react'
 import type { ComponentType } from 'react'
+import { useLanguage } from '@/hooks/use-language'
 
 // Quick-action shortcuts. Each navigates to the page that owns the
 // relevant "create" flow. We deliberately don't try to auto-open any
@@ -23,8 +24,23 @@ const ACTIONS: Action[] = [
 ]
 
 export function QuickActions() {
+  const { language } = useLanguage()
+
+  const getLabel = (label: string) => {
+    if (language === 'ar') {
+      switch (label) {
+        case 'New Contact': return 'عميل جديد'
+        case 'New Deal': return 'صفقة جديدة'
+        case 'New Broadcast': return 'بث جديد'
+        case 'New Automation': return 'أتمتة جديدة'
+        default: return label
+      }
+    }
+    return label
+  }
+
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
       {ACTIONS.map((a) => {
         const Icon = a.icon
         return (
@@ -36,10 +52,11 @@ export function QuickActions() {
             <div className={`flex h-9 w-9 items-center justify-center rounded-lg bg-slate-800 ${a.tint}`}>
               <Icon className="h-4 w-4" />
             </div>
-            <span className="text-sm font-medium text-white">{a.label}</span>
+            <span className="text-sm font-medium text-white">{getLabel(a.label)}</span>
           </Link>
         )
       })}
     </div>
   )
 }
+

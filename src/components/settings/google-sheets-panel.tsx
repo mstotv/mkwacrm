@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
 import { FileSpreadsheet, CheckCircle2, RefreshCw, Link2, Trash2, Plus, ExternalLink, User } from 'lucide-react';
 import { toast } from 'sonner';
+import { useLanguage } from '@/hooks/use-language';
 
 interface GoogleAccount {
   id: string;
@@ -25,6 +26,7 @@ interface LinkedSpreadsheet {
 }
 
 export function GoogleSheetsPanel() {
+  const { language } = useLanguage();
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
   const [sheets, setSheets] = useState<LinkedSpreadsheet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,10 +189,10 @@ export function GoogleSheetsPanel() {
           <div>
             <CardTitle className="text-white flex items-center gap-2">
               <FileSpreadsheet className="h-5 w-5 text-emerald-400" />
-              Connected Google Accounts
+              {language === 'ar' ? 'حسابات جوجل المتصلة' : 'Connected Google Accounts'}
             </CardTitle>
             <CardDescription className="text-xs text-slate-400">
-              Manage your connected Google accounts and linked spreadsheets.
+              {language === 'ar' ? 'إدارة حسابات جوجل المتصلة وجداول البيانات المرتبطة بها.' : 'Manage your connected Google accounts and linked spreadsheets.'}
             </CardDescription>
           </div>
           <Button
@@ -198,14 +200,14 @@ export function GoogleSheetsPanel() {
             className="flex items-center gap-2 text-xs"
           >
             <Link2 className="h-3.5 w-3.5" />
-            Sign in with Google
+            {language === 'ar' ? 'ربط حساب جوجل' : 'Sign in with Google'}
           </Button>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Accounts Grid */}
           {accounts.length === 0 ? (
             <div className="text-center py-8 border border-dashed border-slate-800 rounded-xl bg-slate-950/20 text-slate-400 text-xs">
-              No Google accounts linked yet. Click the button above to link your first account.
+              {language === 'ar' ? 'لا توجد حسابات جوجل مرتبطة بعد. اضغط على الزر أعلاه لربط حسابك الأول.' : 'No Google accounts linked yet. Click the button above to link your first account.'}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -231,7 +233,7 @@ export function GoogleSheetsPanel() {
                       onClick={handleConnect}
                       className="text-[10px] h-7 px-2 hover:bg-slate-800 text-slate-300"
                     >
-                      Resync
+                      {language === 'ar' ? 'مزامنة' : 'Resync'}
                     </Button>
                     <Button
                       variant="ghost"
@@ -239,7 +241,7 @@ export function GoogleSheetsPanel() {
                       onClick={() => handleUnlinkAccount(acc.id)}
                       className="text-[10px] h-7 px-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/20"
                     >
-                      Unlink
+                      {language === 'ar' ? 'إلغاء الربط' : 'Unlink'}
                     </Button>
                   </div>
                 </div>
@@ -258,7 +260,7 @@ export function GoogleSheetsPanel() {
                   className="flex items-center gap-1.5 text-xs"
                 >
                   <Plus className="h-4 w-4" />
-                  Create New Sheet
+                  {language === 'ar' ? 'إنشاء جدول جديد' : 'Create New Sheet'}
                 </Button>
                 <Button
                   variant={activeTab === 'link' ? 'default' : 'outline'}
@@ -267,17 +269,21 @@ export function GoogleSheetsPanel() {
                   className="flex items-center gap-1.5 text-xs"
                 >
                   <Link2 className="h-4 w-4" />
-                  Add Existing Sheet
+                  {language === 'ar' ? 'ربط جدول موجود' : 'Add Existing Sheet'}
                 </Button>
               </div>
 
               {/* Create Sheet Form */}
               {activeTab === 'create' && (
                 <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/60 space-y-4 max-w-md">
-                  <h3 className="text-xs font-bold text-slate-200">Create New Spreadsheet</h3>
+                  <h3 className="text-xs font-bold text-slate-200">
+                    {language === 'ar' ? 'إنشاء جدول بيانات جديد في جوجل' : 'Create New Spreadsheet'}
+                  </h3>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Target Google Account</label>
+                      <label className="text-[10px] text-slate-400 block mb-1">
+                        {language === 'ar' ? 'الحساب المتصل المستهدف' : 'Target Google Account'}
+                      </label>
                       <select
                         value={linkAccountId}
                         onChange={(e) => setLinkAccountId(e.target.value)}
@@ -289,9 +295,11 @@ export function GoogleSheetsPanel() {
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Spreadsheet Title</label>
+                      <label className="text-[10px] text-slate-400 block mb-1">
+                        {language === 'ar' ? 'عنوان الجدول' : 'Spreadsheet Title'}
+                      </label>
                       <Input
-                        placeholder="e.g. Leads Export"
+                        placeholder={language === 'ar' ? 'مثال: عملاء الواتساب المكتملين' : 'e.g. Leads Export'}
                         value={sheetTitle}
                         onChange={(e) => setSheetTitle(e.target.value)}
                         className="bg-slate-900 border-slate-800 text-xs text-white"
@@ -302,7 +310,9 @@ export function GoogleSheetsPanel() {
                       disabled={submitting}
                       className="w-full text-xs"
                     >
-                      {submitting ? 'Creating...' : 'Create Spreadsheet'}
+                      {submitting 
+                        ? (language === 'ar' ? 'جاري الإنشاء...' : 'Creating...') 
+                        : (language === 'ar' ? 'إنشاء جدول البيانات' : 'Create Spreadsheet')}
                     </Button>
                   </div>
                 </div>
@@ -311,10 +321,14 @@ export function GoogleSheetsPanel() {
               {/* Link Existing Sheet Form */}
               {activeTab === 'link' && (
                 <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/60 space-y-4 max-w-md">
-                  <h3 className="text-xs font-bold text-slate-200">Link Existing Spreadsheet</h3>
+                  <h3 className="text-xs font-bold text-slate-200">
+                    {language === 'ar' ? 'ربط جدول بيانات موجود حالياً' : 'Link Existing Spreadsheet'}
+                  </h3>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Target Google Account</label>
+                      <label className="text-[10px] text-slate-400 block mb-1">
+                        {language === 'ar' ? 'الحساب المتصل المستهدف' : 'Target Google Account'}
+                      </label>
                       <select
                         value={linkAccountId}
                         onChange={(e) => setLinkAccountId(e.target.value)}
@@ -326,7 +340,9 @@ export function GoogleSheetsPanel() {
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Spreadsheet Link or ID</label>
+                      <label className="text-[10px] text-slate-400 block mb-1">
+                        {language === 'ar' ? 'رابط الجدول أو الـ ID' : 'Spreadsheet Link or ID'}
+                      </label>
                       <Input
                         placeholder="https://docs.google.com/spreadsheets/d/your-id/edit"
                         value={sheetUrl}
@@ -339,7 +355,9 @@ export function GoogleSheetsPanel() {
                       disabled={submitting}
                       className="w-full text-xs"
                     >
-                      {submitting ? 'Linking...' : 'Link Spreadsheet'}
+                      {submitting 
+                        ? (language === 'ar' ? 'جاري الربط...' : 'Linking...') 
+                        : (language === 'ar' ? 'ربط جدول البيانات' : 'Link Spreadsheet')}
                     </Button>
                   </div>
                 </div>
@@ -351,15 +369,19 @@ export function GoogleSheetsPanel() {
           {sheets.length > 0 && (
             <div className="space-y-4 pt-4 border-t border-slate-800">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Linked Spreadsheets</h3>
+                <h3 className="text-sm font-semibold text-white">
+                  {language === 'ar' ? 'جداول البيانات المرتبطة' : 'Linked Spreadsheets'}
+                </h3>
                 <div className="flex items-center gap-2">
-                  <label className="text-[10px] text-slate-400 font-medium">Filter Account:</label>
+                  <label className="text-[10px] text-slate-400 font-medium">
+                    {language === 'ar' ? 'تصفية حسب الحساب:' : 'Filter Account:'}
+                  </label>
                   <select
                     value={selectedAccountId}
                     onChange={(e) => setSelectedAccountId(e.target.value)}
                     className="rounded border border-slate-700 bg-slate-950 p-1 text-[11px] text-white"
                   >
-                    <option value="all">All Accounts</option>
+                    <option value="all">{language === 'ar' ? 'جميع الحسابات' : 'All Accounts'}</option>
                     {accounts.map(a => (
                       <option key={a.id} value={a.id}>{a.email}</option>
                     ))}
@@ -369,22 +391,30 @@ export function GoogleSheetsPanel() {
 
               {/* Table */}
               <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/20">
-                <table className="w-full border-collapse text-left text-xs">
+                <table className="w-full border-collapse text-left text-xs" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
                   <thead>
                     <tr className="border-b border-slate-800 bg-slate-900/60 text-slate-400 font-medium">
-                      <th className="p-3">Title</th>
-                      <th className="p-3">Spreadsheet ID</th>
-                      <th className="p-3">Linked At</th>
-                      <th className="p-3 text-right">Actions</th>
+                      <th className={`p-3 ${language === 'ar' ? 'text-right' : 'text-left'}`}>
+                        {language === 'ar' ? 'العنوان' : 'Title'}
+                      </th>
+                      <th className={`p-3 ${language === 'ar' ? 'text-right' : 'text-left'}`}>
+                        {language === 'ar' ? 'معرف الجدول (ID)' : 'Spreadsheet ID'}
+                      </th>
+                      <th className={`p-3 ${language === 'ar' ? 'text-right' : 'text-left'}`}>
+                        {language === 'ar' ? 'تاريخ الربط' : 'Linked At'}
+                      </th>
+                      <th className={`p-3 ${language === 'ar' ? 'text-left' : 'text-right'}`}>
+                        {language === 'ar' ? 'الإجراءات' : 'Actions'}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 text-slate-300">
                     {filteredSheets.map((s) => (
                       <tr key={s.id} className="hover:bg-slate-900/30">
-                        <td className="p-3 font-medium text-slate-200">{s.title}</td>
-                        <td className="p-3 font-mono text-[10px] text-slate-400">{s.spreadsheet_id}</td>
-                        <td className="p-3 text-slate-400">{new Date(s.created_at).toLocaleDateString()}</td>
-                        <td className="p-3 text-right flex justify-end gap-2">
+                        <td className={`p-3 font-medium text-slate-200 ${language === 'ar' ? 'text-right' : 'text-left'}`}>{s.title}</td>
+                        <td className={`p-3 font-mono text-[10px] text-slate-400 ${language === 'ar' ? 'text-right' : 'text-left'}`}>{s.spreadsheet_id}</td>
+                        <td className={`p-3 text-slate-400 ${language === 'ar' ? 'text-right' : 'text-left'}`}>{new Date(s.created_at).toLocaleDateString()}</td>
+                        <td className={`p-3 flex gap-2 ${language === 'ar' ? 'justify-start' : 'justify-end'}`}>
                           <Button
                             variant="ghost"
                             size="icon"

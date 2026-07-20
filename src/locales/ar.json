@@ -14,7 +14,8 @@
     "signOut": "تسجيل الخروج",
     "profile": "الملف الشخصي",
     "lightMode": "الوضع الفاتح",
-    "darkMode": "الوضع الداكن"
+    "darkMode": "الوضع الداكن",
+    "follow-ups": "المتابعات"
   },
   "common": {
     "save": "حفظ",
@@ -115,11 +116,35 @@
     "billingTab": "الاشتراك والدفع",
     "whatsappTab": "ربط الواتساب",
     "aiTab": "إعدادات الذكاء الاصطناعي",
-    "integrationsTab": "التكاملات الأخرى",
+    "integrationsTab": "التكاملات والربط",
+    "templatesTab": "قوالب الرسائل",
+    "tagsTab": "الوسوم",
+    "customFieldsTab": "الحقول المخصصة",
+    "dealsTab": "الصفقات",
+    "appearanceTab": "المظهر وتخصيص الألوان",
+    "membersTab": "أعضاء الفريق",
     "languageLabel": "لغة الواجهة",
     "currencyLabel": "العملة الافتراضية",
     "chooseLanguage": "اختر لغة النظام",
     "arabic": "العربية (RTL)",
-    "english": "English (LTR)"
+    "english": "English (LTR)",
+    "telegramTab": "إشعارات تيليجرام",
+    "telegramTitle": "إشعارات تيليجرام الشخصية",
+    "telegramDescription": "اربط بوت تيليجرام خاص بك لاستقبال إشعارات فورية عند وصول حجز موعد جديد أو طلب من عملائك عبر واتساب.",
+    "telegramBotToken": "Bot Token",
+    "telegramBotTokenPlaceholder": "الصق رمز البوت من @BotFather",
+    "telegramChatId": "Chat ID",
+    "telegramChatIdPlaceholder": "رقم المحادثة (مثال: 123456789)",
+    "telegramEnabled": "تفعيل إشعارات تيليجرام",
+    "telegramTestBtn": "إرسال رسالة اختبار",
+    "telegramTestSuccess": "تم إرسال رسالة الاختبار بنجاح! تحقق من تيليجرام.",
+    "telegramSaveSuccess": "تم حفظ إعدادات تيليجرام بنجاح.",
+    "telegramDeleteSuccess": "تم حذف إعدادات تيليجرام.",
+    "telegramSave": "حفظ الإعدادات",
+    "telegramDelete": "حذف الإعدادات",
+    "telegramHowTo": "كيف تحصل على البيانات؟",
+    "telegramHowToToken": "افتح @BotFather في تيليجرام → أرسل /newbot → انسخ الـ Token.",
+    "telegramHowToChatId": "افتح @userinfobot في تيليجرام → أرسل أي رسالة → سيرد لك بـ Chat ID الخاص بك.",
+    "telegramHowToStart": "⚠️ تأكد أنك بدأت محادثة مع البوت بالضغط على /start قبل الاختبار."
   }
 }

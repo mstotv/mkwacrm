@@ -7,6 +7,7 @@ import { EmptyState } from './empty-state'
 import { Skeleton } from './skeleton'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/use-theme'
+import { useLanguage } from '@/hooks/use-language'
 
 type RangeDays = 7 | 30 | 90
 
@@ -31,6 +32,7 @@ const PADDING = { top: 16, right: 16, bottom: 28, left: 40 }
 export function ConversationsChart({ series, loading, range, onRangeChange }: ConversationsChartProps) {
   const data = series[range]
   const { theme } = useTheme()
+  const { language } = useLanguage()
 
   const chartColors = useMemo(() => {
     switch (theme) {
@@ -91,11 +93,15 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
   }, [data])
 
   return (
-    <section className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900">
+    <section className="flex h-full flex-col rounded-xl border border-slate-800 bg-slate-900" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
       <header className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Conversations Over Time</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Daily message volume by direction</p>
+          <h2 className={`text-sm font-semibold text-slate-900 dark:text-white ${language === 'ar' ? 'text-right' : 'text-left'}`}>
+            {language === 'ar' ? 'المحادثات بمرور الوقت' : 'Conversations Over Time'}
+          </h2>
+          <p className={`mt-0.5 text-xs text-slate-500 ${language === 'ar' ? 'text-right' : 'text-left'}`}>
+            {language === 'ar' ? 'حجم الرسائل اليومية حسب الاتجاه' : 'Daily message volume by direction'}
+          </p>
         </div>
         <div className="flex items-center gap-1 rounded-lg bg-slate-800/60 p-1">
           {[7, 30, 90].map((r) => (
@@ -110,7 +116,7 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white',
               )}
             >
-              {r} days
+              {language === 'ar' ? `${r} يوم` : `${r} days`}
             </button>
           ))}
         </div>
@@ -122,17 +128,17 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
         ) : data.every((p) => p.incoming === 0 && p.outgoing === 0) ? (
           <EmptyState
             icon={MessageSquare}
-            title="No message activity in this range"
-            hint="Send or receive messages to start populating this chart."
+            title={language === 'ar' ? 'لا يوجد نشاط رسائل في هذه الفترة' : 'No message activity in this range'}
+            hint={language === 'ar' ? 'أرسل أو استقبل رسائل لبدء تعبئة هذا المخطط البياني.' : 'Send or receive messages to start populating this chart.'}
           />
         ) : (
-          <LineSvg data={data} maxY={maxY} ticks={niceTicks} chartColors={chartColors} />
+          <LineSvg data={data} maxY={maxY} ticks={niceTicks} chartColors={chartColors} language={language} />
         )}
       </div>
 
       <footer className="flex items-center gap-4 border-t border-slate-800 px-5 py-3 text-xs text-slate-400">
-        <LegendDot color={chartColors.incoming} label="Incoming" />
-        <LegendDot color={chartColors.outgoing} label="Outgoing" />
+        <LegendDot color={chartColors.incoming} label={language === 'ar' ? 'واردة' : 'Incoming'} />
+        <LegendDot color={chartColors.outgoing} label={language === 'ar' ? 'صادرة' : 'Outgoing'} />
       </footer>
     </section>
   )
@@ -147,19 +153,19 @@ function LineSvg({
   maxY,
   ticks,
   chartColors,
+  language,
 }: {
   data: ConversationsSeriesPoint[]
   maxY: number
   ticks: number[]
   chartColors: any
+  language: string
 }) {
   const { colorMode } = useTheme()
-  const isDark = colorMode === 'dark'
   // Hover state: both the snapped index AND the tooltip's pixel
   // offset inside the wrapper div. They're stored together so the
   // tooltip positions against the chart's actual rendered pixels,
-  // not against a raw viewBox percentage. See the precision note on
-  // the onMove handler below.
+  // not against a raw viewBox percentage.
   const [hover, setHover] = useState<{ idx: number; tooltipLeftPx: number } | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -178,14 +184,6 @@ function LineSvg({
   const incomingPath = data.map((p, i) => `${i === 0 ? 'M' : 'L'}${xFor(i)},${yFor(p.incoming)}`).join(' ')
   const outgoingPath = data.map((p, i) => `${i === 0 ? 'M' : 'L'}${xFor(i)},${yFor(p.outgoing)}`).join(' ')
 
-  // Mouse-move: use the SVG's current screen-CTM to map clientX
-  // back to viewBox coordinates. The previous rect-based math
-  // assumed the viewBox filled the SVG DOM box linearly, but
-  // `preserveAspectRatio="xMidYMid meet"` (the SVG default)
-  // letterboxes the content horizontally when the container is
-  // wider than the viewBox aspect — so hover snapped hundreds of
-  // pixels off on wide layouts. CTM-inverse correctly accounts for
-  // letterboxing, scaling, and any future transform changes.
   useEffect(() => {
     const svg = svgRef.current
     const wrap = wrapRef.current
@@ -198,36 +196,31 @@ function LineSvg({
       pt.y = e.clientY
       const local = pt.matrixTransform(ctm.inverse())
       const xVb = local.x
-      if (xVb < PADDING.left - 8 || xVb > VB_W - PADDING.right + 8) {
-        setHover(null)
-        return
-      }
-      const relative = xVb - PADDING.left
-      const idx = Math.max(
-        0,
-        Math.min(data.length - 1, Math.round(stepX === 0 ? 0 : relative / stepX)),
-      )
-      // Map the snapped data-point's viewBox x back to screen, then
-      // subtract the wrapper's left edge — that pixel offset is what
-      // the absolutely-positioned tooltip div consumes. `xFor` is
-      // inlined here so the effect deps stay stable (it's a closure
-      // that'd otherwise be a new reference every render).
-      const dataPointVbX = PADDING.left + idx * stepX
-      const dataPointPt = svg.createSVGPoint()
-      dataPointPt.x = dataPointVbX
-      dataPointPt.y = 0
-      const screen = dataPointPt.matrixTransform(ctm)
-      const wrapRect = wrap.getBoundingClientRect()
-      setHover({ idx, tooltipLeftPx: screen.x - wrapRect.left })
+
+      // Snap to closest day column. Bounds clamp ensures we don't snap
+      // to index -1 or index >= length when the cursor drifts past the
+      // axis borders.
+      const rawIdx = Math.round((xVb - PADDING.left) / stepX)
+      const idx = Math.max(0, Math.min(data.length - 1, rawIdx))
+
+      // Tooltip pixel alignment: standard getBoundingClientRect is scales-
+      // safe and matches current screen layout. We offset by padding.left
+      // and index step scaled to the actual DOM width so the tooltip
+      // box snaps precisely to the vertical axis line.
+      const rect = svg.getBoundingClientRect()
+      const ratio = rect.width / VB_W
+      const tooltipLeftPx = (PADDING.left + idx * stepX) * ratio
+
+      setHover({ idx, tooltipLeftPx })
     }
     const onLeave = () => setHover(null)
-    svg.addEventListener('mousemove', onMove)
-    svg.addEventListener('mouseleave', onLeave)
+
+    wrap.addEventListener('mousemove', onMove)
+    wrap.addEventListener('mouseleave', onLeave)
     return () => {
-      svg.removeEventListener('mousemove', onMove)
-      svg.removeEventListener('mouseleave', onLeave)
+      wrap.removeEventListener('mousemove', onMove)
+      wrap.removeEventListener('mouseleave', onLeave)
     }
-    // xFor + yFor close over stepX, so stepX covers them.
   }, [data, stepX])
 
   const hovered = hover !== null ? data[hover.idx] : null
@@ -282,7 +275,7 @@ function LineSvg({
               textAnchor="middle"
               className="fill-slate-500 text-[10px]"
             >
-              {shortDayLabel(p.day)}
+              {shortDayLabel(p.day, language)}
             </text>
           ) : null,
         )}
@@ -329,15 +322,15 @@ function LineSvg({
           className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-slate-250 dark:border-slate-800 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-[11px] shadow-lg"
           style={{ left: `${hover.tooltipLeftPx}px` }}
         >
-          <div className="font-medium text-slate-900 dark:text-white">{longDayLabel(hovered.day)}</div>
+          <div className="font-medium text-slate-900 dark:text-white">{longDayLabel(hovered.day, language)}</div>
           <div className="mt-1 flex flex-col gap-0.5">
             <span className={cn("flex items-center gap-1.5", chartColors.textIncoming)}>
               <span className={cn("inline-block h-1.5 w-1.5 rounded-full", chartColors.dotIncoming)} />
-              {hovered.incoming} incoming
+              {hovered.incoming} {language === 'ar' ? 'واردة' : 'incoming'}
             </span>
             <span className={cn("flex items-center gap-1.5", chartColors.textOutgoing)}>
               <span className={cn("inline-block h-1.5 w-1.5 rounded-full", chartColors.dotOutgoing)} />
-              {hovered.outgoing} outgoing
+              {hovered.outgoing} {language === 'ar' ? 'صادرة' : 'outgoing'}
             </span>
           </div>
         </div>
@@ -355,18 +348,18 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   )
 }
 
-function shortDayLabel(key: string): string {
+function shortDayLabel(key: string, language: string): string {
   // key is YYYY-MM-DD; return "Apr 17"-style. Using Date with an
   // appended time avoids timezone-shift surprises across midnight.
   const [y, m, d] = key.split('-').map(Number)
   const date = new Date(y, m - 1, d)
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return date.toLocaleDateString(language === 'ar' ? 'ar-SA' : undefined, { month: 'short', day: 'numeric' })
 }
 
-function longDayLabel(key: string): string {
+function longDayLabel(key: string, language: string): string {
   const [y, m, d] = key.split('-').map(Number)
   const date = new Date(y, m - 1, d)
-  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+  return date.toLocaleDateString(language === 'ar' ? 'ar-SA' : undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
 /**

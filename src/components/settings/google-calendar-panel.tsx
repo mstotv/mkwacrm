@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
 import { Calendar, CheckCircle2, RefreshCw, Link2, User, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { useLanguage } from '@/hooks/use-language';
 
 interface GoogleAccount {
   id: string;
@@ -22,6 +23,7 @@ interface CalendarListItem {
 }
 
 export function GoogleCalendarPanel() {
+  const { language } = useLanguage();
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
   const [calendarsMap, setCalendarsMap] = useState<Record<string, CalendarListItem[]>>({});
   const [loading, setLoading] = useState(true);
@@ -121,10 +123,10 @@ export function GoogleCalendarPanel() {
           <div>
             <CardTitle className="text-white flex items-center gap-2">
               <Calendar className="h-5 w-5 text-blue-400" />
-              Google Calendar Settings
+              {language === 'ar' ? 'إعدادات تقويم جوجل' : 'Google Calendar Settings'}
             </CardTitle>
             <CardDescription className="text-xs text-slate-400">
-              Configure which Google Calendar to use for automated WhatsApp appointment bookings.
+              {language === 'ar' ? 'اختر تقويم جوجل الذي سيتم استخدامه لجدولة مواعيد حجز العملاء القادمة عبر واتساب.' : 'Configure which Google Calendar to use for automated WhatsApp appointment bookings.'}
             </CardDescription>
           </div>
           <Button
@@ -132,13 +134,13 @@ export function GoogleCalendarPanel() {
             className="flex items-center gap-2 text-xs"
           >
             <Link2 className="h-3.5 w-3.5" />
-            Connect Google Account
+            {language === 'ar' ? 'ربط حساب جوجل' : 'Connect Google Account'}
           </Button>
         </CardHeader>
         <CardContent className="space-y-6">
           {accounts.length === 0 ? (
             <div className="text-center py-8 border border-dashed border-slate-800 rounded-xl bg-slate-950/20 text-slate-400 text-xs">
-              No Google accounts linked yet. Click the button above to link your account.
+              {language === 'ar' ? 'لا توجد حسابات جوجل مرتبطة بعد. اضغط على الزر أعلاه لربط حسابك.' : 'No Google accounts linked yet. Click the button above to link your account.'}
             </div>
           ) : (
             <div className="space-y-4">
@@ -166,20 +168,20 @@ export function GoogleCalendarPanel() {
                       </div>
                       <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-950/30 px-2.5 py-1 rounded-full border border-emerald-900/50">
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        Authenticated
+                        {language === 'ar' ? 'متصل بنجاح' : 'Authenticated'}
                       </div>
                     </div>
 
                     <div className="pt-2 border-t border-slate-900 space-y-3">
                       <div>
                         <label className="text-[10px] text-slate-400 font-semibold block mb-1.5">
-                          Target Booking Calendar
+                          {language === 'ar' ? 'تقويم الحجز المستهدف' : 'Target Booking Calendar'}
                         </label>
                         <div className="flex gap-3 max-w-md">
                           {isLoadingCals ? (
                             <div className="text-xs text-slate-400 flex items-center gap-2">
                               <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                              Loading calendars...
+                              {language === 'ar' ? 'جاري تحميل التقويمات...' : 'Loading calendars...'}
                             </div>
                           ) : (
                             <select
@@ -187,10 +189,10 @@ export function GoogleCalendarPanel() {
                               onChange={(e) => setSelectedCalendarMap(prev => ({ ...prev, [acc.id]: e.target.value }))}
                               className="w-full rounded border border-slate-700 bg-slate-900 p-2 text-xs text-white"
                             >
-                              <option value="primary">Default primary calendar</option>
+                              <option value="primary">{language === 'ar' ? 'التقويم الرئيسي الافتراضي' : 'Default primary calendar'}</option>
                               {calendars.map(cal => (
                                 <option key={cal.id} value={cal.id}>
-                                  {cal.summary} {cal.primary ? '(Primary)' : ''}
+                                  {cal.summary} {cal.primary ? (language === 'ar' ? '(رئيسي)' : '(Primary)') : ''}
                                 </option>
                               ))}
                             </select>
@@ -202,7 +204,9 @@ export function GoogleCalendarPanel() {
                             className="flex items-center gap-1.5 text-xs px-4"
                           >
                             <Save className="h-4 w-4" />
-                            {isSaving ? 'Saving...' : 'Save'}
+                            {isSaving 
+                              ? (language === 'ar' ? 'جاري الحفظ...' : 'Saving...') 
+                              : (language === 'ar' ? 'حفظ التقويم' : 'Save')}
                           </Button>
                         </div>
                       </div>

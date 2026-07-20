@@ -20,8 +20,10 @@ import {
 
 import { createClient } from "@/lib/supabase/client"
 import { useCan } from "@/hooks/use-can"
+import { useLanguage } from "@/hooks/use-language"
 import type { Automation } from "@/types"
 import { Button } from "@/components/ui/button"
+
 import { GatedButton } from "@/components/ui/gated-button"
 import { Switch } from "@/components/ui/switch"
 import {
@@ -59,6 +61,7 @@ const TEMPLATE_ICON: Record<TemplateSlug, typeof Zap> = {
 
 export default function AutomationsPage() {
   const router = useRouter()
+  const { language } = useLanguage()
   const canCreate = useCan("send-messages")
   const [automations, setAutomations] = useState<Automation[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -75,7 +78,7 @@ export default function AutomationsPage() {
       if (fetchErr) throw fetchErr
       setAutomations((data ?? []) as Automation[])
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load automations")
+      setError(err instanceof Error ? err.message : (language === 'ar' ? 'فشل تحميل الأتمتة' : 'Failed to load automations'))
     }
   }
 
@@ -99,20 +102,24 @@ export default function AutomationsPage() {
         prev?.map((x) => (x.id === a.id ? { ...x, is_active: !next } : x)) ?? prev,
       )
       const body = await res.json().catch(() => ({}))
-      toast.error(body?.error ?? "Failed to update")
+      toast.error(body?.error ?? (language === 'ar' ? 'فشل التحديث' : 'Failed to update'))
       return
     }
-    toast.success(next ? "Automation activated" : "Automation paused")
+    toast.success(
+      next
+        ? (language === 'ar' ? 'تم تفعيل الأتمتة' : 'Automation activated')
+        : (language === 'ar' ? 'تم إيقاف الأتمتة مؤقتاً' : 'Automation paused')
+    )
   }
 
   async function duplicate(a: Automation) {
     const res = await fetch(`/api/automations/${a.id}/duplicate`, { method: "POST" })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      toast.error(body?.error ?? "Failed to duplicate")
+      toast.error(body?.error ?? (language === 'ar' ? 'فشل التكرار' : 'Failed to duplicate'))
       return
     }
-    toast.success("Automation duplicated")
+    toast.success(language === 'ar' ? 'تم تكرار الأتمتة بنجاح' : "Automation duplicated")
     load()
   }
 
@@ -123,10 +130,10 @@ export default function AutomationsPage() {
     setDeleting(false)
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      toast.error(body?.error ?? "Failed to delete")
+      toast.error(body?.error ?? (language === 'ar' ? 'فشل الحذف' : 'Failed to delete'))
       return
     }
-    toast.success("Automation deleted")
+    toast.success(language === 'ar' ? 'تم حذف الأتمتة' : "Automation deleted")
     setPendingDelete(null)
     load()
   }
@@ -135,12 +142,34 @@ export default function AutomationsPage() {
     router.push(`/automations/new?template=${slug}`)
   }
 
+  const getTemplateDetails = (slug: TemplateSlug) => {
+    const details = {
+      welcome_message: {
+        name: language === 'ar' ? 'رسالة ترحيبية' : 'Welcome Message',
+        description: language === 'ar' ? 'رد تلقائي للمراسلات لأول مرة بترحيب لطيف.' : 'Auto-reply to first-time contacts with a greeting.',
+      },
+      out_of_office: {
+        name: language === 'ar' ? 'خارج أوقات العمل' : 'Out of Office',
+        description: language === 'ar' ? 'رد تلقائي خارج ساعات العمل لضمان عدم بقاء العميل معلقاً.' : 'Auto-reply during off-hours so nobody is left waiting.',
+      },
+      lead_qualifier: {
+        name: language === 'ar' ? 'تأهيل العملاء المحتملين' : 'Lead Qualifier',
+        description: language === 'ar' ? 'اطرح أسئلة تأهيلية لفلترة وتصنيف العملاء الواردين.' : 'Ask qualification questions to filter inbound leads.',
+      },
+      follow_up_reminder: {
+        name: language === 'ar' ? 'تذكير المتابعة' : 'Follow-up Reminder',
+        description: language === 'ar' ? 'أرسل نغزة/تنبيه إذا لم يرد جهة الاتصال خلال 24 ساعة.' : 'Send a nudge if a contact has not replied within 24 hours.',
+      },
+    }
+    return details[slug] || AUTOMATION_TEMPLATES[slug];
+  }
+
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-2">
+      <div className="flex h-64 flex-col items-center justify-center gap-2" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
         <p className="text-sm text-red-400">{error}</p>
         <Button variant="outline" onClick={() => window.location.reload()}>
-          Retry
+          {language === 'ar' ? 'إعادة المحاولة' : 'Retry'}
         </Button>
       </div>
     )
@@ -157,12 +186,16 @@ export default function AutomationsPage() {
   const showTemplates = automations.length < 3
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Automations</h1>
+          <h1 className="text-2xl font-bold text-white">
+            {language === 'ar' ? 'الأتمتة والردود' : 'Automations'}
+          </h1>
           <p className="mt-1 text-sm text-slate-400">
-            Build workflows that react to WhatsApp® events automatically.
+            {language === 'ar'
+              ? 'أنشئ تدفقات عمل تفاعلية تستجيب تلقائياً لأحداث تطبيق واتساب.'
+              : 'Build workflows that react to WhatsApp® events automatically.'}
           </p>
         </div>
         <GatedButton
@@ -171,29 +204,31 @@ export default function AutomationsPage() {
           onClick={() => router.push("/automations/new")}
           className="bg-primary text-primary-foreground hover:bg-primary/90"
         >
-          <Plus className="h-4 w-4" />
-          Create Automation
+          <Plus className={`${language === 'ar' ? 'ml-1' : 'mr-1'} h-4 w-4`} />
+          {language === 'ar' ? 'إنشاء أتمتة' : 'Create Automation'}
         </GatedButton>
       </div>
 
       {showTemplates && (
         <section>
-          <h2 className="mb-3 text-sm font-semibold text-slate-300">Quick-start templates</h2>
+          <h2 className={`mb-3 text-sm font-semibold text-slate-300 ${language === 'ar' ? 'text-right' : 'text-left'}`}>
+            {language === 'ar' ? 'قوالب جاهزة سريعة البدء' : 'Quick-start templates'}
+          </h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
             {TEMPLATE_ORDER.map((slug) => {
-              const t = AUTOMATION_TEMPLATES[slug]
+              const details = getTemplateDetails(slug)
               const Icon = TEMPLATE_ICON[slug]
               return (
                 <button
                   key={slug}
                   onClick={() => startFromTemplate(slug)}
-                  className="group flex flex-col items-start rounded-xl border border-slate-800 bg-slate-900 p-4 text-left transition-colors hover:border-primary/50 hover:bg-slate-900/80"
+                  className={`group flex flex-col items-start rounded-xl border border-slate-800 bg-slate-900 p-4 ${language === 'ar' ? 'text-right' : 'text-left'} transition-colors hover:border-primary/50 hover:bg-slate-900/80`}
                 >
                   <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary/15">
                     <Icon className="h-5 w-5" />
                   </div>
-                  <div className="text-sm font-semibold text-white">{t.name}</div>
-                  <p className="mt-1 text-xs text-slate-400">{t.description}</p>
+                  <div className="text-sm font-semibold text-white">{details.name}</div>
+                  <p className="mt-1 text-xs text-slate-400">{details.description}</p>
                 </button>
               )
             })}
@@ -206,9 +241,9 @@ export default function AutomationsPage() {
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
             <Zap className="h-6 w-6 text-primary" />
           </div>
-          <p className="mt-3 text-sm font-medium text-white">No automations yet</p>
+          <p className="mt-3 text-sm font-medium text-white">{language === 'ar' ? 'لا توجد عمليات أتمتة مضافة بعد' : 'No automations yet'}</p>
           <p className="mt-1 text-xs text-slate-400">
-            Pick a template above or create one from scratch.
+            {language === 'ar' ? 'اختر قالباً جاهزاً من الأعلى أو ابدأ من الصفر.' : 'Pick a template above or create one from scratch.'}
           </p>
         </div>
       ) : (
@@ -222,28 +257,41 @@ export default function AutomationsPage() {
               onDuplicate={() => duplicate(a)}
               onLogs={() => router.push(`/automations/${a.id}/logs`)}
               onDelete={() => setPendingDelete(a)}
+              language={language}
             />
           ))}
         </ul>
       )}
 
       <Dialog open={!!pendingDelete} onOpenChange={(v) => !v && setPendingDelete(null)}>
-        <DialogContent>
+        <DialogContent style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
           <DialogHeader>
-            <DialogTitle>Delete automation</DialogTitle>
-            <DialogDescription>
-              This permanently removes{" "}
-              <span className="text-white">{pendingDelete?.name}</span> and its execution
-              history. This cannot be undone.
+            <DialogTitle className={language === 'ar' ? 'text-right' : 'text-left'}>
+              {language === 'ar' ? 'حذف الأتمتة' : 'Delete automation'}
+            </DialogTitle>
+            <DialogDescription className={language === 'ar' ? 'text-right' : 'text-left'}>
+              {language === 'ar' ? (
+                <>
+                  سيؤدي هذا إلى حذف الأتمتة{" "}
+                  <span className="text-white font-semibold">{pendingDelete?.name}</span> وسجل
+                  التشغيل الخاص بها بشكل نهائي. لا يمكن التراجع عن هذا الإجراء.
+                </>
+              ) : (
+                <>
+                  This permanently removes{" "}
+                  <span className="text-white">{pendingDelete?.name}</span> and its execution
+                  history. This cannot be undone.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+          <DialogFooter className="flex gap-2">
             <Button
               variant="ghost"
               onClick={() => setPendingDelete(null)}
               disabled={deleting}
             >
-              Cancel
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
             </Button>
             <Button
               variant="destructive"
@@ -251,7 +299,7 @@ export default function AutomationsPage() {
               disabled={deleting}
             >
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              Delete
+              {language === 'ar' ? 'حذف' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -267,6 +315,7 @@ function AutomationCard({
   onDuplicate,
   onLogs,
   onDelete,
+  language,
 }: {
   automation: Automation
   onToggle: (next: boolean) => void
@@ -274,8 +323,38 @@ function AutomationCard({
   onDuplicate: () => void
   onLogs: () => void
   onDelete: () => void
+  language: string
 }) {
   const meta = triggerMeta(automation.trigger_type)
+
+  const getTriggerLabel = (label: string) => {
+    if (language === 'ar') {
+      switch (label) {
+        case 'New Message': return 'رسالة جديدة'
+        case 'First Message from Contact': return 'الرسالة الأولى من جهة الاتصال'
+        case 'Keyword Match': return 'مطابقة الكلمات المفتاحية'
+        case 'New Contact': return 'جهة اتصال جديدة'
+        case 'Conversation Assigned': return 'تعيين المحادثة'
+        case 'Tag Added': return 'إضافة وسم'
+        case 'Time-Based': return 'مبني على الوقت'
+        default: return label
+      }
+    }
+    return label
+  }
+
+  const formatRelativeTime = (iso: string | null | undefined) => {
+    if (!iso) return language === 'ar' ? 'أبداً' : 'never'
+    const then = new Date(iso).getTime()
+    if (Number.isNaN(then)) return language === 'ar' ? 'أبداً' : 'never'
+    const diffSec = Math.round((Date.now() - then) / 1000)
+    if (diffSec < 60) return language === 'ar' ? 'الآن' : 'just now'
+    if (diffSec < 3600) return language === 'ar' ? `منذ ${Math.floor(diffSec / 60)} د` : `${Math.floor(diffSec / 60)}m ago`
+    if (diffSec < 86400) return language === 'ar' ? `منذ ${Math.floor(diffSec / 3600)} س` : `${Math.floor(diffSec / 3600)}h ago`
+    if (diffSec < 2_592_000) return language === 'ar' ? `منذ ${Math.floor(diffSec / 86400)} يوم` : `${Math.floor(diffSec / 86400)}d ago`
+    return new Date(iso).toLocaleDateString(language === 'ar' ? 'ar-SA' : undefined)
+  }
+
   return (
     <li className="rounded-xl border border-slate-800 bg-slate-900 transition-colors hover:border-slate-700">
       <div className="flex items-center gap-4 p-4">
@@ -289,7 +368,7 @@ function AutomationCard({
         <button
           type="button"
           onClick={onEdit}
-          className="min-w-0 flex-1 text-left"
+          className={`min-w-0 flex-1 ${language === 'ar' ? 'text-right' : 'text-left'}`}
         >
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-semibold text-white">
@@ -312,13 +391,13 @@ function AutomationCard({
                 meta.pillClass,
               )}
             >
-              {meta.label}
+              {getTriggerLabel(meta.label)}
             </span>
             <span className="tabular-nums">
-              {automation.execution_count} run{automation.execution_count === 1 ? "" : "s"}
+              {automation.execution_count} {language === 'ar' ? 'مرات تشغيل' : (automation.execution_count === 1 ? 'run' : 'runs')}
             </span>
             <span aria-hidden>·</span>
-            <span>last {formatRelative(automation.last_executed_at)}</span>
+            <span>{language === 'ar' ? 'آخر تشغيل: ' : 'last '}{formatRelativeTime(automation.last_executed_at)}</span>
           </div>
         </button>
 
@@ -336,23 +415,23 @@ function AutomationCard({
             >
               <MoreVertical className="h-4 w-4" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align={language === 'ar' ? 'start' : 'end'}>
               <DropdownMenuItem onClick={onEdit}>
-                <Pencil className="h-4 w-4" />
-                Edit
+                <Pencil className={`${language === 'ar' ? 'ml-2' : 'mr-2'} h-4 w-4`} />
+                {language === 'ar' ? 'تعديل' : 'Edit'}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onDuplicate}>
-                <Copy className="h-4 w-4" />
-                Duplicate
+                <Copy className={`${language === 'ar' ? 'ml-2' : 'mr-2'} h-4 w-4`} />
+                {language === 'ar' ? 'تكرار' : 'Duplicate'}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onLogs}>
-                <FileText className="h-4 w-4" />
-                View Logs
+                <FileText className={`${language === 'ar' ? 'ml-2' : 'mr-2'} h-4 w-4`} />
+                {language === 'ar' ? 'عرض السجلات' : 'View Logs'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onClick={onDelete}>
-                <Trash2 className="h-4 w-4" />
-                Delete
+                <Trash2 className={`${language === 'ar' ? 'ml-2' : 'mr-2'} h-4 w-4`} />
+                {language === 'ar' ? 'حذف' : 'Delete'}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -361,3 +440,4 @@ function AutomationCard({
     </li>
   )
 }
+

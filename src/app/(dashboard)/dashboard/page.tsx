@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
+import { useLanguage } from '@/hooks/use-language'
 import { formatCurrency } from '@/lib/currency'
 import {
   MessageSquare,
@@ -38,6 +39,7 @@ type RangeDays = 7 | 30 | 90
 
 export default function DashboardPage() {
   const { defaultCurrency } = useAuth()
+  const { t, language } = useLanguage()
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
 
@@ -119,12 +121,16 @@ export default function DashboardPage() {
   )
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-white">
+          {language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}
+        </h1>
         <p className="mt-1 text-sm text-slate-400">
-          Live analytics across conversations, contacts, deals, broadcasts, and automations.
+          {language === 'ar'
+            ? 'التحليلات والمؤشرات المباشرة للمحادثات، جهات الاتصال، الصفقات، البث المباشر، والأتمتة.'
+            : 'Live analytics across conversations, contacts, deals, broadcasts, and automations.'}
         </p>
       </div>
 
@@ -135,16 +141,21 @@ export default function DashboardPage() {
         ) : (
           <>
             <MetricCard
-              title="Active Conversations"
+              title={language === 'ar' ? 'المحادثات النشطة' : 'Active Conversations'}
               value={metrics.activeConversations.current.toLocaleString()}
               icon={MessageSquare}
               delta={{
                 sign: metrics.activeConversations.previous,
-                label: deltaLabel(metrics.activeConversations.previous, 'new today vs yesterday'),
+                label: deltaLabel(
+                  metrics.activeConversations.previous,
+                  'جديد اليوم مقارنة بالأمس',
+                  'new today vs yesterday',
+                  language
+                ),
               }}
             />
             <MetricCard
-              title="New Contacts Today"
+              title={language === 'ar' ? 'العملاء الجدد اليوم' : 'New Contacts Today'}
               value={metrics.newContactsToday.current.toLocaleString()}
               icon={UserPlus}
               delta={{
@@ -152,18 +163,24 @@ export default function DashboardPage() {
                   metrics.newContactsToday.current - metrics.newContactsToday.previous,
                 label: deltaLabel(
                   metrics.newContactsToday.current - metrics.newContactsToday.previous,
+                  'مقارنة بالأمس',
                   'vs yesterday',
+                  language
                 ),
               }}
             />
             <MetricCard
-              title="Open Deals Value"
+              title={language === 'ar' ? 'قيمة الصفقات المفتوحة' : 'Open Deals Value'}
               value={formatCurrency(metrics.openDealsValue, defaultCurrency)}
               icon={DollarSign}
-              subtitle={`${metrics.openDealsCount} open deal${metrics.openDealsCount === 1 ? '' : 's'}`}
+              subtitle={
+                language === 'ar'
+                  ? `${metrics.openDealsCount} صفقة مفتوحة`
+                  : `${metrics.openDealsCount} open deal${metrics.openDealsCount === 1 ? '' : 's'}`
+              }
             />
             <MetricCard
-              title="Messages Sent Today"
+              title={language === 'ar' ? 'الرسائل المرسلة اليوم' : 'Messages Sent Today'}
               value={metrics.messagesSentToday.current.toLocaleString()}
               icon={Send}
               delta={{
@@ -171,7 +188,9 @@ export default function DashboardPage() {
                   metrics.messagesSentToday.current - metrics.messagesSentToday.previous,
                 label: deltaLabel(
                   metrics.messagesSentToday.current - metrics.messagesSentToday.previous,
+                  'مقارنة بالأمس',
                   'vs yesterday',
+                  language
                 ),
               }}
             />
@@ -218,8 +237,9 @@ export default function DashboardPage() {
 
 // ------------------------------------------------------------
 
-function deltaLabel(delta: number, suffix: string): string {
-  if (delta === 0) return `No change ${suffix}`
+function deltaLabel(delta: number, suffixAr: string, suffixEn: string, language: string): string {
+  if (delta === 0) return language === 'ar' ? `لا تغيير ${suffixAr}` : `No change ${suffixEn}`
   const sign = delta > 0 ? '+' : ''
-  return `${sign}${delta.toLocaleString()} ${suffix}`
+  return `${sign}${delta.toLocaleString()} ${language === 'ar' ? suffixAr : suffixEn}`
 }
+

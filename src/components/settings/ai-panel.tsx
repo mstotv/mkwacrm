@@ -16,6 +16,7 @@ import {
   Trash2,
   FileText,
   Loader2,
+  Bell,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getEffectiveSubscriptionPlanLabel, isActiveSubscription } from '@/lib/auth/subscription';
@@ -45,7 +46,7 @@ interface TrainingEntry {
 
 export function AIPanel() {
   const { account, accountRole, profileLoading } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [config, setConfig] = useState<AIConfig>({
     provider: 'openai',
     api_key: '',
@@ -59,6 +60,11 @@ export function AIPanel() {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [testingKey, setTestingKey] = useState(false);
   const [subscription, setSubscription] = useState<any>(null);
+
+  // Follow-up settings states
+  const [followUpActionType, setFollowUpActionType] = useState('both');
+  const [followUpReminderTemplate, setFollowUpReminderTemplate] = useState('مرحباً {name}، تواصلنا معك سابقاً بخصوص {reason}، هل ما زلت مهتماً؟');
+  const [followUpDefaultTime, setFollowUpDefaultTime] = useState('10:00');
 
   const handleTestConnection = async () => {
     if (!config.api_key) {
@@ -118,31 +124,46 @@ export function AIPanel() {
           setSubscription(normalizeSubscription(subData));
         }
 
-        // Load AI Config
-        const { data } = await supabase
-          .from('ai_config')
-          .select('*')
-          .eq('account_id', accountId)
-          .maybeSingle();
+          // Load AI Config
+          const { data } = await supabase
+            .from('ai_config')
+            .select('*')
+            .eq('account_id', accountId)
+            .maybeSingle();
 
-        if (!isMounted) return;
+          if (!isMounted) return;
 
-        if (data) {
-          setConfig({
-            id: data.id,
-            provider: data.provider || 'openai',
-            api_key: data.api_key || '',
-            bot_name: data.bot_name || 'AI Assistant',
-            system_prompt: data.system_prompt || '',
-            is_active: data.is_active ?? false,
-          });
-          // Parse existing training data from system_prompt
-          const parsed = parseTrainingFromPrompt(data.system_prompt || '');
-          setTrainingEntries(parsed);
-        }
-      } catch (err) {
-        console.error('Error loading AI config and subscription:', err);
-      } finally {
+          if (data) {
+            setConfig({
+              id: data.id,
+              provider: data.provider || 'openai',
+              api_key: data.api_key || '',
+              bot_name: data.bot_name || 'AI Assistant',
+              system_prompt: data.system_prompt || '',
+              is_active: data.is_active ?? false,
+            });
+            // Parse existing training data from system_prompt
+            const parsed = parseTrainingFromPrompt(data.system_prompt || '');
+            setTrainingEntries(parsed);
+          }
+
+          // Load Account Settings (follow-up settings)
+          const { data: acctData } = await supabase
+            .from('accounts')
+            .select('follow_up_action_type, follow_up_reminder_template, follow_up_default_time')
+            .eq('id', accountId)
+            .maybeSingle();
+
+          if (!isMounted) return;
+
+          if (acctData) {
+            setFollowUpActionType(acctData.follow_up_action_type || 'both');
+            setFollowUpReminderTemplate(acctData.follow_up_reminder_template || 'مرحباً {name}، تواصلنا معك سابقاً بخصوص {reason}، هل ما زلت مهتماً؟');
+            setFollowUpDefaultTime(acctData.follow_up_default_time || '10:00');
+          }
+        } catch (err) {
+          console.error('Error loading AI config and subscription:', err);
+        } finally {
         if (isMounted) {
           setLoading(false);
         }
@@ -362,6 +383,18 @@ export function AIPanel() {
           setConfig(prev => ({ ...prev, id: data.id }));
         }
       }
+
+      // Save follow-up settings in accounts
+      const { error: acctErr } = await supabase
+        .from('accounts')
+        .update({
+          follow_up_action_type: followUpActionType,
+          follow_up_reminder_template: followUpReminderTemplate,
+          follow_up_default_time: followUpDefaultTime,
+        })
+        .eq('id', account.id);
+
+      if (acctErr) throw acctErr;
 
       toast.success(t('common.success', 'تم حفظ إعدادات الذكاء الاصطناعي بنجاح!'));
     } catch (err: any) {
@@ -630,6 +663,83 @@ export function AIPanel() {
           )}
         </div>
 
+        {/* ===== AI Follow-up Settings Section ===== */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-5" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
+          <h4 className="font-semibold text-white flex items-center gap-2">
+            <Bell className="h-5 w-5 text-blue-400" />
+            {language === 'ar' ? 'إعدادات المتابعة التلقائية (AI Follow-up)' : 'AI Follow-up Settings'}
+          </h4>
+          <p className="text-xs text-slate-400">
+            {language === 'ar' 
+              ? 'تتيح هذه الميزة للذكاء الاصطناعي اكتشاف رغبة العميل في التأجيل (مثال: "بفكر وأرد عليك بكره") وجدولة تذكير تلقائي أو تنبيهك لمتابعته.' 
+              : 'This feature enables the AI to detect when a customer wants to postpone a decision (e.g., "I will think about it and reply tomorrow") and schedule an automatic reminder or alert you to follow up.'}
+          </p>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5">
+                  {language === 'ar' ? 'طريقة المتابعة الافتراضية' : 'Default Follow-up Action'}
+                </label>
+                <select
+                  disabled={!isOwnerOrAdmin}
+                  value={followUpActionType}
+                  onChange={e => setFollowUpActionType(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-850 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+                >
+                  <option value="auto_reminder">
+                    {language === 'ar' ? 'إرسال رسالة تذكير تلقائية للعميل' : 'Send automatic reminder message to client'}
+                  </option>
+                  <option value="notify_owner">
+                    {language === 'ar' ? 'تنبيهي فقط عبر تيليجرام' : 'Notify me only via Telegram'}
+                  </option>
+                  <option value="both">
+                    {language === 'ar' ? 'كلاهما (تذكير العميل وتنبيهي)' : 'Both (remind client & notify me)'}
+                  </option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5">
+                  {language === 'ar' ? 'الوقت الافتراضي لإرسال التذكير' : 'Default Reminder Delivery Time'}
+                </label>
+                <input
+                  type="text"
+                  disabled={!isOwnerOrAdmin}
+                  value={followUpDefaultTime}
+                  onChange={e => setFollowUpDefaultTime(e.target.value)}
+                  placeholder="10:00"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-850 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  {language === 'ar' 
+                    ? 'توقيت إرسال المتابعة المجدولة باليوم المعني بتنسيق 24 ساعة (مثال: 10:00 أو 18:30).' 
+                    : 'The scheduled follow-up message dispatch time on the targeted day, formatted in 24-hour style (e.g., 10:00 or 18:30).'}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-slate-400 mb-1.5">
+                {language === 'ar' ? 'نص رسالة التذكير الافتراضي للعميل' : 'Default Reminder Message Template'}
+              </label>
+              <textarea
+                rows={5}
+                disabled={!isOwnerOrAdmin}
+                value={followUpReminderTemplate}
+                onChange={e => setFollowUpReminderTemplate(e.target.value)}
+                placeholder={language === 'ar' ? 'أدخل رسالة التذكير...' : 'Enter reminder message...'}
+                className="w-full rounded-lg border border-slate-700 bg-slate-850 px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-violet-500 focus:outline-none resize-none font-sans"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">
+                {language === 'ar' 
+                  ? 'استخدم المتغيرات {name} لاسم العميل و {reason} لموضوع المتابعة.' 
+                  : 'Use variables {name} for client name and {reason} for the follow-up reason.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Save Button */}
         {isOwnerOrAdmin && (
           <div className="flex justify-end">
@@ -639,7 +749,9 @@ export function AIPanel() {
               className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition duration-150"
             >
               <Save className="h-4 w-4" />
-              {saving ? 'جاري الحفظ...' : 'حفظ التغييرات وإطلاق البوت'}
+              {saving 
+                ? (language === 'ar' ? 'جاري الحفظ...' : 'Saving...') 
+                : (language === 'ar' ? 'حفظ التغييرات وإطلاق البوت' : 'Save Changes & Launch Bot')}
             </button>
           </div>
         )}

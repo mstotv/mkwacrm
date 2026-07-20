@@ -28,6 +28,7 @@ import { GitBranch, Plus, ChevronDown, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/hooks/use-language";
 import { GatedButton } from "@/components/ui/gated-button";
 
 // Pipeline creation is admin-class (settings-tier write under
@@ -35,20 +36,21 @@ import { GatedButton } from "@/components/ui/gated-button";
 // agent+. The two CTAs gate on different `useCan` capabilities,
 // not on different copy.
 
-// Spec-defined seed — name and color per the product spec.
-const SPEC_DEFAULT_STAGES = [
-  { name: "New Lead", color: "#3b82f6", position: 0 }, // blue
-  { name: "Qualified", color: "#eab308", position: 1 }, // yellow
-  { name: "Proposal Sent", color: "#f97316", position: 2 }, // orange
-  { name: "Negotiation", color: "#8b5cf6", position: 3 }, // purple
-  { name: "Won", color: "#22c55e", position: 4 }, // green
+const getSpecDefaultStages = (lang: string) => [
+  { name: lang === "ar" ? "عميل محتمل" : "New Lead", color: "#3b82f6", position: 0 }, // blue
+  { name: lang === "ar" ? "عميل مؤهل" : "Qualified", color: "#eab308", position: 1 }, // yellow
+  { name: lang === "ar" ? "تم إرسال العرض" : "Proposal Sent", color: "#f97316", position: 2 }, // orange
+  { name: lang === "ar" ? "مفاوضات" : "Negotiation", color: "#8b5cf6", position: 3 }, // purple
+  { name: lang === "ar" ? "تمت الصفقة" : "Won", color: "#22c55e", position: 4 }, // green
 ];
+
 
 export default function PipelinesPage() {
   const supabase = createClient();
   const canEditSettings = useCan("edit-settings");
   const canCreateDeals = useCan("send-messages");
   const { accountId } = useAuth();
+  const { language } = useLanguage();
 
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
@@ -118,7 +120,7 @@ export default function PipelinesPage() {
 
     const { data: pipeline, error } = await supabase
       .from("pipelines")
-      .insert({ user_id: user.id, account_id: accountId, name: "Sales Pipeline" })
+      .insert({ user_id: user.id, account_id: accountId, name: language === 'ar' ? "قسم المبيعات" : "Sales Pipeline" })
       .select()
       .single();
 
@@ -127,7 +129,7 @@ export default function PipelinesPage() {
       return null;
     }
 
-    const stagesPayload = SPEC_DEFAULT_STAGES.map((s) => ({
+    const stagesPayload = getSpecDefaultStages(language).map((s) => ({
       pipeline_id: pipeline.id,
       name: s.name,
       color: s.color,
@@ -136,7 +138,8 @@ export default function PipelinesPage() {
     await supabase.from("pipeline_stages").insert(stagesPayload);
 
     return pipeline as Pipeline;
-  }, [supabase, accountId]);
+  }, [supabase, accountId, language]);
+
 
   // Initial load + seed-if-empty
   useEffect(() => {
@@ -223,11 +226,11 @@ export default function PipelinesPage() {
         .update({ stage_id: newStageId })
         .eq("id", dealId);
       if (error) {
-        toast.error("Failed to move deal");
+        toast.error(language === "ar" ? "فشل نقل الصفقة" : "Failed to move deal");
         refreshDeals();
       }
     },
-    [supabase, refreshDeals],
+    [supabase, refreshDeals, language],
   );
 
   const handleAddDeal = useCallback(
@@ -260,7 +263,7 @@ export default function PipelinesPage() {
     }
     // pipelines.account_id is NOT NULL post-017 with no DB default.
     if (!accountId) {
-      toast.error("Your profile is not linked to an account.");
+      toast.error(language === "ar" ? "ملفك الشخصي غير مرتبط بحساب." : "Your profile is not linked to an account.");
       setCreating(false);
       return;
     }
@@ -272,12 +275,12 @@ export default function PipelinesPage() {
       .single();
 
     if (error || !pipeline) {
-      toast.error("Failed to create pipeline");
+      toast.error(language === "ar" ? "فشل إنشاء قسم المبيعات" : "Failed to create pipeline");
       setCreating(false);
       return;
     }
 
-    const stagesPayload = SPEC_DEFAULT_STAGES.map((s) => ({
+    const stagesPayload = getSpecDefaultStages(language).map((s) => ({
       pipeline_id: pipeline.id,
       name: s.name,
       color: s.color,
@@ -290,8 +293,9 @@ export default function PipelinesPage() {
     setSelectedPipelineId(pipeline.id);
     await refreshPipelines();
     setCreating(false);
-    toast.success("Pipeline created");
+    toast.success(language === "ar" ? "تم إنشاء قسم المبيعات" : "Pipeline created");
   }
+
 
   const selectedPipeline = pipelines.find((p) => p.id === selectedPipelineId);
 
@@ -312,7 +316,7 @@ export default function PipelinesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={{ direction: language === "ar" ? "rtl" : "ltr" }}>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -323,17 +327,17 @@ export default function PipelinesPage() {
             >
               <GitBranch className="h-4 w-4 text-primary" />
               <span className="font-semibold">
-                {selectedPipeline?.name ?? "Select Pipeline"}
+                {selectedPipeline?.name ?? (language === "ar" ? "اختر قسم المبيعات" : "Select Pipeline")}
               </span>
               <ChevronDown className="h-4 w-4 text-slate-400" />
             </DropdownMenuTrigger>
             <DropdownMenuContent
-              align="start"
+              align={language === "ar" ? "end" : "start"}
               className="w-64 border-slate-700 bg-slate-900 text-slate-200"
             >
               {pipelines.length === 0 && (
                 <DropdownMenuItem disabled className="text-slate-500">
-                  No pipelines yet
+                  {language === "ar" ? "لا توجد أقسام مبيعات بعد" : "No pipelines yet"}
                 </DropdownMenuItem>
               )}
               {pipelines.map((p) => (
@@ -346,7 +350,7 @@ export default function PipelinesPage() {
                       : "text-slate-300"
                   }
                 >
-                  <GitBranch className="mr-2 h-3.5 w-3.5" />
+                  <GitBranch className={`${language === "ar" ? "ml-2" : "mr-2"} h-3.5 w-3.5`} />
                   {p.name}
                 </DropdownMenuItem>
               ))}
@@ -356,8 +360,8 @@ export default function PipelinesPage() {
                   onClick={() => setSettingsOpen(true)}
                   className="text-slate-300"
                 >
-                  <Settings className="mr-2 h-3.5 w-3.5" />
-                  Manage Pipelines
+                  <Settings className={`${language === "ar" ? "ml-2" : "mr-2"} h-3.5 w-3.5`} />
+                  {language === "ar" ? "إدارة أقسام المبيعات" : "Manage Pipelines"}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -372,8 +376,8 @@ export default function PipelinesPage() {
             onClick={() => setNewPipelineOpen(true)}
             className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
           >
-            <Plus className="mr-1 h-4 w-4" />
-            Add Pipeline
+            <Plus className={`${language === "ar" ? "ml-1" : "mr-1"} h-4 w-4`} />
+            {language === "ar" ? "إضافة قسم مبيعات" : "Add Pipeline"}
           </GatedButton>
           <GatedButton
             canAct={canCreateDeals}
@@ -382,21 +386,21 @@ export default function PipelinesPage() {
             onClick={() => handleAddDeal()}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
-            <Plus className="mr-1 h-4 w-4" />
-            Add Deal
+            <Plus className={`${language === "ar" ? "ml-1" : "mr-1"} h-4 w-4`} />
+            {language === "ar" ? "إضافة صفقة" : "Add Deal"}
           </GatedButton>
         </div>
       </div>
 
       {/* Board */}
       {pipelines.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 py-20">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 py-20" style={{ direction: language === "ar" ? "rtl" : "ltr" }}>
           <GitBranch className="h-12 w-12 text-slate-600" />
           <h3 className="mt-4 text-lg font-medium text-white">
-            No pipelines yet
+            {language === "ar" ? "لا توجد أقسام مبيعات بعد" : "No pipelines yet"}
           </h3>
           <p className="mt-2 text-sm text-slate-400">
-            Create a pipeline to start tracking deals
+            {language === "ar" ? "أنشئ قسم مبيعات للبدء في تتبع الصفقات" : "Create a pipeline to start tracking deals"}
           </p>
           <GatedButton
             canAct={canEditSettings}
@@ -404,8 +408,8 @@ export default function PipelinesPage() {
             onClick={() => setNewPipelineOpen(true)}
             className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
           >
-            <Plus className="mr-1 h-4 w-4" />
-            Create Pipeline
+            <Plus className={`${language === "ar" ? "ml-1" : "mr-1"} h-4 w-4`} />
+            {language === "ar" ? "إنشاء قسم مبيعات" : "Create Pipeline"}
           </GatedButton>
         </div>
       ) : (
@@ -423,39 +427,47 @@ export default function PipelinesPage() {
 
       {/* New Pipeline Dialog */}
       <Dialog open={newPipelineOpen} onOpenChange={setNewPipelineOpen}>
-        <DialogContent className="sm:max-w-sm bg-slate-900 border-slate-700">
+        <DialogContent className="sm:max-w-sm bg-slate-900 border-slate-700" style={{ direction: language === "ar" ? "rtl" : "ltr" }}>
           <DialogHeader>
-            <DialogTitle className="text-white">New Pipeline</DialogTitle>
+            <DialogTitle className={`text-white ${language === "ar" ? "text-right" : "text-left"}`}>
+              {language === "ar" ? "قسم مبيعات جديد" : "New Pipeline"}
+            </DialogTitle>
           </DialogHeader>
           <div className="py-2">
-            <Label className="text-slate-300">Pipeline Name</Label>
+            <Label className={`text-slate-300 block ${language === "ar" ? "text-right" : "text-left"}`}>
+              {language === "ar" ? "اسم قسم المبيعات" : "Pipeline Name"}
+            </Label>
             <Input
               value={newPipelineName}
               onChange={(e) => setNewPipelineName(e.target.value)}
-              placeholder="e.g., Enterprise Sales"
+              placeholder={language === "ar" ? "مثال: مبيعات الشركات" : "e.g., Enterprise Sales"}
               className="mt-2 bg-slate-800 border-slate-700 text-white"
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleCreatePipeline();
               }}
             />
-            <p className="mt-2 text-xs text-slate-400">
-              Default stages (New Lead → Won) will be created automatically.
+            <p className={`mt-2 text-xs text-slate-400 ${language === "ar" ? "text-right" : "text-left"}`}>
+              {language === "ar"
+                ? "المراحل الافتراضية (عميل محتمل ← تمت الصفقة) سيتم إنشاؤها تلقائياً."
+                : "Default stages (New Lead → Won) will be created automatically."}
             </p>
           </div>
-          <DialogFooter className="bg-slate-900/50 border-slate-700">
+          <DialogFooter className="bg-slate-900/50 border-slate-700 flex gap-2">
             <Button
               variant="outline"
               onClick={() => setNewPipelineOpen(false)}
               className="border-slate-700 text-slate-300 hover:bg-slate-800"
             >
-              Cancel
+              {language === "ar" ? "إلغاء" : "Cancel"}
             </Button>
             <Button
               onClick={handleCreatePipeline}
               disabled={creating || !newPipelineName.trim()}
               className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              {creating ? "Creating..." : "Create Pipeline"}
+              {creating
+                ? (language === "ar" ? "جاري الإنشاء..." : "Creating...")
+                : (language === "ar" ? "إنشاء قسم مبيعات" : "Create Pipeline")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -488,5 +500,6 @@ export default function PipelinesPage() {
         onSaved={refreshDeals}
       />
     </div>
+
   );
 }
