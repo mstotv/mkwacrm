@@ -18,6 +18,7 @@ import {
   Bell,
   ChevronDown,
   Link2,
+  Globe,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useCan } from '@/hooks/use-can';
@@ -210,14 +211,13 @@ function SettingsPageInner() {
             <CreditCard className="size-4" />
             {t('settings.billingTab')}
           </TabsTrigger>
-          <TabsTrigger
-            value="integrations"
-            className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
-          >
-
-            <Link2 className="size-4 text-violet-400" />
-            {t('settings.integrationsTab') || 'Integrations'}
-          </TabsTrigger>
+            <TabsTrigger
+              value="integrations"
+              className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
+            >
+              <Link2 className="mr-2 size-4" />
+              {t('settings.integrationsTab') || 'Integrations'}
+            </TabsTrigger>
         </TabsList>
 
 
@@ -301,7 +301,6 @@ function SettingsPageInner() {
             </TabsContent>
           </Tabs>
         </TabsContent>
-
       </Tabs>
     </div>
   );

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSiteSettings } from "@/hooks/use-site-settings";
+import { useLanguage } from "@/hooks/use-language";
 import {
   Card,
   CardContent,
@@ -34,6 +35,8 @@ export default function LoginPage() {
 function LoginPageInner() {
   const searchParams = useSearchParams();
   const { settings } = useSiteSettings();
+  const { language } = useLanguage();
+  const isAr = language === 'ar';
   // Forwarded from `/join/<token>` when the visitor already has an
   // account. After a successful sign-in we send them to the join
   // page to accept rather than to /dashboard.
@@ -124,12 +127,12 @@ function LoginPageInner() {
             )}
           </div>
           <CardTitle className="text-xl text-white">
-            {inviteToken ? "Sign in to accept" : "Welcome back"}
+            {inviteToken ? (isAr ? "سجل دخولك للقبول" : "Sign in to accept") : (isAr ? "مرحباً بعودتك" : "Welcome back")}
           </CardTitle>
           <CardDescription className="text-slate-400">
             {inviteToken
-              ? "Sign in and we'll take you to the invitation."
-              : "Sign in to your account"}
+              ? (isAr ? "سجل دخولك وسنوجهك إلى الدعوة." : "Sign in and we'll take you to the invitation.")
+              : (isAr ? "سجل دخولك إلى حسابك" : "Sign in to your account")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -142,7 +145,7 @@ function LoginPageInner() {
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="email" className="text-slate-300">
-                Email
+                {isAr ? "البريد الإلكتروني" : "Email"}
               </Label>
               <Input
                 id="email"
@@ -158,19 +161,19 @@ function LoginPageInner() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password" className="text-slate-300">
-                  Password
+                  {isAr ? "كلمة المرور" : "Password"}
                 </Label>
                 <Link
                   href="/forgot-password"
                   className="text-sm text-primary hover:text-primary/80"
                 >
-                  Forgot password?
+                  {isAr ? "هل نسيت كلمة المرور؟" : "Forgot password?"}
                 </Link>
               </div>
               <Input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
+                placeholder={isAr ? "أدخل كلمة المرور" : "Enter your password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -183,7 +186,7 @@ function LoginPageInner() {
               disabled={loading || telegramLoading}
               className="mt-2 h-12 md:h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? (isAr ? "جاري تسجيل الدخول..." : "Signing in...") : (isAr ? "تسجيل الدخول" : "Sign in")}
             </Button>
           </form>
 
@@ -193,7 +196,7 @@ function LoginPageInner() {
               <div className="relative my-4 flex items-center justify-center">
                 <div className="absolute w-full border-t border-slate-800" />
                 <span className="relative bg-slate-900 px-3 text-xs text-slate-500 uppercase">
-                  أو الدخول عبر تليجرام
+                  {isAr ? "أو الدخول عبر تليجرام" : "Or sign in with Telegram"}
                 </span>
               </div>
               {telegramLoading ? (
@@ -210,7 +213,7 @@ function LoginPageInner() {
           )}
 
           <p className="mt-6 text-center text-sm text-slate-400">
-            Don&apos;t have an account?{" "}
+            {isAr ? "ليس لديك حساب؟ " : "Don't have an account? "}
             <Link
               href={
                 inviteToken
@@ -219,7 +222,7 @@ function LoginPageInner() {
               }
               className="text-primary hover:text-primary/80"
             >
-              Create account
+              {isAr ? "إنشاء حساب" : "Create account"}
             </Link>
           </p>
         </CardContent>

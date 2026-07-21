@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSiteSettings } from "@/hooks/use-site-settings";
+import { useLanguage } from "@/hooks/use-language";
 import {
   Card,
   CardContent,
@@ -32,6 +33,8 @@ export default function SignupPage() {
 function SignupPageInner() {
   const searchParams = useSearchParams();
   const { settings } = useSiteSettings();
+  const { language } = useLanguage();
+  const isAr = language === 'ar';
   // When the user lands here from `/join/<token>` we carry the
   // invite token in the query so it survives the signup → email
   // verification → redirect round-trip. `emailRedirectTo` below
@@ -44,6 +47,8 @@ function SignupPageInner() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [telegramLoading, setTelegramLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -91,12 +96,17 @@ function SignupPageInner() {
     setError(null);
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match");
+      setError(isAr ? "كلمات المرور غير متطابقة" : "Passwords do not match");
+      return;
+    }
+
+    if (!acceptTerms || !acceptPrivacy) {
+      setError(isAr ? "يجب الموافقة على شروط الخدمة وسياسة الخصوصية لإنشاء حساب." : "You must agree to the Terms of Service and Privacy Policy to create an account.");
       return;
     }
 
     if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+      setError(isAr ? "يجب أن تتكون كلمة المرور من 6 أحرف على الأقل" : "Password must be at least 6 characters");
       return;
     }
 
@@ -140,12 +150,16 @@ function SignupPageInner() {
               <CheckCircle className="h-6 w-6 text-primary" />
             </div>
             <CardTitle className="text-xl text-white">
-              Check your email
+              {isAr ? "تفقد بريدك الإلكتروني" : "Check your email"}
             </CardTitle>
             <CardDescription className="text-slate-400">
-              We&apos;ve sent a confirmation link to{" "}
-              <span className="text-white">{email}</span>. Please check your
-              inbox and click the link to verify your account.
+              {isAr ? (
+                <>لقد أرسلنا رابط التأكيد إلى <span className="text-white">{email}</span>. يرجى التحقق من صندوق الوارد والضغط على الرابط لتأكيد حسابك.</>
+              ) : (
+                <>We&apos;ve sent a confirmation link to{" "}
+                <span className="text-white">{email}</span>. Please check your
+                inbox and click the link to verify your account.</>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -160,7 +174,7 @@ function SignupPageInner() {
                 variant="outline"
                 className="w-full border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
               >
-                Back to sign in
+                {isAr ? "العودة لتسجيل الدخول" : "Back to sign in"}
               </Button>
             </Link>
           </CardContent>
@@ -187,12 +201,12 @@ function SignupPageInner() {
             )}
           </div>
           <CardTitle className="text-xl text-white">
-            {inviteToken ? "Create account & join" : "Create account"}
+            {inviteToken ? (isAr ? "إنشاء حساب والانضمام" : "Create account & join") : (isAr ? "إنشاء حساب" : "Create account")}
           </CardTitle>
           <CardDescription className="text-slate-400">
             {inviteToken
-              ? "Verify your email, then accept the invitation to join your team."
-              : `Get started with ${settings.site_name} for WhatsApp Auto`}
+              ? (isAr ? "قم بتأكيد بريدك الإلكتروني، ثم اقبل الدعوة للانضمام إلى الفريق." : "Verify your email, then accept the invitation to join your team.")
+              : (isAr ? `ابدأ مع ${settings.site_name} لأتمتة واتساب` : `Get started with ${settings.site_name} for WhatsApp Auto`)}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -205,12 +219,12 @@ function SignupPageInner() {
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="fullName" className="text-slate-300">
-                Full name
+                {isAr ? "الاسم الكامل" : "Full name"}
               </Label>
               <Input
                 id="fullName"
                 type="text"
-                placeholder="John Doe"
+                placeholder={isAr ? "الاسم الكامل" : "John Doe"}
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 required
@@ -220,7 +234,7 @@ function SignupPageInner() {
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="email" className="text-slate-300">
-                Email
+                {isAr ? "البريد الإلكتروني" : "Email"}
               </Label>
               <Input
                 id="email"
@@ -235,12 +249,12 @@ function SignupPageInner() {
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="password" className="text-slate-300">
-                Password
+                {isAr ? "كلمة المرور" : "Password"}
               </Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="At least 6 characters"
+                placeholder={isAr ? "6 أحرف على الأقل" : "At least 6 characters"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -250,12 +264,12 @@ function SignupPageInner() {
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="confirmPassword" className="text-slate-300">
-                Confirm password
+                {isAr ? "تأكيد كلمة المرور" : "Confirm password"}
               </Label>
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="Repeat your password"
+                placeholder={isAr ? "أعد كتابة كلمة المرور" : "Repeat your password"}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -263,12 +277,56 @@ function SignupPageInner() {
               />
             </div>
 
+            <div className="flex flex-col gap-3 my-2 bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <div className="relative flex items-center justify-center mt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={acceptTerms}
+                    onChange={(e) => setAcceptTerms(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <div className="h-5 w-5 rounded border border-slate-600 bg-slate-800 peer-checked:bg-primary peer-checked:border-primary transition-colors flex items-center justify-center">
+                    <CheckCircle className="h-3.5 w-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+                <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
+                  {isAr ? (
+                    <>أوافق على <Link href="/p/terms" target="_blank" className="text-primary hover:underline">شروط الخدمة (Terms of Service)</Link></>
+                  ) : (
+                    <>I agree to the <Link href="/p/terms" target="_blank" className="text-primary hover:underline">Terms of Service</Link></>
+                  )}
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <div className="relative flex items-center justify-center mt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={acceptPrivacy}
+                    onChange={(e) => setAcceptPrivacy(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <div className="h-5 w-5 rounded border border-slate-600 bg-slate-800 peer-checked:bg-primary peer-checked:border-primary transition-colors flex items-center justify-center">
+                    <CheckCircle className="h-3.5 w-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+                <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
+                  {isAr ? (
+                    <>أوافق على <Link href="/p/privacy" target="_blank" className="text-primary hover:underline">سياسة الخصوصية (Privacy Policy)</Link></>
+                  ) : (
+                    <>I agree to the <Link href="/p/privacy" target="_blank" className="text-primary hover:underline">Privacy Policy</Link></>
+                  )}
+                </span>
+              </label>
+            </div>
+
             <Button
               type="submit"
               disabled={loading || telegramLoading}
               className="mt-2 h-12 md:h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              {loading ? "Creating account..." : "Create account"}
+              {loading ? (isAr ? "جاري إنشاء الحساب..." : "Creating account...") : (isAr ? "إنشاء حساب" : "Create account")}
             </Button>
           </form>
 
@@ -278,24 +336,38 @@ function SignupPageInner() {
               <div className="relative my-4 flex items-center justify-center">
                 <div className="absolute w-full border-t border-slate-800" />
                 <span className="relative bg-slate-900 px-3 text-xs text-slate-500 uppercase">
-                  أو التسجيل عبر تليجرام
+                  {isAr ? "أو التسجيل عبر تليجرام" : "Or sign up with Telegram"}
                 </span>
               </div>
-              {telegramLoading ? (
-                <div className="flex justify-center py-2">
-                  <Loader2 className="h-6 w-6 animate-spin text-violet-400" />
+              <div className="relative mt-2">
+                {(!acceptTerms || !acceptPrivacy) && (
+                  <div
+                    className="absolute inset-0 z-10 flex items-center justify-center cursor-not-allowed group"
+                    onClick={() => setError(isAr ? "يجب الموافقة على شروط الخدمة وسياسة الخصوصية لإنشاء حساب عبر تليجرام." : "You must agree to the Terms and Privacy Policy to sign up with Telegram.")}
+                  >
+                    <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 text-white text-xs py-1 px-3 rounded shadow-lg pointer-events-none whitespace-nowrap">
+                      {isAr ? "الرجاء الموافقة على الشروط والخصوصية أولاً" : "Please accept the Terms and Privacy Policy first"}
+                    </div>
+                  </div>
+                )}
+                <div className={(!acceptTerms || !acceptPrivacy) ? "opacity-40 grayscale pointer-events-none transition-all" : "transition-all"}>
+                  {telegramLoading ? (
+                    <div className="flex justify-center py-2">
+                      <Loader2 className="h-6 w-6 animate-spin text-violet-400" />
+                    </div>
+                  ) : (
+                    <TelegramLoginWidget
+                      botUsername={process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME}
+                      onAuth={handleTelegramAuth}
+                    />
+                  )}
                 </div>
-              ) : (
-                <TelegramLoginWidget
-                  botUsername={process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME}
-                  onAuth={handleTelegramAuth}
-                />
-              )}
+              </div>
             </>
           )}
 
           <p className="mt-6 text-center text-sm text-slate-400">
-            Already have an account?{" "}
+            {isAr ? "لديك حساب بالفعل؟ " : "Already have an account? "}
             <Link
               href={
                 inviteToken
@@ -304,7 +376,7 @@ function SignupPageInner() {
               }
               className="text-primary hover:text-primary/80"
             >
-              Sign in
+              {isAr ? "تسجيل الدخول" : "Sign in"}
             </Link>
           </p>
         </CardContent>

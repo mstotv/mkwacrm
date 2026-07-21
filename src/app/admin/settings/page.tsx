@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Palette, Globe, Plus, Trash2, Save, Loader2, Shield, Upload, RefreshCw, LayoutTemplate } from 'lucide-react';
 import { toast } from 'sonner';
+import { SitePagesPanel } from '@/components/settings/site-pages-panel';
 
 interface ThemeColors {
   primary: string;
@@ -948,6 +949,12 @@ export default function AdminSettingsPage() {
             </button>
           </div>
         </form>
+      )}
+
+      {activeTab === 'landing' && (
+        <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-6">
+          <SitePagesPanel />
+        </div>
       )}
     </div>
   );

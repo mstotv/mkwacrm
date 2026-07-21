@@ -331,6 +331,7 @@ export default function LandingPage() {
 
   const [dbSettings, setDbSettings] = useState<any>(null)
   const [dbPlans, setDbPlans] = useState<any[]>([])
+  const [isLoaded, setIsLoaded] = useState(false)
 
   const lang = language
   const isRtl = lang === 'ar'
@@ -366,6 +367,8 @@ export default function LandingPage() {
         }
       } catch (err) {
         console.error('Error loading landing page data:', err)
+      } finally {
+        setIsLoaded(true)
       }
     }
     loadLandingData()
@@ -1459,32 +1462,38 @@ export default function LandingPage() {
           <span className={isYearly ? 'active' : ''}>{t.pricing.yearly}</span>
         </div>
         <div className="ld-pricing-grid">
-          {t.pricing.plans.map((plan: any, i: number) => (
-            <div key={i} className={`ld-plan-card ${plan.popular ? 'popular' : ''} ld-animate ld-animate-d${i + 1}`}>
-              {plan.popular && <div className="ld-plan-popular-badge">{t.pricing.popular}</div>}
-              <div className="ld-plan-name">{plan.name}</div>
-              <div className="ld-plan-price">
-                {isYearly ? plan.priceYearly : plan.price}
-                <small>
-                  {isYearly 
-                    ? (lang === 'ar' ? ' / سنوياً' : ' / year') 
-                    : (lang === 'ar' ? ' / شهرياً' : ' / month')}
-                </small>
-              </div>
-              <div className="ld-plan-desc">{plan.desc}</div>
-              <ul className="ld-plan-features">
-                {plan.features.map((f: any, fi: number) => (
-                  <li key={fi}><Check size={16} /> {f}</li>
-                ))}
-              </ul>
-              <Link
-                href="/signup"
-                className={`ld-plan-cta ${plan.popular ? 'primary' : 'outline'}`}
-              >
-                {i === 2 ? t.pricing.ctaEnterprise : t.pricing.cta}
-              </Link>
+          {!isLoaded ? (
+            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'center', padding: '4rem 0' }}>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500" />
             </div>
-          ))}
+          ) : (
+            t.pricing.plans.map((plan: any, i: number) => (
+              <div key={i} className={`ld-plan-card ${plan.popular ? 'popular' : ''} ld-animate ld-animate-d${i + 1}`}>
+                {plan.popular && <div className="ld-plan-popular-badge">{t.pricing.popular}</div>}
+                <div className="ld-plan-name">{plan.name}</div>
+                <div className="ld-plan-price">
+                  {isYearly ? plan.priceYearly : plan.price}
+                  <small>
+                    {isYearly 
+                      ? (lang === 'ar' ? ' / سنوياً' : ' / year') 
+                      : (lang === 'ar' ? ' / شهرياً' : ' / month')}
+                  </small>
+                </div>
+                <div className="ld-plan-desc">{plan.desc}</div>
+                <ul className="ld-plan-features">
+                  {plan.features.map((f: any, fi: number) => (
+                    <li key={fi}><Check size={16} /> {f}</li>
+                  ))}
+                </ul>
+                <Link
+                  href="/signup"
+                  className={`ld-plan-cta ${plan.popular ? 'primary' : 'outline'}`}
+                >
+                  {i === 2 ? t.pricing.ctaEnterprise : t.pricing.cta}
+                </Link>
+              </div>
+            ))
+          )}
         </div>
       </section>
 
@@ -1505,18 +1514,18 @@ export default function LandingPage() {
               <h4>{t.footer.product}</h4>
               <a href="#features">{t.footer.links.features}</a>
               <a href="#pricing">{t.footer.links.pricing}</a>
-              <a href="#">{t.footer.links.docs}</a>
+              <Link href="/p/docs">{t.footer.links.docs}</Link>
             </div>
             <div className="ld-footer-col">
               <h4>{t.footer.company}</h4>
-              <a href="#">{t.footer.links.about}</a>
-              <a href="#">{t.footer.links.contact}</a>
-              <a href="#">{t.footer.links.blog}</a>
+              <Link href="/p/about">{t.footer.links.about}</Link>
+              <Link href="/p/contact">{t.footer.links.contact}</Link>
+              <Link href="/p/blog">{t.footer.links.blog}</Link>
             </div>
             <div className="ld-footer-col">
               <h4>{t.footer.legal}</h4>
-              <a href="#">{t.footer.links.privacy}</a>
-              <a href="#">{t.footer.links.terms}</a>
+              <Link href="/p/privacy">{t.footer.links.privacy}</Link>
+              <Link href="/p/terms">{t.footer.links.terms}</Link>
             </div>
           </div>
           <div className="ld-footer-bottom">
