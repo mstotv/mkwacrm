@@ -87,6 +87,7 @@ interface MessageThreadProps {
    * working; the button is only rendered when this is provided.
    */
   onRefresh?: () => void;
+  onContactClick?: () => void;
 }
 
 function formatDateSeparator(dateStr: string): string {
@@ -143,6 +144,7 @@ export function MessageThread({
   onBack,
   resyncToken = 0,
   onRefresh,
+  onContactClick,
 }: MessageThreadProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -775,13 +777,19 @@ export function MessageThread({
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-medium text-white">
-            {displayName.charAt(0).toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-white">{displayName}</h2>
-            <p className="truncate text-xs text-slate-400">{contact.phone}</p>
-          </div>
+          <button
+            type="button"
+            onClick={onContactClick}
+            className="flex min-w-0 items-center gap-2 sm:gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md lg:cursor-default lg:pointer-events-none"
+          >
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-medium text-white">
+              {displayName.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-semibold text-white">{displayName}</h2>
+              <p className="truncate text-xs text-slate-400">{contact.phone}</p>
+            </div>
+          </button>
           {/* Session timer badge — hidden on the narrowest phones so
               the name + back arrow keep their room. */}
           <Badge

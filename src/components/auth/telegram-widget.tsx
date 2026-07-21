@@ -30,6 +30,11 @@ export function TelegramLoginWidget({
   usePic = true,
 }: TelegramLoginWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const onAuthRef = useRef(onAuth);
+
+  useEffect(() => {
+    onAuthRef.current = onAuth;
+  }, [onAuth]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -47,7 +52,7 @@ export function TelegramLoginWidget({
     // Set callback in global scope
     const callbackName = `onTelegramAuth_${Math.random().toString(36).substring(2, 9)}`;
     (window as any)[callbackName] = (user: TelegramUser) => {
-      onAuth(user);
+      onAuthRef.current(user);
     };
 
     // Create the script tag
@@ -70,7 +75,7 @@ export function TelegramLoginWidget({
     return () => {
       delete (window as any)[callbackName];
     };
-  }, [botUsername, onAuth, size, cornerRadius, requestAccess, usePic]);
+  }, [botUsername, size, cornerRadius, requestAccess, usePic]);
 
   return (
     <div className="flex flex-col items-center justify-center py-2">

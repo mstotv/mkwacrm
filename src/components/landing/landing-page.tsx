@@ -1267,6 +1267,7 @@ export default function LandingPage() {
           .ld-plan-card.popular { transform: none; }
           .ld-plan-card.popular:hover { transform: translateY(-6px); }
           .ld-footer-grid { grid-template-columns: 1.5fr 1fr 1fr; gap: 2rem; }
+          .ld-hero { padding: 9rem 2rem 5rem; }
         }
         @media (max-width: 768px) {
           .ld-nav-links { display: none; }
@@ -1275,11 +1276,17 @@ export default function LandingPage() {
           .ld-pricing-grid { grid-template-columns: 1fr; max-width: 440px; margin: 0 auto; }
           .ld-footer-grid { grid-template-columns: 1fr 1fr; }
           .ld-hero-stats { gap: 3rem; }
+          .ld-hero { padding: 8rem 1.5rem 4rem; }
+          .ld-hero h1 { font-size: clamp(2rem, 7vw, 3rem); }
         }
         @media (max-width: 480px) {
           .ld-footer-grid { grid-template-columns: 1fr; }
-          .ld-hero { padding-top: 9rem; }
+          .ld-hero { padding: 6rem 1rem 3rem; }
           .ld-hero-stats { gap: 2rem; flex-direction: column; }
+          .ld-hero-ctas { flex-direction: column; width: 100%; }
+          .ld-hero-ctas > * { width: 100%; }
+          .ld-hero h1 { font-size: 1.85rem; }
+          .ld-nav { padding: 1rem; }
         }
 
         /* ===== RTL SUPPORT ===== */

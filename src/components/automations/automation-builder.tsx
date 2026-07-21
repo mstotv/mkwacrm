@@ -37,6 +37,8 @@ import {
   HelpCircle,
 } from "lucide-react"
 
+import { Badge } from "@/components/ui/badge"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -635,6 +637,21 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
 }
 
 // ------------------------------------------------------------
+// Hooks
+// ------------------------------------------------------------
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024)
+    check()
+    window.addEventListener("resize", check)
+    return () => window.removeEventListener("resize", check)
+  }, [])
+  return isMobile
+}
+
+// ------------------------------------------------------------
 // Trigger card
 // ------------------------------------------------------------
 
@@ -650,6 +667,59 @@ function TriggerCard({
   onConfigChange: (c: Record<string, unknown>) => void
 }) {
   const [open, setOpen] = useState(false)
+  const isMobile = useIsMobile()
+  
+  const triggerSettings = (
+    <>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-400">
+          Trigger type
+        </label>
+        <select
+          value={type}
+          onChange={(e) => onTypeChange(e.target.value as AutomationTriggerType)}
+          className="w-full rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-white focus:border-primary focus:outline-none"
+        >
+          {TRIGGER_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-[11px] text-slate-500">
+          {TRIGGER_OPTIONS.find((o) => o.value === type)?.hint}
+        </p>
+      </div>
+      {type === "keyword_match" && (
+        <KeywordMatchConfig
+          config={config as unknown as KeywordMatchTriggerConfig}
+          onChange={onConfigChange}
+        />
+      )}
+      {type === "tag_added" && (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-400">
+            Tag
+          </label>
+          <TagSelect
+            value={(config.tag_id as string) ?? ""}
+            onChange={(v) => onConfigChange({ ...config, tag_id: v })}
+          />
+        </div>
+      )}
+      {type === "time_based" && (
+        <Input
+          placeholder="Cron expression or HH:mm"
+          value={(config.schedule as string) ?? ""}
+          onChange={(e) =>
+            onConfigChange({ ...config, schedule: e.target.value })
+          }
+          className="bg-slate-800 text-white"
+        />
+      )}
+    </>
+  );
+
   return (
     // Card width: full on mobile, fixed 320px on sm+. The canvas wrapper
     // (max-w-2xl + px-4) keeps this tidy on tablet/desktop.
@@ -674,55 +744,20 @@ function TriggerCard({
           />
         </button>
         {open && (
-          <div className="space-y-3 border-t border-slate-800 px-4 py-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-400">
-                Trigger type
-              </label>
-              <select
-                value={type}
-                onChange={(e) => onTypeChange(e.target.value as AutomationTriggerType)}
-                className="w-full rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-white focus:border-primary focus:outline-none"
-              >
-                {TRIGGER_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-[11px] text-slate-500">
-                {TRIGGER_OPTIONS.find((o) => o.value === type)?.hint}
-              </p>
-            </div>
-            {type === "keyword_match" && (
-              <KeywordMatchConfig
-                config={config as unknown as KeywordMatchTriggerConfig}
-                onChange={onConfigChange}
-              />
-            )}
-            {type === "tag_added" && (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
-                  Tag
-                </label>
-                <TagSelect
-                  value={(config.tag_id as string) ?? ""}
-                  onChange={(v) => onConfigChange({ ...config, tag_id: v })}
-                />
-              </div>
-            )}
-            {type === "time_based" && (
-              <Input
-                placeholder="Cron expression or HH:mm"
-                value={(config.schedule as string) ?? ""}
-                onChange={(e) =>
-                  onConfigChange({ ...config, schedule: e.target.value })
-                }
-                className="bg-slate-800 text-white"
-              />
-            )}
+          <div className="hidden lg:block space-y-3 border-t border-slate-800 px-4 py-3">
+            {triggerSettings}
           </div>
         )}
+        <Sheet open={open && isMobile} onOpenChange={setOpen}>
+          <SheetContent side="bottom" className="lg:hidden max-h-[85vh] overflow-y-auto bg-slate-900 border-slate-800">
+            <SheetHeader className="mb-4 text-left">
+              <SheetTitle className="text-white">Trigger Settings</SheetTitle>
+            </SheetHeader>
+            <div className="space-y-4 pb-8">
+              {triggerSettings}
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </div>
   )
@@ -858,6 +893,8 @@ function StepRenderer({
   parentPath: StepPath
 } & Omit<StepListProps, "steps" | "parentPath">) {
   const { language: lang } = useLanguage()
+  const isMobile = useIsMobile()
+  
   const path: StepPath = [
     ...parentPath,
     parentScope.kind === "root"
@@ -904,8 +941,9 @@ function StepRenderer({
               className={cn("h-4 w-4 text-slate-400 transition-transform", expanded && "rotate-180")}
             />
           </button>
+          {/* Desktop inline */}
           {expanded && (
-            <div className="border-t border-slate-800 px-4 py-3">
+            <div className="hidden lg:block space-y-3 border-t border-slate-800 px-4 py-3">
               <StepEditor
                 step={step}
                 onChange={(next) => props.updateStep(path, () => next)}
@@ -942,6 +980,57 @@ function StepRenderer({
               </div>
             </div>
           )}
+
+          {/* Mobile sheet */}
+          <Sheet open={expanded && isMobile} onOpenChange={(o) => props.setExpandedId(o ? step.cid : null)}>
+            <SheetContent side="bottom" className="lg:hidden max-h-[85vh] overflow-y-auto bg-slate-900 border-slate-800">
+              <SheetHeader className="mb-4 text-left">
+                <SheetTitle className="text-white flex items-center gap-2">
+                  <Icon className="h-5 w-5" />
+                  {meta.label}
+                </SheetTitle>
+              </SheetHeader>
+              <div className="space-y-4 pb-8">
+                <StepEditor
+                  step={step}
+                  onChange={(next) => props.updateStep(path, () => next)}
+                />
+                <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-800 pt-3">
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={index === 0}
+                      aria-label="Move up"
+                      onClick={() => props.moveStepAt(path, -1)}
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={index === total - 1}
+                      aria-label="Move down"
+                      onClick={() => props.moveStepAt(path, 1)}
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      props.deleteStepAt(path);
+                      props.setExpandedId(null);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
 
         {isCondition && (

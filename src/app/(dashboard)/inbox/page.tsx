@@ -11,6 +11,7 @@ import { ContactSidebar } from "@/components/inbox/contact-sidebar";
 import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 export default function InboxPage() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function InboxPage() {
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(
     null
   );
+  const [isContactSheetOpen, setIsContactSheetOpen] = useState(false);
   /**
    * Bumped whenever we want children (ConversationList, MessageThread)
    * to refetch from the DB — used as a safety net against missed
@@ -575,6 +577,7 @@ export default function InboxPage() {
             onBack={handleCloseConversation}
             resyncToken={resyncToken}
             onRefresh={handleManualRefresh}
+            onContactClick={() => setIsContactSheetOpen(true)}
           />
         </div>
 
@@ -582,6 +585,13 @@ export default function InboxPage() {
         <div className="hidden lg:block">
           <ContactSidebar contact={activeContact} />
         </div>
+
+        {/* Right panel: Contact sidebar — mobile only (Sheet). */}
+        <Sheet open={isContactSheetOpen} onOpenChange={setIsContactSheetOpen}>
+          <SheetContent side="right" className="w-[85vw] p-0 sm:w-[400px]">
+            <ContactSidebar contact={activeContact} />
+          </SheetContent>
+        </Sheet>
       </div>
     </div>
   );

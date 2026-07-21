@@ -144,7 +144,7 @@ function SettingsPageInner() {
         </div>
 
         {/* Desktop TabsList (lg breakpoint and wider) */}
-        <TabsList className="hidden lg:flex border border-slate-700 bg-slate-900 flex-wrap h-auto gap-1 p-1">
+        <TabsList className="hidden lg:flex border border-slate-700 bg-slate-900 flex-nowrap overflow-x-auto overflow-y-hidden scrollbar-hide justify-start w-full h-auto gap-1 p-1">
           <TabsTrigger
             value="profile"
             className="data-active:text-primary text-slate-400 data-active:bg-slate-800"
@@ -265,20 +265,20 @@ function SettingsPageInner() {
 
         <TabsContent value="integrations" className="space-y-6">
           <Tabs defaultValue="ai" className="w-full">
-            <TabsList className="border border-slate-800 bg-slate-950/40 p-1 mb-6 flex-wrap h-auto gap-1">
-              <TabsTrigger value="ai" className="text-xs py-1.5 px-3">
+            <TabsList className="border border-slate-800 bg-slate-950/40 p-1 mb-6 flex flex-nowrap overflow-x-auto overflow-y-hidden scrollbar-hide w-full justify-start h-auto gap-1">
+              <TabsTrigger value="ai" className="text-xs py-1.5 px-3 whitespace-nowrap shrink-0">
                 <Brain className={`size-3.5 ${language === 'ar' ? 'ml-1' : 'mr-1'}`} />
                 {t('settings.aiTab')}
               </TabsTrigger>
-              <TabsTrigger value="google-sheets" className="text-xs py-1.5 px-3">
+              <TabsTrigger value="google-sheets" className="text-xs py-1.5 px-3 whitespace-nowrap shrink-0">
                 <FileSpreadsheet className={`size-3.5 ${language === 'ar' ? 'ml-1' : 'mr-1'}`} />
                 Google Sheets
               </TabsTrigger>
-              <TabsTrigger value="google-calendar" className="text-xs py-1.5 px-3">
+              <TabsTrigger value="google-calendar" className="text-xs py-1.5 px-3 whitespace-nowrap shrink-0">
                 <Calendar className={`size-3.5 ${language === 'ar' ? 'ml-1' : 'mr-1'}`} />
                 Google Calendar
               </TabsTrigger>
-              <TabsTrigger value="telegram-notifications" className="text-xs py-1.5 px-3">
+              <TabsTrigger value="telegram-notifications" className="text-xs py-1.5 px-3 whitespace-nowrap shrink-0">
                 <Bell className={`size-3.5 ${language === 'ar' ? 'ml-1' : 'mr-1'}`} />
                 {t('settings.telegramTab')}
               </TabsTrigger>
