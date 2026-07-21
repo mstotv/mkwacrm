@@ -15,6 +15,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { SentimentBadge } from "./sentiment-badge";
+import { IntentBadge } from "./intent-badge";
+import { CategoryBadge } from "./category-badge";
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -43,6 +46,34 @@ const FILTER_OPTIONS: { label: string; value: ConversationStatus | "all" }[] = [
   { label: "Closed", value: "closed" },
 ];
 
+const SENTIMENT_FILTER_OPTIONS: { label: string; value: "all" | "positive" | "neutral" | "negative" | "frustrated" }[] = [
+  { label: "All Sentiments", value: "all" },
+  { label: "Frustrated 😡", value: "frustrated" },
+  { label: "Negative 😞", value: "negative" },
+  { label: "Neutral 😐", value: "neutral" },
+  { label: "Positive 😊", value: "positive" },
+];
+
+const INTENT_FILTER_OPTIONS: { label: string; value: "all" | "ready_to_buy" | "hesitant" | "not_interested" | "wants_appointment" | "info_seeking" | "unknown" }[] = [
+  { label: "All Intents", value: "all" },
+  { label: "Ready to Buy 🛒", value: "ready_to_buy" },
+  { label: "Hesitant 🤔", value: "hesitant" },
+  { label: "Not Interested 🚫", value: "not_interested" },
+  { label: "Wants Appointment 📅", value: "wants_appointment" },
+  { label: "Info Seeking ℹ️", value: "info_seeking" },
+  { label: "Unknown ❓", value: "unknown" },
+];
+
+const CATEGORY_FILTER_OPTIONS: { label: string; value: "all" | "sales" | "support" | "complaint" | "refund" | "general" | "unknown" }[] = [
+  { label: "All Categories", value: "all" },
+  { label: "Sales 💰", value: "sales" },
+  { label: "Support 🛠️", value: "support" },
+  { label: "Complaint ⚠️", value: "complaint" },
+  { label: "Refund 💳", value: "refund" },
+  { label: "General ℹ️", value: "general" },
+  { label: "Unknown ❓", value: "unknown" },
+];
+
 export function ConversationList({
   activeConversationId,
   onSelect,
@@ -52,6 +83,9 @@ export function ConversationList({
 }: ConversationListProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ConversationStatus | "all">("all");
+  const [sentimentFilter, setSentimentFilter] = useState<"all" | "positive" | "neutral" | "negative" | "frustrated">("all");
+  const [intentFilter, setIntentFilter] = useState<"all" | "ready_to_buy" | "hesitant" | "not_interested" | "wants_appointment" | "info_seeking" | "unknown">("all");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | "sales" | "support" | "complaint" | "refund" | "general" | "unknown">("all");
   const [loading, setLoading] = useState(true);
 
   // Keep the latest callback in a ref so the fetch effect below can
@@ -114,6 +148,18 @@ export function ConversationList({
       result = result.filter((c) => c.status === filter);
     }
 
+    if (sentimentFilter !== "all") {
+      result = result.filter((c) => c.sentiment === sentimentFilter);
+    }
+
+    if (intentFilter !== "all") {
+      result = result.filter((c) => c.intent === intentFilter);
+    }
+
+    if (categoryFilter !== "all") {
+      result = result.filter((c) => c.category === categoryFilter);
+    }
+
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter((c) => {
@@ -125,7 +171,7 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, filter, search]);
+  }, [conversations, filter, sentimentFilter, intentFilter, categoryFilter, search]);
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,6 +188,9 @@ export function ConversationList({
   );
 
   const activeFilter = FILTER_OPTIONS.find((o) => o.value === filter);
+  const activeSentimentFilter = SENTIMENT_FILTER_OPTIONS.find((o) => o.value === sentimentFilter);
+  const activeIntentFilter = INTENT_FILTER_OPTIONS.find((o) => o.value === intentFilter);
+  const activeCategoryFilter = CATEGORY_FILTER_OPTIONS.find((o) => o.value === categoryFilter);
 
   return (
     // w-full on mobile so the list occupies the whole viewport when it's
@@ -160,31 +209,111 @@ export function ConversationList({
           />
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-slate-400 hover:text-white rounded-md hover:bg-slate-800">
-              {activeFilter?.label ?? "All"}
-              <ChevronDown className="h-3 w-3" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="border-slate-700 bg-slate-800"
-          >
-            {FILTER_OPTIONS.map((opt) => (
-              <DropdownMenuItem
-                key={opt.value}
-                onClick={() => setFilter(opt.value)}
-                className={cn(
-                  "text-sm",
-                  filter === opt.value
-                    ? "text-primary"
-                    : "text-slate-300"
-                )}
-              >
-                {opt.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-1 flex-wrap">
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-slate-400 hover:text-white rounded-md hover:bg-slate-800">
+                {activeFilter?.label ?? "All"}
+                <ChevronDown className="h-3 w-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="border-slate-700 bg-slate-800"
+            >
+              {FILTER_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onClick={() => setFilter(opt.value)}
+                  className={cn(
+                    "text-sm",
+                    filter === opt.value
+                      ? "text-primary"
+                      : "text-slate-300"
+                  )}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-slate-400 hover:text-white rounded-md hover:bg-slate-800">
+                {activeSentimentFilter?.label ?? "All Sentiments"}
+                <ChevronDown className="h-3 w-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="border-slate-700 bg-slate-800"
+            >
+              {SENTIMENT_FILTER_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onClick={() => setSentimentFilter(opt.value)}
+                  className={cn(
+                    "text-sm",
+                    sentimentFilter === opt.value
+                      ? "text-primary"
+                      : "text-slate-300"
+                  )}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-slate-400 hover:text-white rounded-md hover:bg-slate-800">
+                {activeIntentFilter?.label ?? "All Intents"}
+                <ChevronDown className="h-3 w-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="border-slate-700 bg-slate-800"
+            >
+              {INTENT_FILTER_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onClick={() => setIntentFilter(opt.value)}
+                  className={cn(
+                    "text-sm",
+                    intentFilter === opt.value
+                      ? "text-primary"
+                      : "text-slate-300"
+                  )}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-slate-400 hover:text-white rounded-md hover:bg-slate-800">
+                {activeCategoryFilter?.label ?? "All Categories"}
+                <ChevronDown className="h-3 w-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="border-slate-700 bg-slate-800"
+            >
+              {CATEGORY_FILTER_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onClick={() => setCategoryFilter(opt.value)}
+                  className={cn(
+                    "text-sm",
+                    categoryFilter === opt.value
+                      ? "text-primary"
+                      : "text-slate-300"
+                  )}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Conversation Items.
@@ -283,6 +412,18 @@ function ConversationItem({
                 {conversation.unread_count}
               </span>
             )}
+            <div className="flex gap-1">
+              <SentimentBadge 
+                sentiment={conversation.sentiment} 
+                score={conversation.sentiment_score} 
+              />
+              <IntentBadge
+                intent={conversation.intent}
+              />
+              <CategoryBadge
+                category={conversation.category}
+              />
+            </div>
             <span
               className={cn(
                 "h-2 w-2 rounded-full",

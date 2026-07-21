@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useSiteSettings } from '@/hooks/use-site-settings';
+import { useTheme } from 'next-themes';
+import { useAdminLanguage } from '@/contexts/admin-language-provider';
+import { adminDict } from '@/locales/admin';
 import {
   LayoutDashboard,
   Users,
@@ -11,36 +14,113 @@ import {
   BarChart3,
   Settings,
   ChevronRight,
+  ChevronLeft,
   Zap,
+  Moon,
+  Sun,
+  Globe,
+  Key
 } from 'lucide-react';
-
-const NAV_ITEMS = [
-  { href: '/admin', label: 'لوحة التحكم', icon: LayoutDashboard, exact: true },
-  { href: '/admin/users', label: 'إدارة المستخدمين', icon: Users },
-  { href: '/admin/subscriptions', label: 'الاشتراكات', icon: CreditCard },
-  { href: '/admin/analytics', label: 'الإحصائيات', icon: BarChart3 },
-  { href: '/admin/settings', label: 'إعدادات المنصة', icon: Settings },
-];
+import { useEffect, useState, useRef, useCallback } from 'react';
 
 export function AdminSidebar() {
   const pathname = usePathname();
   const { profile } = useAuth();
   const { settings } = useSiteSettings();
+  const { theme, setTheme } = useTheme();
+  const { lang, setLang, dir } = useAdminLanguage();
+  const t = adminDict[lang].sidebar;
+
+  const [mounted, setMounted] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(280); // Default to a bit wider (280px)
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    const savedWidth = localStorage.getItem('adminSidebarWidth');
+    if (savedWidth) {
+      setSidebarWidth(Number(savedWidth));
+    }
+  }, []);
+
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    setIsResizing(true);
+    e.preventDefault();
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback(
+    (e: MouseEvent) => {
+      if (isResizing && sidebarRef.current) {
+        let newWidth;
+        if (dir === 'rtl') {
+          // In RTL, the mouse X decreases as the sidebar grows
+          const sidebarRightEdge = sidebarRef.current.getBoundingClientRect().right;
+          newWidth = sidebarRightEdge - e.clientX;
+        } else {
+          // In LTR, the mouse X increases as the sidebar grows
+          const sidebarLeftEdge = sidebarRef.current.getBoundingClientRect().left;
+          newWidth = e.clientX - sidebarLeftEdge;
+        }
+        
+        if (newWidth >= 240 && newWidth <= 600) {
+          setSidebarWidth(newWidth);
+          localStorage.setItem('adminSidebarWidth', newWidth.toString());
+        }
+      }
+    },
+    [isResizing, dir]
+  );
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResizing);
+    }
+    return () => {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    };
+  }, [isResizing, resize, stopResizing]);
 
   const role = profile?.platform_role;
 
-  // Assistant admin has no specific routes left after removing tickets, so they see nothing or just the dashboard
+  const NAV_ITEMS = [
+    { href: '/admin', label: t.dashboard, icon: LayoutDashboard, exact: true },
+    { href: '/admin/users', label: t.users, icon: Users },
+    { href: '/admin/subscriptions', label: t.subscriptions, icon: CreditCard },
+    { href: '/admin/features', label: t.features, icon: Key },
+    { href: '/admin/analytics', label: t.analytics, icon: BarChart3 },
+    { href: '/admin/settings', label: t.settings, icon: Settings },
+  ];
+
   const filteredItems = NAV_ITEMS.filter((item) => {
     if (role === 'assistant_admin') {
-      return false; // Or return item.href === '/admin' if you want them to see the dashboard
+      return false; 
     }
     return true;
   });
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-slate-800 bg-slate-950">
+    <aside 
+      ref={sidebarRef}
+      style={{ width: `${sidebarWidth}px` }}
+      className="relative flex h-full flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 transition-colors duration-200 shrink-0"
+    >
+      {/* Resizer Handle */}
+      <div 
+        onMouseDown={startResizing}
+        className={`absolute top-0 bottom-0 w-2 cursor-col-resize flex items-center justify-center transition-colors group z-50 ${dir === 'rtl' ? '-left-1' : '-right-1'}`}
+      >
+        <div className={`h-full w-0.5 bg-transparent group-hover:bg-violet-500/50 ${isResizing ? 'bg-violet-500' : ''}`} />
+      </div>
+
       {/* Logo */}
-      <div className="flex items-center gap-3 border-b border-slate-800 px-6 py-5">
+      <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 px-6 py-5">
         {settings.logo_url ? (
           <img src={settings.logo_url} alt="Logo" className="h-9 w-9 object-contain rounded-xl shrink-0" />
         ) : (
@@ -49,15 +129,15 @@ export function AdminSidebar() {
           </div>
         )}
         <div className="min-w-0">
-          <p className="text-sm font-bold text-white truncate">{settings.site_name}</p>
-          <p className="text-xs text-violet-400">
+          <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{settings.site_name}</p>
+          <p className="text-xs text-violet-600 dark:text-violet-400">
             {role === 'super_admin' ? 'Super Admin' : 'Assistant Admin'}
           </p>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-4">
+      <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
         {filteredItems.map((item) => {
           const isActive = item.exact
             ? pathname === item.href
@@ -69,25 +149,52 @@ export function AdminSidebar() {
               href={item.href}
               className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
                 isActive
-                  ? 'bg-violet-600/20 text-violet-300 ring-1 ring-violet-600/30'
-                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                  ? 'bg-violet-100 dark:bg-violet-600/20 text-violet-700 dark:text-violet-300 ring-1 ring-violet-200 dark:ring-violet-600/30'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
-              <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? 'text-violet-400' : ''}`} />
-              <span className="flex-1">{item.label}</span>
-              {isActive && <ChevronRight className="h-3.5 w-3.5 text-violet-400" />}
+              <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? 'text-violet-600 dark:text-violet-400' : ''}`} />
+              <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>
+              {isActive && (
+                dir === 'rtl' ? <ChevronLeft className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400 flex-shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400 flex-shrink-0" />
+              )}
             </Link>
           );
         })}
       </nav>
 
+      {/* Toggles (Language & Theme) */}
+      <div className="border-t border-slate-200 dark:border-slate-800 p-4 space-y-2">
+        {mounted && (
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="w-full flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-300"
+          >
+            <div className="flex items-center gap-2">
+              {theme === 'dark' ? <Sun className="h-4 w-4 flex-shrink-0" /> : <Moon className="h-4 w-4 flex-shrink-0" />}
+              <span className="whitespace-nowrap overflow-hidden text-ellipsis">{theme === 'dark' ? t.themeLight : t.themeDark}</span>
+            </div>
+          </button>
+        )}
+
+        <button
+          onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}
+          className="w-full flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-300"
+        >
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 flex-shrink-0" />
+            <span className="font-mono whitespace-nowrap overflow-hidden text-ellipsis">{t.languageSwitch}</span>
+          </div>
+        </button>
+      </div>
+
       {/* Back to App */}
-      <div className="border-t border-slate-800 p-4">
+      <div className="border-t border-slate-200 dark:border-slate-800 p-4">
         <Link
           href="/dashboard"
-          className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-500 transition hover:bg-slate-800 hover:text-slate-300"
+          className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300 whitespace-nowrap overflow-hidden text-ellipsis"
         >
-          ← العودة إلى التطبيق
+          {dir === 'rtl' ? '←' : '→'} {lang === 'ar' ? 'العودة إلى التطبيق' : 'Back to App'}
         </Link>
       </div>
     </aside>

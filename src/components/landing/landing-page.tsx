@@ -397,14 +397,27 @@ export default function LandingPage() {
     let plansItems: any = baseT.pricing.plans
     if (dbPlans && dbPlans.length > 0) {
       plansItems = dbPlans.map((p: any) => {
-        const pFeatures = lang === 'ar' ? (p.features_ar || []) : (p.features_en || [])
+        // Map the new features object array
+        let pFeatures = []
+        if (p.features && Array.isArray(p.features)) {
+          pFeatures = p.features.map((f: any) => {
+            const featureName = lang === 'ar' ? f.name_ar : f.name_en;
+            if (f.usage_limit > 0) return `${featureName} (${f.usage_limit})`;
+            if (f.usage_limit === -1) return `${featureName} (${lang === 'ar' ? 'غير محدود' : 'Unlimited'})`;
+            return featureName;
+          });
+        } else {
+          // Fallback to legacy
+          pFeatures = lang === 'ar' ? (p.features_ar || []) : (p.features_en || [])
+        }
+
         return {
           name: lang === 'ar' ? p.display_name : p.name.charAt(0).toUpperCase() + p.name.slice(1),
           price: `$${p.price_monthly}`,
           priceYearly: `$${p.price_yearly}`,
           period: lang === 'ar' ? '/شهر' : '/mo',
           desc: p.description || (lang === 'ar' ? `خطة اشتراك ${p.display_name}` : `${p.display_name} subscription plan.`),
-          popular: p.name === 'pro',
+          popular: p.highlighted || p.name === 'pro',
           features: pFeatures,
         }
       })

@@ -2,8 +2,28 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Plus, Check, Pencil, AlertCircle, Save, Loader2, Key, X } from 'lucide-react';
+import { Plus, Trash, Pencil, Check, X, Loader2, Save, Key, GripVertical, Sparkles, Zap, ArrowRight, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAdminLanguage } from '@/contexts/admin-language-provider';
+
+interface PlanModule {
+  feature_id: string;
+  name_ar: string;
+  name_en: string;
+  is_enabled: boolean;
+  usage_limit: number;
+  bulk_limit: number;
+  show_on_landing: boolean;
+}
+
+interface PlanAssignment {
+  feature_id: string;
+  is_enabled: boolean;
+  usage_limit: number;
+  bulk_limit: number;
+  show_on_landing: boolean;
+  feature?: { name_ar: string; name_en: string; sort_order: number };
+}
 
 interface Plan {
   id: string;
@@ -11,107 +31,177 @@ interface Plan {
   display_name: string;
   price_monthly: number;
   price_yearly: number;
-  limits: Record<string, number>;
   is_active: boolean;
-  features_ar?: string[];
-  features_en?: string[];
+  assignments?: PlanAssignment[];
+  highlighted?: boolean;
+  validity_days?: number;
   trial_period_days?: number;
-  billing_options?: Array<{ type: string; price: number; days?: number }>;
+  billing_options?: any[];
+  limits?: any;
 }
 
+const localDict = {
+  ar: {
+    title: 'باقات الاشتراكات',
+    desc: 'إدارة خطط SaaS، والمزايا العامة، وحدود الباقات',
+    addPackage: 'إضافة باقة',
+    loading: 'جاري التحميل...',
+    mostPopular: 'الأكثر شعبية',
+    mo: 'شهر',
+    yr: 'سنة',
+    enabledFeatures: 'المزايا المُفعلة',
+    feature: 'ميزة',
+    more: 'المزيد...',
+    noAssigned: 'لا توجد مزايا مخصصة',
+    editPackage: 'إعدادات الباقة',
+    active: 'نشط',
+    disabled: 'مُعطل',
+    manualTitle: 'تفعيل اشتراك يدوي',
+    manualDesc: 'قم بتعيين باقة لحساب معين وتوثيق الدفع خارج المنصة.',
+    accountUuid: 'معرف الحساب (UUID)',
+    package: 'الباقة',
+    duration: 'المدة',
+    activateBtn: 'تفعيل الاشتراك',
+    monthly30: 'شهري (30 يوم)',
+    yearly365: 'سنوي (365 يوم)',
+    everyDays: 'كل {days} يوم',
+    savePackage: 'حفظ التغييرات',
+    saving: 'جاري الحفظ...',
+    cancel: 'إلغاء',
+    createNew: 'إنشاء باقة جديدة',
+    editTitle: 'تعديل الباقة',
+    configLimits: 'تكوين حدود المزايا بناءً على المزايا العامة',
+    packageDetails: 'تفاصيل الباقة',
+    internalName: 'اسم الباقة (داخلي)',
+    displayName: 'اسم العرض',
+    monthlyPrice: 'السعر الشهري (USD)',
+    yearlyPrice: 'السعر السنوي (USD)',
+    validityDays: 'الصلاحية (بالأيام)',
+    availableToPurchase: 'متاحة للشراء',
+    highlightedPackage: 'باقة مميزة (Highlighted)',
+    featuresAndLimits: 'المزايا والحدود',
+    manageGlobal: 'إدارة المزايا العامة',
+    enable: 'تفعيل',
+    globalFeature: 'الميزة العامة',
+    usageLimit: 'حد الاستخدام',
+    bulkLimit: 'حد البث',
+    landingPage: 'صفحة الهبوط',
+    noFeatures: 'لم يتم العثور على مزايا. اذهب إلى المزايا العامة لإضافتها.',
+    unlimited: 'غير محدود',
+    disabledLimit: 'مُعطل',
+    toastLoadErr: 'حدث خطأ في تحميل خطط الأسعار',
+    toastActive: 'تم تفعيل الخطة',
+    toastDisabled: 'تم تعطيل الخطة',
+    toastReqFields: 'الرجاء إدخال الحقول المطلوبة',
+    toastUpdate: 'تم تحديث خطة الأسعار بنجاح',
+    toastAdd: 'تمت إضافة خطة الأسعار الجديدة بنجاح',
+    toastSaveErr: 'حدث خطأ أثناء حفظ الخطة: ',
+    confirmManual: 'تأكيد تفعيل الاشتراك اليدوي لهذا الحساب؟ (لن يتم سحب أي مبلغ، ولكن سيبدأ الاشتراك في النظام)',
+    toastManualOk: 'تم تفعيل الاشتراك يدويًا بنجاح وتوثيق عملية الدفع',
+    toastManualErr: 'حدث خطأ أثناء تفعيل الاشتراك: ',
+  },
+  en: {
+    title: 'Subscription Packages',
+    desc: 'Manage SaaS plans, global features, and package limits',
+    addPackage: 'Add Package',
+    loading: 'Loading...',
+    mostPopular: 'Most Popular',
+    mo: 'mo',
+    yr: 'yr',
+    enabledFeatures: 'Enabled Features',
+    feature: 'Feature',
+    more: 'more...',
+    noAssigned: 'No assigned features',
+    editPackage: 'Configure',
+    active: 'Active',
+    disabled: 'Disabled',
+    manualTitle: 'Manual Activation',
+    manualDesc: 'Assign a plan to an account and log an off-platform payment.',
+    accountUuid: 'Account UUID',
+    package: 'Package',
+    duration: 'Duration',
+    activateBtn: 'Activate Subscription',
+    monthly30: 'Monthly (30 days)',
+    yearly365: 'Yearly (365 days)',
+    everyDays: 'Every {days} days',
+    savePackage: 'Save Changes',
+    saving: 'Saving...',
+    cancel: 'Cancel',
+    createNew: 'Create New Package',
+    editTitle: 'Edit Package',
+    configLimits: 'Configure package limits based on global features',
+    packageDetails: 'Package Details',
+    internalName: 'Internal Name',
+    displayName: 'Display Name',
+    monthlyPrice: 'Monthly Price (USD)',
+    yearlyPrice: 'Yearly Price (USD)',
+    validityDays: 'Validity (Days)',
+    availableToPurchase: 'Available to Purchase',
+    highlightedPackage: 'Highlighted Package',
+    featuresAndLimits: 'Features & Limits',
+    manageGlobal: 'Manage Global Features',
+    enable: 'Enable',
+    globalFeature: 'Global Feature',
+    usageLimit: 'Usage limit',
+    bulkLimit: 'Bulk limit',
+    landingPage: 'Landing Page',
+    noFeatures: 'No features found. Go to Global Features to add them.',
+    unlimited: 'Unlimited',
+    disabledLimit: 'Disabled',
+    toastLoadErr: 'Failed to load plans',
+    toastActive: 'Plan activated',
+    toastDisabled: 'Plan disabled',
+    toastReqFields: 'Please fill required fields',
+    toastUpdate: 'Plan updated successfully',
+    toastAdd: 'New plan added successfully',
+    toastSaveErr: 'Error saving plan: ',
+    confirmManual: 'Confirm manual activation for this account? (No money will be charged, but the subscription will start)',
+    toastManualOk: 'Subscription activated manually and logged successfully',
+    toastManualErr: 'Error activating subscription: ',
+  }
+};
+
 export default function AdminSubscriptionsPage() {
+  const { lang, dir } = useAdminLanguage();
+  const t = localDict[lang];
+  const isAr = lang === 'ar';
+
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Form states for creating/editing plan
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
-  const [planName, setPlanName] = useState('');
-  const [planDisplayName, setPlanDisplayName] = useState('');
-  const [planPriceMonthly, setPlanPriceMonthly] = useState(0);
-  const [planPriceYearly, setPlanPriceYearly] = useState(0);
-  const [limitContacts, setLimitContacts] = useState(100);
-  const [limitBroadcasts, setLimitBroadcasts] = useState(10);
-  const [limitAgents, setLimitAgents] = useState(1);
-  const [limitAutomations, setLimitAutomations] = useState(5);
-  const [featuresAr, setFeaturesAr] = useState<string[]>([]);
-  const [featuresEn, setFeaturesEn] = useState<string[]>([]);
-  const [newFeatureAr, setNewFeatureAr] = useState('');
-  const [newFeatureEn, setNewFeatureEn] = useState('');
   const [savingPlan, setSavingPlan] = useState(false);
 
-  // Free Trial and Billing Options states
+  // Form states
+  const [planName, setPlanName] = useState('');
+  const [planDisplayName, setPlanDisplayName] = useState('');
+  const [planPriceMonthly, setPlanPriceMonthly] = useState<number>(0);
+  const [planPriceYearly, setPlanPriceYearly] = useState<number>(0);
+  const [isActive, setIsActive] = useState(true);
+  const [isHighlighted, setIsHighlighted] = useState(false);
+  const [validityDays, setValidityDays] = useState<number>(30);
+
   const [trialEnabled, setTrialEnabled] = useState(false);
   const [trialPeriodDays, setTrialPeriodDays] = useState(7);
-  const [billingOptions, setBillingOptions] = useState<Array<{ type: string; price: number; days?: number }>>([]);
-  const [newOptionType, setNewOptionType] = useState('monthly');
-  const [newOptionPrice, setNewOptionPrice] = useState(0);
-  const [newOptionDays, setNewOptionDays] = useState(30);
 
-  // Feature Keys library states
-  const [showKeysModal, setShowKeysModal] = useState(false);
+  const [billingOptions, setBillingOptions] = useState<any[]>([]);
+
+  // Features / Modules
   const [libraryFeatures, setLibraryFeatures] = useState<any[]>([]);
-  const [loadingFeatures, setLoadingFeatures] = useState(false);
-  const [savingFeatures, setSavingFeatures] = useState(false);
-  const [editingKeys, setEditingKeys] = useState<Record<string, string>>({});
+  const [modules, setModules] = useState<PlanModule[]>([]);
 
-  // Manual activation states
+  // Manual activate states
   const [manualAccountId, setManualAccountId] = useState('');
   const [manualPlanId, setManualPlanId] = useState('');
-  const [manualPaymentMethod, setManualPaymentMethod] = useState('manual');
-  const [manualDuration, setManualDuration] = useState<string>('monthly');
+  const [manualDuration, setManualDuration] = useState('monthly');
+  const [manualPaymentMethod, setManualPaymentMethod] = useState('bank_transfer');
   const [activating, setActivating] = useState(false);
 
   const supabase = createClient();
 
-  async function loadLibraryFeatures() {
-    try {
-      setLoadingFeatures(true);
-      const res = await fetch('/api/admin/features');
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      setLibraryFeatures(data.features || []);
-      
-      const initialKeys: Record<string, string> = {};
-      (data.features || []).forEach((f: any) => {
-        initialKeys[f.id] = f.feature_key || '';
-      });
-      setEditingKeys(initialKeys);
-    } catch (err: any) {
-      toast.error('فشل تحميل رموز المزايا: ' + err.message);
-    } finally {
-      setLoadingFeatures(false);
-    }
-  }
-
-  async function handleSaveFeatureKeys(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      setSavingFeatures(true);
-      const updates = Object.entries(editingKeys).map(([id, key]) => ({
-        id,
-        feature_key: key,
-      }));
-
-      const res = await fetch('/api/admin/features', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates }),
-      });
-
-      const resData = await res.json();
-      if (!res.ok) throw new Error(resData.error || 'Failed to update keys');
-
-      toast.success('تم تحديث رموز المزايا بنجاح');
-      setShowKeysModal(false);
-    } catch (err: any) {
-      toast.error(err.message || 'حدث خطأ أثناء حفظ رموز المزايا');
-    } finally {
-      setSavingFeatures(false);
-    }
-  }
-
   useEffect(() => {
+    loadLibraryFeatures();
     loadPlans();
   }, []);
 
@@ -127,19 +217,42 @@ export default function AdminSubscriptionsPage() {
     }
   }, [manualPlanId, plans]);
 
+  async function loadLibraryFeatures() {
+    try {
+      const { data, error } = await supabase
+        .from('plan_features_library')
+        .select('*')
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      setLibraryFeatures(data || []);
+    } catch (err: any) {
+      toast.error(isAr ? 'فشل تحميل المزايا العامة' : 'Failed to load global features');
+    }
+  }
+
   async function loadPlans() {
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('subscription_plans')
-        .select('*')
+        .select(`
+          *,
+          assignments:plan_feature_assignments (
+            feature_id,
+            is_enabled,
+            usage_limit,
+            bulk_limit,
+            show_on_landing,
+            feature:plan_features_library (name_ar, name_en, sort_order)
+          )
+        `)
         .order('price_monthly', { ascending: true });
 
       if (error) throw error;
       setPlans((data as Plan[]) || []);
       if (data && data.length > 0) setManualPlanId(data[0].id);
     } catch (err) {
-      toast.error('حدث خطأ في تحميل خطط الأسعار');
+      toast.error(t.toastLoadErr);
     } finally {
       setLoading(false);
     }
@@ -158,25 +271,36 @@ export default function AdminSubscriptionsPage() {
       setPlans(prev =>
         prev.map(p => (p.id === plan.id ? { ...p, is_active: nextStatus } : p))
       );
-      toast.success(nextStatus ? 'تم تفعيل الخطة' : 'تم تعطيل الخطة');
+      toast.success(nextStatus ? t.toastActive : t.toastDisabled);
     } catch (err) {
-      toast.error('فشل تغيير حالة الخطة');
+      toast.error(isAr ? 'فشل تغيير حالة الخطة' : 'Failed to change plan status');
     }
   };
 
-  const openPlanModal = (plan: Plan | any) => {
+  const openPlanModal = (plan: Plan | null) => {
     setEditingPlan(plan);
     if (plan) {
       setPlanName(plan.name);
       setPlanDisplayName(plan.display_name);
       setPlanPriceMonthly(plan.price_monthly);
       setPlanPriceYearly(plan.price_yearly);
-      setLimitContacts(plan.limits.contacts ?? 100);
-      setLimitBroadcasts(plan.limits.broadcasts ?? 10);
-      setLimitAgents(plan.limits.agents ?? 1);
-      setLimitAutomations(plan.limits.automations ?? 5);
-      setFeaturesAr(plan.features_ar || []);
-      setFeaturesEn(plan.features_en || []);
+      setIsActive(plan.is_active);
+      setIsHighlighted(plan.highlighted ?? false);
+      setValidityDays(plan.validity_days ?? 30);
+      
+      const mappedModules: PlanModule[] = libraryFeatures.map(feat => {
+        const assignment = plan.assignments?.find((a: any) => a.feature_id === feat.id);
+        return {
+          feature_id: feat.id,
+          name_ar: feat.name_ar,
+          name_en: feat.name_en,
+          is_enabled: assignment ? assignment.is_enabled : false,
+          usage_limit: assignment ? assignment.usage_limit : -1,
+          bulk_limit: assignment ? assignment.bulk_limit : -1,
+          show_on_landing: assignment ? assignment.show_on_landing : true,
+        };
+      });
+      setModules(mappedModules);
 
       const trialDays = plan.trial_period_days || 0;
       setTrialEnabled(trialDays > 0);
@@ -196,12 +320,20 @@ export default function AdminSubscriptionsPage() {
       setPlanDisplayName('');
       setPlanPriceMonthly(0);
       setPlanPriceYearly(0);
-      setLimitContacts(100);
-      setLimitBroadcasts(10);
-      setLimitAgents(1);
-      setLimitAutomations(5);
-      setFeaturesAr([]);
-      setFeaturesEn([]);
+      setIsActive(true);
+      setIsHighlighted(false);
+      setValidityDays(30);
+      
+      const defaultModules: PlanModule[] = libraryFeatures.map(feat => ({
+        feature_id: feat.id,
+        name_ar: feat.name_ar,
+        name_en: feat.name_en,
+        is_enabled: false,
+        usage_limit: -1,
+        bulk_limit: -1,
+        show_on_landing: true,
+      }));
+      setModules(defaultModules);
       setTrialEnabled(false);
       setTrialPeriodDays(7);
       setBillingOptions([]);
@@ -209,30 +341,16 @@ export default function AdminSubscriptionsPage() {
     setShowPlanModal(true);
   };
 
-  const addFeatureAr = () => {
-    if (!newFeatureAr.trim()) return;
-    setFeaturesAr(prev => [...prev, newFeatureAr.trim()]);
-    setNewFeatureAr('');
-  };
-
-  const removeFeatureAr = (idx: number) => {
-    setFeaturesAr(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const addFeatureEn = () => {
-    if (!newFeatureEn.trim()) return;
-    setFeaturesEn(prev => [...prev, newFeatureEn.trim()]);
-    setNewFeatureEn('');
-  };
-
-  const removeFeatureEn = (idx: number) => {
-    setFeaturesEn(prev => prev.filter((_, i) => i !== idx));
+  const updateModule = (idx: number, field: keyof PlanModule, value: any) => {
+    const newModules = [...modules];
+    newModules[idx] = { ...newModules[idx], [field]: value };
+    setModules(newModules);
   };
 
   const handleSavePlan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!planName.trim() || !planDisplayName.trim()) {
-      toast.error('الرجاء إدخال الحقول المطلوبة');
+      toast.error(t.toastReqFields);
       return;
     }
 
@@ -260,15 +378,13 @@ export default function AdminSubscriptionsPage() {
         price_yearly: yearlyPrice,
         trial_period_days: trialEnabled ? Number(trialPeriodDays) : 0,
         billing_options: finalOptions,
-        limits: {
-          contacts: Number(limitContacts),
-          broadcasts: Number(limitBroadcasts),
-          agents: Number(limitAgents),
-          automations: Number(limitAutomations),
-        },
-        features_ar: featuresAr,
-        features_en: featuresEn,
+        is_active: isActive,
+        highlighted: isHighlighted,
+        validity_days: Number(validityDays),
+        limits: { contacts: 1000, broadcasts: 100, agents: 10, automations: 10 },
       };
+
+      let planIdToUse = editingPlan?.id;
 
       if (editingPlan) {
         const { error } = await supabase
@@ -277,23 +393,42 @@ export default function AdminSubscriptionsPage() {
           .eq('id', editingPlan.id);
 
         if (error) throw error;
-        toast.success('تم تحديث خطة الأسعار والمميزات بنجاح');
+        toast.success(t.toastUpdate);
       } else {
-        const { error } = await supabase
+        const { data: insertedPlan, error } = await supabase
           .from('subscription_plans')
-          .insert({
-            ...planPayload,
-            is_active: true,
-          });
+          .insert(planPayload)
+          .select('id')
+          .single();
 
         if (error) throw error;
-        toast.success('تمت إضافة خطة الأسعار الجديدة بنجاح');
+        planIdToUse = insertedPlan.id;
+        toast.success(t.toastAdd);
+      }
+
+      if (planIdToUse) {
+        const assignmentsToSave = modules.map(mod => ({
+          plan_id: planIdToUse,
+          feature_id: mod.feature_id,
+          is_enabled: mod.is_enabled,
+          usage_limit: mod.usage_limit,
+          bulk_limit: mod.bulk_limit,
+          show_on_landing: mod.show_on_landing,
+        }));
+        
+        if (assignmentsToSave.length > 0) {
+          const { error: assignError } = await supabase
+            .from('plan_feature_assignments')
+            .upsert(assignmentsToSave, { onConflict: 'plan_id, feature_id' });
+            
+          if (assignError) throw assignError;
+        }
       }
 
       setShowPlanModal(false);
       loadPlans();
     } catch (err: any) {
-      toast.error('حدث خطأ أثناء حفظ الخطة: ' + err.message);
+      toast.error(t.toastSaveErr + err.message);
     } finally {
       setSavingPlan(false);
     }
@@ -301,40 +436,19 @@ export default function AdminSubscriptionsPage() {
 
   const handleManualActivate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualAccountId.trim() || !manualPlanId) {
-      toast.error('الرجاء إدخال ID الحساب');
-      return;
-    }
+    if (!manualAccountId.trim() || !manualPlanId) return;
+
+    if (!confirm(t.confirmManual)) return;
 
     try {
       setActivating(true);
-
-      // Verify account exists
-      const { data: accountExists } = await supabase
-        .from('accounts')
-        .select('id')
-        .eq('id', manualAccountId.trim())
-        .maybeSingle();
-
-      if (!accountExists) {
-        toast.error('خطأ: ID الحساب غير موجود في النظام');
-        return;
-      }
-
-      // Get target plan details for price logging
       const selectedPlanData = plans.find(p => p.id === manualPlanId);
-
-      let periodEnd: string | null = null;
+      let periodEnd = '';
+      
       if (manualDuration === 'yearly') {
         const d = new Date();
-        d.setDate(d.getDate() + 365);
+        d.setFullYear(d.getFullYear() + 1);
         periodEnd = d.toISOString();
-      } else if (manualDuration === 'monthly') {
-        const d = new Date();
-        d.setDate(d.getDate() + 30);
-        periodEnd = d.toISOString();
-      } else if (manualDuration === 'lifetime') {
-        periodEnd = null;
       } else if (manualDuration.startsWith('custom_days_')) {
         const days = parseInt(manualDuration.replace('custom_days_', ''), 10);
         const d = new Date();
@@ -360,7 +474,6 @@ export default function AdminSubscriptionsPage() {
         price = manualDuration === 'yearly' ? Number(selectedPlanData?.price_yearly || 0) : Number(selectedPlanData?.price_monthly || 0);
       }
 
-      // Call the secure admin API to upsert subscription and log payment
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -379,138 +492,143 @@ export default function AdminSubscriptionsPage() {
       const resData = await res.json();
       if (!res.ok) throw new Error(resData.error || 'Failed to activate plan');
 
-      toast.success('تم تفعيل الاشتراك يدويًا بنجاح وتوثيق عملية الدفع');
+      toast.success(t.toastManualOk);
       setManualAccountId('');
     } catch (err: any) {
-      toast.error('حدث خطأ أثناء تفعيل الاشتراك: ' + err.message);
+      toast.error(t.toastManualErr + err.message);
     } finally {
       setActivating(false);
     }
   };
 
-  const limitLabel = (key: string) => {
-    const map: Record<string, string> = {
-      contacts: 'جهات الاتصال',
-      broadcasts: 'البث الشهري',
-      agents: 'الأعضاء',
-      automations: 'الأتمتة النشطة',
-    };
-    return map[key] ?? key;
-  };
-
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-start justify-between">
+    <div className="p-8 lg:p-10 space-y-10 min-h-full bg-slate-50/50 dark:bg-[#0B1121] transition-colors duration-200" dir={dir}>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">الاشتراكات وخطط الأسعار</h1>
-          <p className="mt-1 text-sm text-slate-400">إدارة خطط أسعار SaaS، المزايا، وحدود استخدام كل خطة</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">{t.title}</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xl leading-relaxed">{t.desc}</p>
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => {
-              setShowKeysModal(true);
-              loadLibraryFeatures();
-            }}
-            className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-750 px-4 py-2 text-sm font-medium text-slate-200 transition shadow-md"
-          >
-            <Key className="h-4 w-4 text-violet-400" /> مكتبة رموز المزايا
-          </button>
-          <button
-            onClick={() => openPlanModal(null)}
-            className="flex items-center gap-2 rounded-lg bg-violet-650 hover:bg-violet-600 px-4 py-2 text-sm font-medium text-white transition shadow-lg"
-          >
-            <Plus className="h-4.5 w-4.5" /> إضافة خطة جديدة
-          </button>
-        </div>
+        <button
+          onClick={() => openPlanModal(null)}
+          className="group relative inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-6 py-3 text-sm font-semibold text-white transition-all duration-200 hover:bg-violet-500 hover:shadow-lg hover:shadow-violet-500/25 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+        >
+          <Plus className="h-4 w-4 transition-transform group-hover:rotate-90" />
+          {t.addPackage}
+        </button>
       </div>
 
-      {/* Plans list */}
       {loading ? (
-        <div className="text-center py-16 text-slate-500">
-          <Loader2 className="h-6 w-6 animate-spin text-violet-400 mx-auto" />
-          <p className="mt-2 text-xs">جاري التحميل...</p>
+        <div className="flex flex-col items-center justify-center py-32 text-slate-500">
+          <Loader2 className="h-8 w-8 animate-spin text-violet-500 mb-4" />
+          <p className="text-sm font-medium animate-pulse">{t.loading}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="max-w-5xl grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:gap-8">
           {plans.map((plan) => (
             <div
               key={plan.id}
-              className={`relative rounded-2xl border p-6 flex flex-col justify-between transition ${plan.name === 'pro'
-                  ? 'border-violet-500/50 bg-gradient-to-b from-violet-900/10 to-slate-900/90 shadow-xl'
-                  : 'border-slate-800 bg-slate-900/40'
-                } ${!plan.is_active ? 'opacity-50' : ''}`}
+              className={`relative flex flex-col rounded-3xl border transition-all duration-300 ${
+                plan.highlighted
+                  ? 'border-violet-500 shadow-xl shadow-violet-500/10 dark:shadow-violet-900/20 bg-white dark:bg-gradient-to-b dark:from-[#111827] dark:to-[#0B1121]'
+                  : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-lg'
+              } ${!plan.is_active ? 'opacity-50 grayscale-[0.5]' : ''}`}
             >
-              {plan.name === 'pro' && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-violet-600 px-3 py-0.5 text-xs font-bold text-white shadow-md">
-                  الأكثر شعبية
+              {/* Highlight Badge */}
+              {plan.highlighted && (
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                  <div className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-1.5 text-xs font-bold tracking-wide text-white shadow-lg shadow-violet-500/30">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {t.mostPopular}
+                  </div>
                 </div>
               )}
 
-              <div>
+              <div className="p-6 flex-1 flex flex-col">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-white">{plan.display_name}</h3>
-                  <span className="text-[10px] text-slate-500 font-mono font-bold uppercase">{plan.name}</span>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">{plan.display_name}</h3>
+                  <span className={`text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-1 rounded-md ${
+                    plan.highlighted 
+                      ? 'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300' 
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                  }`}>
+                    {plan.name}
+                  </span>
                 </div>
 
-                <div className="mt-2 flex items-end gap-1">
-                  <span className="text-3xl font-extrabold text-white">${plan.price_monthly}</span>
-                  <span className="mb-1 text-slate-400 text-sm">/ شهرياً</span>
+                <div className="mb-6 flex items-baseline gap-1.5">
+                  <span className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">${plan.price_monthly}</span>
+                  <span className="text-sm font-medium text-slate-500 dark:text-slate-400">/ {t.mo}</span>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  ${plan.price_yearly} / سنوياً
-                </p>
+                {plan.price_yearly > 0 && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium">
+                    ${plan.price_yearly} / {t.yr}
+                  </p>
+                )}
 
-                {/* Limits list */}
-                <div className="my-6 space-y-2.5 border-t border-b border-slate-850 py-4">
-                  {Object.entries(plan.limits).map(([key, value]) => (
-                    <div key={key} className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">{limitLabel(key)}</span>
-                      <span className={`font-semibold ${value === -1 ? 'text-emerald-400' : 'text-slate-200'}`}>
-                        {value === -1 ? '∞ غير محدود' : value.toLocaleString('ar')}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <div className="h-px w-full bg-slate-100 dark:bg-slate-800 mb-6" />
 
-                {/* Features preview */}
-                <div className="mb-6 space-y-1.5">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">المزايا المدرجة (العربية)</p>
-                  {plan.features_ar && plan.features_ar.length > 0 ? (
-                    <ul className="text-xs space-y-1">
-                      {plan.features_ar.slice(0, 4).map((f, i) => (
-                        <li key={i} className="text-slate-400 flex items-center gap-1.5">
-                          <span className="w-1 h-1 rounded-full bg-violet-400" />
-                          <span className="line-clamp-1">{f}</span>
+                <div className="flex-1 flex flex-col">
+                  <p className="text-xs font-bold text-slate-900 dark:text-slate-300 uppercase tracking-wider mb-4">
+                    {t.enabledFeatures}
+                  </p>
+                  {plan.assignments && plan.assignments.length > 0 ? (
+                    <ul className="space-y-3.5 mb-8">
+                      {plan.assignments.filter(a => a.is_enabled).slice(0, 6).map((a, i) => (
+                        <li key={i} className="flex items-center justify-between group">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                              <Check className="h-3 w-3" strokeWidth={3} />
+                            </div>
+                            <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">
+                              {isAr ? a.feature?.name_ar : a.feature?.name_en || t.feature}
+                            </span>
+                          </div>
+                          {a.usage_limit > 0 && (
+                            <span className="text-xs font-mono text-slate-500 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                              {a.usage_limit}
+                            </span>
+                          )}
+                          {a.usage_limit === -1 && (
+                            <span className="text-xs font-mono text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                              ∞
+                            </span>
+                          )}
                         </li>
                       ))}
-                      {plan.features_ar.length > 4 && (
-                        <li className="text-[10px] text-slate-500">+{plan.features_ar.length - 4} أخرى...</li>
+                      {plan.assignments.filter(a => a.is_enabled).length > 6 && (
+                        <li className="text-xs font-medium text-slate-500 dark:text-slate-500 mt-2">
+                          +{plan.assignments.filter(a => a.is_enabled).length - 6} {t.more}
+                        </li>
                       )}
                     </ul>
                   ) : (
-                    <p className="text-xs text-slate-650">لا توجد مزايا مضافة</p>
+                    <div className="flex flex-col items-center justify-center py-8 text-slate-400 dark:text-slate-600">
+                      <Zap className="h-8 w-8 mb-2 opacity-20" />
+                      <p className="text-sm">{t.noAssigned}</p>
+                    </div>
                   )}
                 </div>
-              </div>
 
-              <div className="flex gap-2 border-t border-slate-850 pt-4 mt-auto">
-                <button
-                  onClick={() => openPlanModal(plan)}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-slate-300 hover:bg-slate-750 transition"
-                >
-                  <Pencil className="h-3.5 w-3.5" /> تعديل خطة ومزايا
-                </button>
-                <button
-                  onClick={() => handleToggleActive(plan)}
-                  className={`flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${plan.is_active
-                      ? 'bg-emerald-600/10 text-emerald-400 border border-emerald-600/20'
-                      : 'bg-red-600/10 text-red-500 border border-red-600/20'
+                <div className="mt-auto grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => openPlanModal(plan)}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-900 dark:text-white transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                  >
+                    <Pencil className="h-4 w-4 text-slate-500" />
+                    {t.editPackage}
+                  </button>
+                  <button
+                    onClick={() => handleToggleActive(plan)}
+                    className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition border ${
+                      plan.is_active
+                        ? 'border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
                     }`}
-                  title={plan.is_active ? 'تعطيل الخطة' : 'تفعيل الخطة'}
-                >
-                  <Check className="h-3.5 w-3.5" />
-                  {plan.is_active ? 'نشطة' : 'معطلة'}
-                </button>
+                  >
+                    {plan.is_active ? t.active : t.disabled}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -518,477 +636,368 @@ export default function AdminSubscriptionsPage() {
       )}
 
       {/* Manual Subscription activation */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-        <h2 className="font-semibold text-white mb-4">تفعيل اشتراك يدوي لحساب</h2>
-        <form onSubmit={handleManualActivate} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5">ID الحساب (Account UUID)</label>
-            <input
-              type="text"
-              required
-              value={manualAccountId}
-              onChange={(e) => setManualAccountId(e.target.value)}
-              placeholder="مثال: aa74b889-..."
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-650 focus:border-violet-500 focus:outline-none font-mono"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5">الباقة / الخطة</label>
-            <select
-              value={manualPlanId}
-              onChange={(e) => setManualPlanId(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
-            >
-              {plans.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.display_name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1.5">مدة الاشتراك</label>
-            <select
-              value={manualDuration}
-              onChange={(e) => setManualDuration(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
-            >
-              {(() => {
-                const selectedPlan = plans.find(p => p.id === manualPlanId) || plans[0];
-                const opts = selectedPlan?.billing_options || [];
-                if (opts.length > 0) {
-                  return opts.map((opt: any, idx: number) => {
-                    const val = opt.type === 'custom_days' ? `custom_days_${opt.days}` : opt.type;
-                    let label = '';
-                    if (opt.type === 'monthly') label = `شهري (30 يوم) - ${opt.price}$`;
-                    else if (opt.type === 'yearly') label = `سنوي (365 يوم) - ${opt.price}$`;
-                    else if (opt.type === 'lifetime') label = `مدى الحياة - ${opt.price}$`;
-                    else if (opt.type === 'custom_days') label = `كل ${opt.days} يوم - ${opt.price}$`;
+      <div className="mt-12 overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] shadow-sm">
+        <div className="border-b border-slate-100 dark:border-slate-800/60 px-8 py-6 bg-slate-50/50 dark:bg-[#111827]/50">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">{t.manualTitle}</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t.manualDesc}</p>
+        </div>
+        
+        <form onSubmit={handleManualActivate} className="p-8">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+            <div className="md:col-span-4">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">
+                {t.accountUuid}
+              </label>
+              <input
+                type="text"
+                required
+                value={manualAccountId}
+                onChange={(e) => setManualAccountId(e.target.value)}
+                placeholder="e.g. aa74b889-..."
+                className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B1121] px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none transition-shadow font-mono"
+              />
+            </div>
+            
+            <div className="md:col-span-3">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">
+                {t.package}
+              </label>
+              <div className="relative">
+                <select
+                  value={manualPlanId}
+                  onChange={(e) => setManualPlanId(e.target.value)}
+                  className="w-full appearance-none rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B1121] px-4 py-3 pr-10 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none transition-shadow cursor-pointer"
+                >
+                  {plans.map((p) => (
+                    <option key={p.id} value={p.id}>{p.display_name} - ${p.price_monthly}/{t.mo}</option>
+                  ))}
+                </select>
+                <div className={`pointer-events-none absolute inset-y-0 ${dir === 'rtl' ? 'left-0 pl-3' : 'right-0 pr-3'} flex items-center`}>
+                  <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
+              </div>
+            </div>
+
+            <div className="md:col-span-3">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">
+                {t.duration}
+              </label>
+              <div className="relative">
+                <select
+                  value={manualDuration}
+                  onChange={(e) => setManualDuration(e.target.value)}
+                  className="w-full appearance-none rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B1121] px-4 py-3 pr-10 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none transition-shadow cursor-pointer"
+                >
+                  {(() => {
+                    const plan = plans.find(p => p.id === manualPlanId);
+                    const opts = plan?.billing_options || [];
+                    if (opts.length > 0) {
+                      return opts.map((opt, idx) => {
+                        let val = opt.type;
+                        let label = `${opt.type} - $${opt.price}`;
+                        if (opt.type === 'monthly') label = `${t.monthly30} - $${opt.price}`;
+                        else if (opt.type === 'yearly') label = `${t.yearly365} - $${opt.price}`;
+                        else if (opt.type === 'custom_days') {
+                          val = `custom_days_${opt.days}`;
+                          label = `${t.everyDays.replace('{days}', opt.days)} - $${opt.price}`;
+                        }
+                        return <option key={idx} value={val}>{label}</option>;
+                      });
+                    }
                     return (
-                      <option key={idx} value={val}>
-                        {label}
-                      </option>
+                      <>
+                        <option value="monthly">{t.monthly30}</option>
+                        <option value="yearly">{t.yearly365}</option>
+                      </>
                     );
-                  });
-                }
-                return (
+                  })()}
+                </select>
+                <div className={`pointer-events-none absolute inset-y-0 ${dir === 'rtl' ? 'left-0 pl-3' : 'right-0 pr-3'} flex items-center`}>
+                  <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
+              </div>
+            </div>
+
+            <div className="md:col-span-2">
+              <button
+                type="submit"
+                disabled={activating}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-900 dark:bg-white px-4 py-3 text-sm font-semibold text-white dark:text-slate-900 transition hover:bg-slate-800 dark:hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {activating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
                   <>
-                    <option value="monthly">شهري (30 يوم)</option>
-                    <option value="yearly">سنوي (365 يوم)</option>
+                    {t.activateBtn}
+                    {dir === 'rtl' ? <ArrowLeft className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}
                   </>
-                );
-              })()}
-            </select>
+                )}
+              </button>
+            </div>
           </div>
-          <button
-            type="submit"
-            disabled={activating}
-            className="flex items-center justify-center gap-2 rounded-lg bg-violet-650 hover:bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition disabled:bg-slate-800 disabled:text-slate-500"
-          >
-            {activating ? 'جاري التفعيل...' : 'تفعيل الاشتراك وتأكيد الدفع'}
-          </button>
         </form>
       </div>
 
-      {/* PLAN DETAILS CREATE/EDIT MODAL */}
       {showPlanModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
-            <h3 className="text-lg font-bold mb-4">
-              {editingPlan ? `تعديل باقة: ${editingPlan.display_name}` : 'إضافة باقة اشتراك SaaS جديدة'}
-            </h3>
-
-            <form onSubmit={handleSavePlan} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">الرمز التعريفي (اسم فريد بالإنجليزية)</label>
-                  <input
-                    type="text"
-                    required
-                    disabled={!!editingPlan}
-                    placeholder="مثال: enterprise"
-                    value={planName}
-                    onChange={(e) => setPlanName(e.target.value)}
-                    className="w-full rounded-xl border border-slate-755 bg-slate-800 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">الاسم المعروض (Display Name)</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="مثال: خطة المؤسسات"
-                    value={planDisplayName}
-                    onChange={(e) => setPlanDisplayName(e.target.value)}
-                    className="w-full rounded-xl border border-slate-755 bg-slate-800 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">السعر الشهري ($)</label>
-                  <input
-                    type="number"
-                    required
-                    min={0}
-                    value={planPriceMonthly}
-                    onChange={(e) => setPlanPriceMonthly(Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-755 bg-slate-800 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">السعر السنوي ($)</label>
-                  <input
-                    type="number"
-                    required
-                    min={0}
-                    value={planPriceYearly}
-                    onChange={(e) => setPlanPriceYearly(Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-755 bg-slate-800 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* Free Trial Settings */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 text-xs font-bold text-slate-200 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={trialEnabled}
-                      onChange={(e) => setTrialEnabled(e.target.checked)}
-                      className="rounded border-slate-700 bg-slate-800 text-violet-500 focus:ring-violet-500"
-                    />
-                    تفعيل فترة تجريبية مجانية (Free Trial)
-                  </label>
-                </div>
-                {trialEnabled && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setShowPlanModal(false)} />
+          
+          <div className="relative w-full max-w-6xl h-[90vh] rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0B1121] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <form onSubmit={handleSavePlan} className="flex flex-col flex-1 overflow-hidden">
+              
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-6 sm:px-8 border-b border-slate-200 dark:border-slate-800 shrink-0 bg-white dark:bg-[#0F172A] z-10 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                    <Pencil className="h-6 w-6" />
+                  </div>
                   <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">عدد أيام الفترة التجريبية</label>
-                    <input
-                      type="number"
-                      required
-                      min={1}
-                      value={trialPeriodDays}
-                      onChange={(e) => setTrialPeriodDays(Number(e.target.value))}
-                      className="w-32 rounded-lg border border-slate-755 bg-slate-800 px-3 py-1.5 text-xs text-white focus:border-violet-500 focus:outline-none font-mono"
-                    />
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                      {editingPlan ? t.editTitle : t.createNew}
+                    </h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{t.configLimits}</p>
                   </div>
-                )}
-              </div>
-
-              {/* Billing Options Editor */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4 space-y-3">
-                <h4 className="text-xs font-bold text-violet-400 uppercase tracking-wide">دورات الفوترة المتقدمة (الخيارات المتاحة للدفع)</h4>
-                <p className="text-[10px] text-slate-500 leading-normal">
-                  تتيح هذه الإعدادات للمسؤولين تحديد خيارات دفع مرنة للمستخدم (شهري، سنوي، مدى الحياة، أيام مخصصة).
-                </p>
-
-                {/* Billing options list */}
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {billingOptions.map((opt: any, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between bg-slate-950/40 p-2.5 rounded-lg border border-slate-850 text-xs">
-                      <div>
-                        <span className="font-semibold text-white">
-                          {opt.type === 'monthly' ? 'شهرياً' :
-                           opt.type === 'yearly' ? 'سنوياً' :
-                           opt.type === 'lifetime' ? 'مدى الحياة' :
-                           `كل ${opt.days} يوم`}
-                        </span>
-                        <span className="text-slate-400 font-mono ml-2">({opt.price}$)</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setBillingOptions(prev => prev.filter((_: any, i: number) => i !== idx))}
-                        className="text-red-500 hover:text-red-400 font-bold"
-                      >
-                        إزالة
-                      </button>
-                    </div>
-                  ))}
-                  {billingOptions.length === 0 && (
-                    <p className="text-xs text-slate-650 text-center py-2">لا توجد دورات فوترة مخصصة مضافة حالياً.</p>
-                  )}
                 </div>
-
-                {/* Add new option form */}
-                <div className="flex gap-2 items-end pt-2 border-t border-slate-850">
-                  <div className="flex-1">
-                    <label className="block text-[10px] text-slate-400 mb-1">النوع</label>
-                    <select
-                      value={newOptionType}
-                      onChange={(e) => setNewOptionType(e.target.value)}
-                      className="w-full rounded-lg border border-slate-755 bg-slate-800 px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
-                    >
-                      <option value="monthly">شهري</option>
-                      <option value="yearly">سنوي</option>
-                      <option value="lifetime">مدى الحياة (Lifetime)</option>
-                      <option value="custom_days">أيام مخصصة</option>
-                    </select>
-                  </div>
-
-                  {newOptionType === 'custom_days' && (
-                    <div className="w-20">
-                      <label className="block text-[10px] text-slate-400 mb-1">الأيام</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={newOptionDays}
-                        onChange={(e) => setNewOptionDays(Number(e.target.value))}
-                        className="w-full rounded-lg border border-slate-755 bg-slate-800 px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500 font-mono"
-                      />
-                    </div>
-                  )}
-
-                  <div className="w-24">
-                    <label className="block text-[10px] text-slate-400 mb-1">السعر ($)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={newOptionPrice}
-                      onChange={(e) => setNewOptionPrice(Number(e.target.value))}
-                      className="w-full rounded-lg border border-slate-755 bg-slate-800 px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500 font-mono"
-                    />
-                  </div>
-
+                <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (newOptionPrice < 0) return;
-                      const newOpt = {
-                        type: newOptionType,
-                        price: Number(newOptionPrice),
-                        ...(newOptionType === 'custom_days' ? { days: Number(newOptionDays) } : {})
-                      };
-                      setBillingOptions(prev => [...prev, newOpt]);
-                    }}
-                    className="bg-violet-650 hover:bg-violet-600 text-white rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+                    onClick={() => setShowPlanModal(false)}
+                    className="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                   >
-                    إضافة
-                  </button>
-                </div>
-              </div>
-
-              {/* Plan limits */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4 space-y-3">
-                <h4 className="text-xs font-bold text-violet-400 uppercase tracking-wide">حدود الاستخدام للخطة (-1 يعني غير محدود)</h4>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">عدد جهات الاتصال (Contacts Limit)</label>
-                    <input
-                      type="number"
-                      required
-                      value={limitContacts}
-                      onChange={(e) => setLimitContacts(Number(e.target.value))}
-                      className="w-full rounded-lg border border-slate-750 bg-slate-800 px-3 py-1.5 text-xs text-white focus:border-violet-500 focus:outline-none font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">عدد البث الشهري (Broadcasts Limit)</label>
-                    <input
-                      type="number"
-                      required
-                      value={limitBroadcasts}
-                      onChange={(e) => setLimitBroadcasts(Number(e.target.value))}
-                      className="w-full rounded-lg border border-slate-750 bg-slate-800 px-3 py-1.5 text-xs text-white focus:border-violet-500 focus:outline-none font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">عدد الأعضاء المضافين (Agents Limit)</label>
-                    <input
-                      type="number"
-                      required
-                      value={limitAgents}
-                      onChange={(e) => setLimitAgents(Number(e.target.value))}
-                      className="w-full rounded-lg border border-slate-750 bg-slate-800 px-3 py-1.5 text-xs text-white focus:border-violet-500 focus:outline-none font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">عدد عمليات الأتمتة (Automations Limit)</label>
-                    <input
-                      type="number"
-                      required
-                      value={limitAutomations}
-                      onChange={(e) => setLimitAutomations(Number(e.target.value))}
-                      className="w-full rounded-lg border border-slate-750 bg-slate-800 px-3 py-1.5 text-xs text-white focus:border-violet-500 focus:outline-none font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Dynamic Features List */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Arabic Features */}
-                <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
-                  <h4 className="text-xs font-bold text-slate-350 mb-3">المزايا (بالعربية)</h4>
-                  <div className="flex gap-2 mb-3">
-                    <input
-                      type="text"
-                      placeholder="أدخل ميزة جديدة باللغة العربية..."
-                      value={newFeatureAr}
-                      onChange={(e) => setNewFeatureAr(e.target.value)}
-                      className="flex-1 bg-slate-800 border border-slate-750 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-violet-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={addFeatureAr}
-                      className="bg-violet-650 hover:bg-violet-600 text-white rounded-lg px-3 py-1 text-xs transition"
-                    >
-                      إضافة
-                    </button>
-                  </div>
-                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                    {featuresAr.map((f, idx) => (
-                      <div key={idx} className="flex items-center justify-between gap-2 bg-slate-900/60 rounded px-2.5 py-1.5 text-xs">
-                        <span className="line-clamp-1">{f}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeFeatureAr(idx)}
-                          className="text-red-500 hover:text-red-400 font-bold"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                    {featuresAr.length === 0 && (
-                      <p className="text-xs text-slate-600 text-center py-2">لا توجد مزايا مدرجة</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* English Features */}
-                <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
-                  <h4 className="text-xs font-bold text-slate-350 mb-3">Features (in English)</h4>
-                  <div className="flex gap-2 mb-3">
-                    <input
-                      type="text"
-                      placeholder="Add feature in English..."
-                      value={newFeatureEn}
-                      onChange={(e) => setNewFeatureEn(e.target.value)}
-                      className="flex-1 bg-slate-800 border border-slate-750 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-violet-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={addFeatureEn}
-                      className="bg-violet-650 hover:bg-violet-600 text-white rounded-lg px-3 py-1 text-xs transition"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                    {featuresEn.map((f, idx) => (
-                      <div key={idx} className="flex items-center justify-between gap-2 bg-slate-900/60 rounded px-2.5 py-1.5 text-xs">
-                        <span className="line-clamp-1">{f}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeFeatureEn(idx)}
-                          className="text-red-500 hover:text-red-400 font-bold"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                    {featuresEn.length === 0 && (
-                      <p className="text-xs text-slate-600 text-center py-2">No features added</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowPlanModal(false)}
-                  className="rounded-lg bg-slate-800 hover:bg-slate-750 px-4 py-2 text-sm text-slate-300 transition"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingPlan}
-                  className="flex items-center gap-1.5 rounded-lg bg-violet-650 hover:bg-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-lg transition disabled:bg-slate-800 disabled:text-slate-500"
-                >
-                  <Save className="h-4 w-4" />
-                  {savingPlan ? 'جاري الحفظ...' : 'حفظ التغييرات'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL: FEATURE KEYS LIBRARY ================= */}
-      {showKeysModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl relative">
-            <button
-              type="button"
-              onClick={() => setShowKeysModal(false)}
-              className="absolute left-4 top-4 text-slate-400 hover:text-white"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
-              <Key className="h-5 w-5 text-violet-400" /> مكتبة رموز ومفاتيح المزايا البرمجية
-            </h3>
-            <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-              اربط كل ميزة نصية بمفتاح برمجي فريد (مثال: <code className="bg-slate-950 px-1 py-0.5 rounded text-violet-300">ai_reply</code> أو <code className="bg-slate-950 px-1 py-0.5 rounded text-violet-300">google_sheets</code>) لتفعيل أو حظر الميزة برمجياً للحسابات المشتركة.
-            </p>
-
-            {loadingFeatures ? (
-              <div className="text-center py-12 text-slate-500">
-                <Loader2 className="h-6 w-6 animate-spin text-violet-400 mx-auto" />
-                <p className="mt-2 text-xs">جاري تحميل المميزات...</p>
-              </div>
-            ) : (
-              <form onSubmit={handleSaveFeatureKeys} className="space-y-4">
-                <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-                  {libraryFeatures.map((feat) => (
-                    <div key={feat.id} className="grid grid-cols-2 gap-4 items-center bg-slate-950/40 p-3 rounded-xl border border-slate-850">
-                      <div>
-                        <div className="text-xs font-semibold text-white truncate">{feat.name_ar}</div>
-                        <div className="text-[10px] text-slate-400 truncate">{feat.name_en}</div>
-                      </div>
-                      <div>
-                        <input
-                          type="text"
-                          placeholder="مثال: ai_reply"
-                          value={editingKeys[feat.id] || ''}
-                          onChange={(e) => setEditingKeys(prev => ({ ...prev, [feat.id]: e.target.value }))}
-                          className="w-full rounded-lg border border-slate-700 bg-slate-850 px-3 py-1.5 text-xs text-white focus:border-violet-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                  {libraryFeatures.length === 0 && (
-                    <p className="text-xs text-slate-650 text-center py-4">لم يتم العثور على مزايا في المكتبة</p>
-                  )}
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4 border-t border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setShowKeysModal(false)}
-                    className="rounded-lg bg-slate-800 hover:bg-slate-750 px-4 py-2 text-sm text-slate-300 transition"
-                  >
-                    إلغاء
+                    {t.cancel}
                   </button>
                   <button
                     type="submit"
-                    disabled={savingFeatures}
-                    className="flex items-center gap-1.5 rounded-lg bg-violet-650 hover:bg-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-lg transition disabled:bg-slate-800 disabled:text-slate-500"
+                    disabled={savingPlan}
+                    className="flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition disabled:opacity-50"
                   >
-                    <Save className="h-4 w-4" />
-                    {savingFeatures ? 'جاري الحفظ...' : 'حفظ الرموز'}
+                    {savingPlan ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {savingPlan ? t.saving : t.savePackage}
                   </button>
                 </div>
-              </form>
-            )}
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-8 bg-slate-50/50 dark:bg-[#0B1121]">
+                
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] p-6 shadow-sm">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-3">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800 text-xs font-mono text-slate-600 dark:text-slate-400">1</span>
+                    {t.packageDetails}
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">{t.internalName}</label>
+                      <input
+                        type="text"
+                        required
+                        value={planName}
+                        onChange={(e) => setPlanName(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#0B1121] px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none font-mono transition-shadow"
+                        placeholder="e.g. basic, pro"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">{t.displayName}</label>
+                      <input
+                        type="text"
+                        required
+                        value={planDisplayName}
+                        onChange={(e) => setPlanDisplayName(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#0B1121] px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none transition-shadow"
+                        placeholder="e.g. Pro Plan"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">{t.monthlyPrice}</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={planPriceMonthly}
+                          onChange={(e) => setPlanPriceMonthly(Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#0B1121] pl-8 pr-4 py-2.5 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none font-mono transition-shadow"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">{t.yearlyPrice}</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={planPriceYearly}
+                          onChange={(e) => setPlanPriceYearly(Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#0B1121] pl-8 pr-4 py-2.5 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none font-mono transition-shadow"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/60">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">{t.validityDays}</label>
+                      <input
+                        type="number"
+                        value={validityDays}
+                        onChange={(e) => setValidityDays(Number(e.target.value))}
+                        className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#0B1121] px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none font-mono transition-shadow"
+                      />
+                    </div>
+                    <div className="flex flex-col justify-end pb-3">
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <div className="relative flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            checked={isActive}
+                            onChange={(e) => setIsActive(e.target.checked)}
+                            className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#0B1121] transition-all checked:border-violet-600 checked:bg-violet-600 dark:checked:border-violet-500 dark:checked:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+                            id="isActiveCheck"
+                          />
+                          <Check className="pointer-events-none absolute h-3 w-3 text-white opacity-0 transition-opacity peer-checked:opacity-100" strokeWidth={3} />
+                        </div>
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+                          {t.availableToPurchase}
+                        </span>
+                      </label>
+                    </div>
+                    <div className="flex flex-col justify-end pb-3">
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <div className="relative flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            checked={isHighlighted}
+                            onChange={(e) => setIsHighlighted(e.target.checked)}
+                            className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#0B1121] transition-all checked:border-violet-600 checked:bg-violet-600 dark:checked:border-violet-500 dark:checked:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+                            id="isHighCheck"
+                          />
+                          <Check className="pointer-events-none absolute h-3 w-3 text-white opacity-0 transition-opacity peer-checked:opacity-100" strokeWidth={3} />
+                        </div>
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+                          {t.highlightedPackage}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0F172A] shadow-sm overflow-hidden flex flex-col">
+                  <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-3">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800 text-xs font-mono text-slate-600 dark:text-slate-400">2</span>
+                      {t.featuresAndLimits}
+                    </h3>
+                    <a
+                      href="/admin/features"
+                      className="flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800 px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                    >
+                      <Plus className="h-4 w-4" /> {t.manageGlobal}
+                    </a>
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-700 dark:text-slate-300">
+                      <thead className="bg-slate-50 dark:bg-[#111827] text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800">
+                        <tr>
+                          <th className="px-6 py-4 w-16 text-center">#</th>
+                          <th className="px-6 py-4 w-24 text-center">{t.enable}</th>
+                          <th className="px-6 py-4 min-w-[250px] text-right" dir={dir}>{t.globalFeature}</th>
+                          <th className="px-6 py-4 w-40 text-center">{t.usageLimit}</th>
+                          <th className="px-6 py-4 w-40 text-center">{t.bulkLimit}</th>
+                          <th className="px-6 py-4 w-32 text-center">{t.landingPage}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                        {modules.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                              {t.noFeatures}
+                            </td>
+                          </tr>
+                        ) : modules.map((mod, idx) => (
+                          <tr 
+                            key={mod.feature_id} 
+                            className={`group transition-all duration-200 ${mod.is_enabled ? 'bg-white dark:bg-[#0F172A] hover:bg-slate-50 dark:hover:bg-slate-800/40' : 'bg-slate-50/50 dark:bg-[#0B1121]/50 opacity-60 hover:opacity-100'}`}
+                          >
+                            <td className="px-6 py-4 text-center text-slate-400 dark:text-slate-600 font-mono text-xs">
+                              {idx + 1}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <div className="flex items-center justify-center">
+                                <label className="relative flex items-center justify-center cursor-pointer">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={mod.is_enabled} 
+                                    onChange={(e) => updateModule(idx, 'is_enabled', e.target.checked)}
+                                    className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#0B1121] transition-all checked:border-violet-600 checked:bg-violet-600 dark:checked:border-violet-500 dark:checked:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+                                  />
+                                  <Check className="pointer-events-none absolute h-3 w-3 text-white opacity-0 transition-opacity peer-checked:opacity-100" strokeWidth={3} />
+                                </label>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-right" dir={dir}>
+                              <div className="flex flex-col gap-0.5">
+                                <span className={`font-semibold ${mod.is_enabled ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
+                                  {isAr ? mod.name_ar : mod.name_en}
+                                </span>
+                                <span className="text-xs text-slate-400 dark:text-slate-500">
+                                  {!isAr ? mod.name_ar : mod.name_en}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <div className={`flex flex-col items-center justify-center gap-2 ${!mod.is_enabled && 'opacity-50 pointer-events-none'}`}>
+                                <input 
+                                  type="number" 
+                                  value={mod.usage_limit} 
+                                  onChange={e => updateModule(idx, 'usage_limit', Number(e.target.value))} 
+                                  className="w-20 bg-slate-50 dark:bg-[#0B1121] border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1.5 text-center text-sm font-mono font-medium text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none transition-shadow disabled:opacity-50" 
+                                  title="-1 = Unlimited, 0 = Disabled"
+                                  disabled={!mod.is_enabled}
+                                />
+                                {mod.usage_limit === -1 && (
+                                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">{t.unlimited}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <div className={`flex flex-col items-center justify-center gap-2 ${!mod.is_enabled && 'opacity-50 pointer-events-none'}`}>
+                                <input 
+                                  type="number" 
+                                  value={mod.bulk_limit} 
+                                  onChange={e => updateModule(idx, 'bulk_limit', Number(e.target.value))} 
+                                  className="w-20 bg-slate-50 dark:bg-[#0B1121] border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-1.5 text-center text-sm font-mono font-medium text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none transition-shadow disabled:opacity-50" 
+                                  title="-1 = Unlimited, 0 = Disabled"
+                                  disabled={!mod.is_enabled}
+                                />
+                                {mod.bulk_limit === -1 && (
+                                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">{t.unlimited}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <button
+                                type="button"
+                                onClick={() => mod.is_enabled && updateModule(idx, 'show_on_landing', !mod.show_on_landing)}
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${mod.show_on_landing ? 'bg-violet-600' : 'bg-slate-200 dark:bg-slate-700'} ${!mod.is_enabled && 'opacity-50 pointer-events-none'}`}
+                              >
+                                <span className="sr-only">Toggle</span>
+                                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${mod.show_on_landing ? (dir === 'rtl' ? '-translate-x-5' : 'translate-x-5') : 'translate-x-0'}`} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}

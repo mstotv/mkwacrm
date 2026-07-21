@@ -37,6 +37,9 @@ import { MessageActions } from "./message-actions";
 import { MessageComposer } from "./message-composer";
 import { TemplatePicker } from "./template-picker";
 import { buildReplyPreview } from "./reply-quote";
+import { SentimentBadge } from "./sentiment-badge";
+import { IntentBadge } from "./intent-badge";
+import { CategoryBadge } from "./category-badge";
 import { toast } from "sonner";
 
 interface ReplyDraft {
@@ -802,6 +805,21 @@ export function MessageThread({
             <Clock className="h-3 w-3" />
             {sessionInfo.remaining}
           </Badge>
+          <div className="ml-1 hidden sm:flex sm:gap-1 flex-wrap">
+            <SentimentBadge 
+              sentiment={conversation.sentiment} 
+              score={conversation.sentiment_score} 
+              showText 
+            />
+            <IntentBadge
+              intent={conversation.intent}
+              showText
+            />
+            <CategoryBadge
+              category={conversation.category}
+              showText
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-2">

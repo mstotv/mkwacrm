@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { SitePageViewer } from './site-page-viewer'
+import { SitePageViewer } from '@/app/p/[slug]/site-page-viewer'
 
 export const revalidate = 60 // Revalidate cache every 60 seconds
 

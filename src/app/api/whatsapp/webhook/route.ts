@@ -8,6 +8,7 @@ import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger, handleQnaSessionResponse } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { runAutoResponder } from '@/lib/whatsapp/auto-responder'
+import { analyzeSentimentAndSave } from '@/lib/whatsapp/sentiment-analyzer'
 import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
@@ -740,6 +741,12 @@ async function processMessage(
       configOwnerUserId,
       parentMessageId: message.id,
     }).catch((err) => console.error('[AutoResponder] execution failed:', err))
+  }
+
+  // Run Sentiment Analysis in the background for every incoming message
+  if (inboundText) {
+    analyzeSentimentAndSave(accountId, conversation.id, inboundText)
+      .catch((err) => console.error('[SentimentAnalysis] execution failed:', err))
   }
 }
 

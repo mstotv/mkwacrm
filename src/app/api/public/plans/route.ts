@@ -20,9 +20,8 @@ export async function GET() {
     // Fetch active plans ordered by sort_order then price
     const { data: plans, error: plansError } = await supabase
       .from('subscription_plans')
-      .select('id, name, display_name, description, price_monthly, price_yearly, sort_order, limits, features_ar, features_en')
+      .select('id, name, display_name, description, price_monthly, price_yearly, sort_order, limits, features_ar, features_en, highlighted')
       .eq('is_active', true)
-      .order('sort_order', { ascending: true })
       .order('price_monthly', { ascending: true });
 
     if (plansError) {
@@ -30,35 +29,24 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch plans' }, { status: 500 });
     }
 
-    // Fetch all feature assignments with feature details
+    // Fetch all feature assignments with feature details, specifically those shown on landing
     const { data: assignments, error: assignError } = await supabase
       .from('plan_feature_assignments')
-      .select('plan_id, feature:plan_features_library(id, name_ar, name_en, sort_order)');
+      .select('plan_id, is_enabled, usage_limit, bulk_limit, show_on_landing, feature:plan_features_library(id, name_ar, name_en, sort_order)')
+      .eq('is_enabled', true)
+      .eq('show_on_landing', true);
 
     if (assignError) {
       console.error('Error fetching feature assignments:', assignError);
-      // Fallback: return plans without library features (use legacy JSON arrays)
-      const fallbackPlans = (plans || []).map((plan: any) => ({
-        id: plan.id,
-        name: plan.name,
-        display_name: plan.display_name,
-        description: plan.description,
-        price_monthly: plan.price_monthly,
-        price_yearly: plan.price_yearly,
-        sort_order: plan.sort_order,
-        limits: plan.limits,
-        features_ar: plan.features_ar || [],
-        features_en: plan.features_en || [],
-      }));
-
-      return NextResponse.json({ plans: fallbackPlans }, {
+      // Fallback
+      return NextResponse.json({ plans: plans || [] }, {
         status: 200,
         headers: { 'Cache-Control': 'no-store' },
       });
     }
 
     // Group feature assignments by plan_id
-    const featuresByPlan: Record<string, { name_ar: string; name_en: string; sort_order: number }[]> = {};
+    const featuresByPlan: Record<string, any[]> = {};
     for (const assignment of (assignments || [])) {
       const planId = assignment.plan_id;
       const feature = assignment.feature as any;
@@ -68,13 +56,15 @@ export async function GET() {
         featuresByPlan[planId] = [];
       }
       featuresByPlan[planId].push({
+        id: feature.id,
         name_ar: feature.name_ar,
         name_en: feature.name_en,
         sort_order: feature.sort_order ?? 0,
+        usage_limit: assignment.usage_limit,
+        bulk_limit: assignment.bulk_limit,
       });
     }
 
-    // Sort features within each plan by sort_order
     for (const planId of Object.keys(featuresByPlan)) {
       featuresByPlan[planId].sort((a, b) => a.sort_order - b.sort_order);
     }
@@ -82,7 +72,6 @@ export async function GET() {
     // Merge plans with their features
     const enrichedPlans = (plans || []).map((plan: any) => {
       const libraryFeatures = featuresByPlan[plan.id] || [];
-      const hasLibraryFeatures = libraryFeatures.length > 0;
 
       return {
         id: plan.id,
@@ -93,13 +82,8 @@ export async function GET() {
         price_yearly: plan.price_yearly,
         sort_order: plan.sort_order,
         limits: plan.limits,
-        // Prefer library features; fallback to legacy JSON arrays
-        features_ar: hasLibraryFeatures
-          ? libraryFeatures.map(f => f.name_ar)
-          : (plan.features_ar || []),
-        features_en: hasLibraryFeatures
-          ? libraryFeatures.map(f => f.name_en)
-          : (plan.features_en || []),
+        highlighted: plan.highlighted,
+        features: libraryFeatures,
       };
     });
 

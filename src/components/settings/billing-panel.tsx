@@ -27,6 +27,13 @@ interface Plan {
   is_active: boolean;
   trial_period_days?: number;
   billing_options?: Array<{ type: string; price: number; days?: number }>;
+  features?: Array<{
+    id: string;
+    name_ar: string;
+    name_en: string;
+    usage_limit: number;
+    bulk_limit: number;
+  }>;
 }
 
 interface UserSub {
@@ -57,12 +64,13 @@ export function BillingPanel() {
 
     async function loadBillingData() {
       try {
-        // Load plans
-        const { data: plansData } = await supabase
-          .from('subscription_plans')
-          .select('*')
-          .eq('is_active', true)
-          .order('price_monthly', { ascending: true });
+        // Load plans from API to get normalized feature assignments
+        const plansRes = await fetch('/api/public/plans', { cache: 'no-store' });
+        let plansData = [];
+        if (plansRes.ok) {
+          const { plans } = await plansRes.json();
+          plansData = plans || [];
+        }
 
         // Load current subscription via API to bypass RLS select limitations
         const resSub = await fetch('/api/billing/subscription');
@@ -341,12 +349,12 @@ export function BillingPanel() {
                   </div>
 
                   <div className="mt-6 space-y-3">
-                    {Object.entries(plan.limits).map(([key, value]) => (
-                      <div key={key} className="flex items-center gap-2 text-sm text-slate-300">
+                    {plan.features?.map((f: any) => (
+                      <div key={f.id} className="flex items-center gap-2 text-sm text-slate-300">
                         <Check className="h-4 w-4 text-violet-400 shrink-0" />
-                        <span className="text-slate-400">{limitLabel(key)}:</span>
+                        <span className="text-slate-400">{language === 'ar' ? f.name_ar : f.name_en}:</span>
                         <span className="font-semibold ml-auto">
-                          {value === -1 ? '∞ غير محدود' : value.toLocaleString('ar')}
+                          {f.usage_limit === -1 ? (language === 'ar' ? '∞ غير محدود' : '∞ Unlimited') : (f.usage_limit > 0 ? f.usage_limit.toLocaleString('ar') : '')}
                         </span>
                       </div>
                     ))}

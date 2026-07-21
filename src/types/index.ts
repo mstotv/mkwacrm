@@ -158,6 +158,10 @@ export interface Conversation {
   created_at: string;
   updated_at: string;
   contact?: Contact;
+  sentiment?: 'positive' | 'neutral' | 'negative' | 'frustrated';
+  sentiment_score?: number;
+  intent?: 'ready_to_buy' | 'hesitant' | 'not_interested' | 'wants_appointment' | 'info_seeking' | 'unknown';
+  category?: 'sales' | 'support' | 'complaint' | 'refund' | 'general' | 'unknown';
 }
 
 export type SenderType = 'customer' | 'agent' | 'bot';

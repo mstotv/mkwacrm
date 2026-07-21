@@ -5,6 +5,7 @@ import { normalizePhone } from '@/lib/whatsapp/phone-utils';
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
 import { runAutomationsForTrigger, handleQnaSessionResponse } from '@/lib/automations/engine';
 import { runAutoResponder } from '@/lib/whatsapp/auto-responder';
+import { analyzeSentimentAndSave } from '@/lib/whatsapp/sentiment-analyzer';
 
 let _adminClient: any = null;
 function supabaseAdmin() {
@@ -370,13 +371,18 @@ export async function POST(request: Request) {
             accountId,
             contactId: contactRecord.id,
             conversationId: conversation.id,
-            messageText: contentText,
+            messageText: contentText || '',
             senderPhone: senderPhone,
             phoneNumberId: instanceName, // maps to instance name
             accessToken,
             configOwnerUserId,
             parentMessageId: key.id,
-          }).catch((err) => console.error('[Evolution Webhook AutoResponder] failed:', err));
+          }).catch((err) => console.error('[AutoResponder Evolution] execution failed:', err));
+        }
+
+        if (contentText) {
+          analyzeSentimentAndSave(accountId, conversation.id, contentText)
+            .catch((err) => console.error('[SentimentAnalysis Evolution] execution failed:', err));
         }
       }
     }
