@@ -172,7 +172,7 @@ const translations = {
       signup: 'ابدأ مجاناً',
     },
     hero: {
-      badge: '🚀 منصة إدارة علاقات عملاء واتساب (CRM) الأولى للأعمال النامية',
+      badge: '🚀 منصة واتساب CRM الأولى للأعمال النامية',
       title: 'طوّر أعمالك عبر',
       titleHighlight: 'واتساب بزنس',
       subtitle:
@@ -398,26 +398,31 @@ export default function LandingPage() {
     if (dbPlans && dbPlans.length > 0) {
       plansItems = dbPlans.map((p: any) => {
         // Map the new features object array
-        let pFeatures = []
+        let pFeatures: { text: string; yearlyOnly: boolean }[] = []
         if (p.features && Array.isArray(p.features)) {
           pFeatures = p.features.map((f: any) => {
             const featureName = lang === 'ar' ? f.name_ar : f.name_en;
-            if (f.usage_limit > 0) return `${featureName} (${f.usage_limit})`;
-            if (f.usage_limit === -1) return `${featureName} (${lang === 'ar' ? 'غير محدود' : 'Unlimited'})`;
-            return featureName;
+            let text = featureName;
+            if (f.usage_limit > 0) text = `${featureName} (${f.usage_limit})`;
+            if (f.usage_limit === -1) text = `${featureName} (${lang === 'ar' ? 'غير محدود' : 'Unlimited'})`;
+            return { text, yearlyOnly: !!f.yearly_only };
           });
         } else {
           // Fallback to legacy
-          pFeatures = lang === 'ar' ? (p.features_ar || []) : (p.features_en || [])
+          const legacyArr = lang === 'ar' ? (p.features_ar || []) : (p.features_en || []);
+          pFeatures = legacyArr.map((text: string) => ({ text, yearlyOnly: false }));
         }
 
         return {
-          name: lang === 'ar' ? p.display_name : p.name.charAt(0).toUpperCase() + p.name.slice(1),
+          name: lang === 'ar' ? (p.display_name_ar || p.display_name) : (p.display_name || p.name.charAt(0).toUpperCase() + p.name.slice(1)),
           price: `$${p.price_monthly}`,
           priceYearly: `$${p.price_yearly}`,
+          originalPrice: p.original_price_monthly ? `$${p.original_price_monthly}` : null,
+          originalPriceYearly: p.original_price_yearly ? `$${p.original_price_yearly}` : null,
           period: lang === 'ar' ? '/شهر' : '/mo',
           desc: p.description || (lang === 'ar' ? `خطة اشتراك ${p.display_name}` : `${p.display_name} subscription plan.`),
-          popular: p.highlighted || p.name === 'pro',
+          badgeType: p.badge_type || (p.highlighted ? 'popular' : null),
+          trialDays: p.trial_period_days || 0,
           features: pFeatures,
         }
       })
@@ -999,44 +1004,52 @@ export default function LandingPage() {
           color: var(--ld-text);
         }
         .ld-toggle-track {
-          width: 60px;
-          height: 32px;
+          width: 64px;
+          height: 34px;
           border-radius: 999px;
-          background: #cbd5e1;
+          background: #e2e8f0;
           cursor: pointer;
           position: relative;
-          transition: background 0.3s;
-          border: none;
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+          border: 1px solid rgba(0,0,0,0.05);
           padding: 0;
           box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
         }
         html[data-mode="dark"] .ld-toggle-track,
         html.dark .ld-toggle-track {
-          background: #334155;
+          background: rgba(30, 41, 59, 0.8);
+          border-color: rgba(255,255,255,0.05);
+          box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
         }
         .ld-toggle-track.on {
-          background: var(--ld-primary);
+          background: linear-gradient(135deg, var(--ld-primary), #a855f7);
+          box-shadow: 0 0 20px rgba(168, 85, 247, 0.5), inset 0 2px 4px rgba(0,0,0,0.1);
+          border-color: transparent;
+        }
+        .ld-toggle-track:hover {
+          transform: scale(1.05);
         }
         .ld-toggle-knob {
           position: absolute;
-          top: 4px;
-          left: 4px;
-          width: 24px;
-          height: 24px;
+          top: 3px;
+          left: 3px;
+          width: 26px;
+          height: 26px;
           border-radius: 50%;
           background: white;
-          transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-          box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+          transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.02);
         }
         .ld-toggle-track.on .ld-toggle-knob {
-          transform: translateX(28px);
+          transform: translateX(30px);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2), 0 0 10px rgba(255,255,255,0.4);
         }
         [dir="rtl"] .ld-toggle-track.on .ld-toggle-knob {
-          transform: translateX(-28px);
+          transform: translateX(-30px);
         }
         [dir="rtl"] .ld-toggle-knob {
           left: auto;
-          right: 4px;
+          right: 3px;
         }
         .ld-pricing-grid {
           display: grid;
@@ -1055,34 +1068,104 @@ export default function LandingPage() {
           flex-direction: column;
           box-shadow: 0 4px 20px rgba(0, 0, 0, 0.01);
         }
-        .ld-plan-card.popular {
+        .ld-plan-card.badge-popular {
           border-color: var(--ld-primary);
           background: linear-gradient(180deg, rgba(16, 185, 129, 0.03), var(--ld-card));
           transform: scale(1.04);
           box-shadow: 0 20px 40px rgba(16, 185, 129, 0.08);
           border-width: 2px;
         }
+        .ld-plan-card.badge-bestseller {
+          border-color: #F59E0B;
+          background: linear-gradient(180deg, rgba(245, 158, 11, 0.03), var(--ld-card));
+          transform: scale(1.04);
+          box-shadow: 0 20px 40px rgba(245, 158, 11, 0.08);
+          border-width: 2px;
+        }
+        .ld-plan-card.badge-value {
+          border-color: #10B981;
+          background: linear-gradient(180deg, rgba(16, 185, 129, 0.03), var(--ld-card));
+          transform: scale(1.04);
+          box-shadow: 0 20px 40px rgba(16, 185, 129, 0.08);
+          border-width: 2px;
+        }
+        .ld-plan-card.badge-recommended {
+          border-color: #3B82F6;
+          background: linear-gradient(180deg, rgba(59, 130, 246, 0.03), var(--ld-card));
+          transform: scale(1.04);
+          box-shadow: 0 20px 40px rgba(59, 130, 246, 0.08);
+          border-width: 2px;
+        }
+        .ld-plan-card.badge-limited {
+          border-color: #EF4444;
+          background: linear-gradient(180deg, rgba(239, 68, 68, 0.03), var(--ld-card));
+          transform: scale(1.04);
+          box-shadow: 0 20px 40px rgba(239, 68, 68, 0.08);
+          border-width: 2px;
+        }
+
         .ld-plan-card:hover {
           transform: translateY(-6px);
           box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
         }
-        .ld-plan-card.popular:hover {
+        .ld-plan-card[class*="badge-"]:hover {
           transform: scale(1.04) translateY(-6px);
-          box-shadow: 0 24px 48px rgba(16, 185, 129, 0.12);
         }
-        .ld-plan-popular-badge {
+        .ld-plan-card.badge-popular:hover { box-shadow: 0 24px 48px rgba(16, 185, 129, 0.12); }
+        .ld-plan-card.badge-bestseller:hover { box-shadow: 0 24px 48px rgba(245, 158, 11, 0.12); }
+        .ld-plan-card.badge-value:hover { box-shadow: 0 24px 48px rgba(16, 185, 129, 0.12); }
+        .ld-plan-card.badge-recommended:hover { box-shadow: 0 24px 48px rgba(59, 130, 246, 0.12); }
+        .ld-plan-card.badge-limited:hover { box-shadow: 0 24px 48px rgba(239, 68, 68, 0.12); }
+
+        .ld-plan-dynamic-badge {
           position: absolute;
           top: -16px;
           left: 50%;
           transform: translateX(-50%);
           padding: 0.4rem 1.5rem;
           border-radius: 999px;
-          background: linear-gradient(135deg, var(--ld-gradient-1), var(--ld-gradient-2));
           color: white;
-          font-size: 0.8rem;
+          font-size: 0.85rem;
           font-weight: 700;
           white-space: nowrap;
+          animation: badge-float 3s ease-in-out infinite;
+        }
+        .ld-plan-dynamic-badge.popular {
+          background: linear-gradient(135deg, var(--ld-gradient-1), var(--ld-gradient-2));
           box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+        }
+        .ld-plan-dynamic-badge.bestseller {
+          background: linear-gradient(135deg, #F59E0B, #D97706);
+          box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+          animation: badge-pulse-gold 2s infinite;
+        }
+        .ld-plan-dynamic-badge.value {
+          background: linear-gradient(135deg, #10B981, #059669);
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        .ld-plan-dynamic-badge.recommended {
+          background: linear-gradient(135deg, #3B82F6, #2563EB);
+          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        .ld-plan-dynamic-badge.limited {
+          background: linear-gradient(135deg, #EF4444, #DC2626);
+          box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+          animation: badge-pulse-red 1.5s infinite;
+        }
+
+        @keyframes badge-float {
+          0%, 100% { transform: translate(-50%, 0); }
+          50% { transform: translate(-50%, -4px); }
+        }
+        @keyframes badge-pulse-gold {
+          0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+          70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+        @keyframes badge-pulse-red {
+          0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+          70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
         .ld-plan-name {
           font-size: 1.25rem;
@@ -1481,21 +1564,57 @@ export default function LandingPage() {
             </div>
           ) : (
             t.pricing.plans.map((plan: any, i: number) => (
-              <div key={i} className={`ld-plan-card ${plan.popular ? 'popular' : ''} ld-animate ld-animate-d${i + 1}`}>
-                {plan.popular && <div className="ld-plan-popular-badge">{t.pricing.popular}</div>}
-                <div className="ld-plan-name">{plan.name}</div>
+              <div key={i} className={`ld-plan-card ${plan.badgeType ? `badge-${plan.badgeType}` : ''} ld-animate ld-animate-d${i + 1}`}>
+                {plan.badgeType && (
+                  <div className={`ld-plan-dynamic-badge ${plan.badgeType}`}>
+                    {plan.badgeType === 'popular' && (lang === 'ar' ? 'الأكثر شيوعاً' : 'Most Popular')}
+                    {plan.badgeType === 'bestseller' && (lang === 'ar' ? 'الأكثر مبيعاً' : 'Best Seller')}
+                    {plan.badgeType === 'value' && (lang === 'ar' ? 'القيمة الأفضل' : 'Best Value')}
+                    {plan.badgeType === 'recommended' && (lang === 'ar' ? 'نوصي به' : 'Recommended')}
+                    {plan.badgeType === 'limited' && (lang === 'ar' ? 'عرض لفترة محدودة' : 'Limited Time')}
+                  </div>
+                )}
+                
+                <div className="flex justify-between items-start">
+                  <div className="ld-plan-name">{plan.name}</div>
+                  {plan.trialDays > 0 && (
+                    <div className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold px-3 py-1 rounded-full border border-emerald-500/20">
+                      {lang === 'ar' ? `مجاناً لـ ${plan.trialDays} أيام` : `${plan.trialDays} Days Free`}
+                    </div>
+                  )}
+                </div>
                 <div className="ld-plan-price">
-                  {isYearly ? plan.priceYearly : plan.price}
-                  <small>
-                    {isYearly 
-                      ? (lang === 'ar' ? ' / سنوياً' : ' / year') 
-                      : (lang === 'ar' ? ' / شهرياً' : ' / month')}
-                  </small>
+                  {(isYearly && plan.originalPriceYearly) || (!isYearly && plan.originalPrice) ? (
+                    <div className="flex flex-col items-start justify-center">
+                      <span className="relative inline-block text-2xl text-slate-500 dark:text-slate-400 font-bold mb-1 after:absolute after:left-0 after:top-1/2 after:w-full after:h-[3px] after:bg-red-500 after:-rotate-[12deg]">
+                        {isYearly ? plan.originalPriceYearly : plan.originalPrice}
+                      </span>
+                      <div>
+                        {isYearly ? plan.priceYearly : plan.price}
+                        <small>
+                          {isYearly 
+                            ? (lang === 'ar' ? ' / سنوياً' : ' / year') 
+                            : (lang === 'ar' ? ' / شهرياً' : ' / month')}
+                        </small>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {isYearly ? plan.priceYearly : plan.price}
+                      <small>
+                        {isYearly 
+                          ? (lang === 'ar' ? ' / سنوياً' : ' / year') 
+                          : (lang === 'ar' ? ' / شهرياً' : ' / month')}
+                      </small>
+                    </>
+                  )}
                 </div>
                 <div className="ld-plan-desc">{plan.desc}</div>
                 <ul className="ld-plan-features">
-                  {plan.features.map((f: any, fi: number) => (
-                    <li key={fi}><Check size={16} /> {f}</li>
+                  {plan.features
+                    .filter((f: any) => !f.yearlyOnly || isYearly)
+                    .map((f: any, fi: number) => (
+                      <li key={fi}><Check size={16} /> {f.text}</li>
                   ))}
                 </ul>
                 <Link

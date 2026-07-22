@@ -14,6 +14,7 @@ interface PlanModule {
   usage_limit: number;
   bulk_limit: number;
   show_on_landing: boolean;
+  yearly_only: boolean;
 }
 
 interface PlanAssignment {
@@ -22,6 +23,7 @@ interface PlanAssignment {
   usage_limit: number;
   bulk_limit: number;
   show_on_landing: boolean;
+  yearly_only?: boolean;
   feature?: { name_ar: string; name_en: string; sort_order: number };
 }
 
@@ -31,6 +33,8 @@ interface Plan {
   display_name: string;
   price_monthly: number;
   price_yearly: number;
+  original_price_monthly?: number;
+  original_price_yearly?: number;
   is_active: boolean;
   assignments?: PlanAssignment[];
   highlighted?: boolean;
@@ -86,6 +90,7 @@ const localDict = {
     usageLimit: 'حد الاستخدام',
     bulkLimit: 'حد البث',
     landingPage: 'صفحة الهبوط',
+    yearlyOnly: 'حصري للسنوي',
     noFeatures: 'لم يتم العثور على مزايا. اذهب إلى المزايا العامة لإضافتها.',
     unlimited: 'غير محدود',
     disabledLimit: 'مُعطل',
@@ -145,6 +150,7 @@ const localDict = {
     usageLimit: 'Usage limit',
     bulkLimit: 'Bulk limit',
     landingPage: 'Landing Page',
+    yearlyOnly: 'Yearly Only',
     noFeatures: 'No features found. Go to Global Features to add them.',
     unlimited: 'Unlimited',
     disabledLimit: 'Disabled',
@@ -176,10 +182,14 @@ export default function AdminSubscriptionsPage() {
   // Form states
   const [planName, setPlanName] = useState('');
   const [planDisplayName, setPlanDisplayName] = useState('');
-  const [planPriceMonthly, setPlanPriceMonthly] = useState<number>(0);
+  const [planDisplayNameAr, setPlanDisplayNameAr] = useState('');
+  const [planPriceMonthly, setPlanPriceMonthly] = useState<number | ''>('');
   const [planPriceYearly, setPlanPriceYearly] = useState<number>(0);
+  const [originalPriceMonthly, setOriginalPriceMonthly] = useState<number>(0);
+  const [originalPriceYearly, setOriginalPriceYearly] = useState<number>(0);
   const [isActive, setIsActive] = useState(true);
   const [isHighlighted, setIsHighlighted] = useState(false);
+  const [badgeType, setBadgeType] = useState<string>('');
   const [validityDays, setValidityDays] = useState<number>(30);
 
   const [trialEnabled, setTrialEnabled] = useState(false);
@@ -243,6 +253,7 @@ export default function AdminSubscriptionsPage() {
             usage_limit,
             bulk_limit,
             show_on_landing,
+            yearly_only,
             feature:plan_features_library (name_ar, name_en, sort_order)
           )
         `)
@@ -282,10 +293,14 @@ export default function AdminSubscriptionsPage() {
     if (plan) {
       setPlanName(plan.name);
       setPlanDisplayName(plan.display_name);
+      setPlanDisplayNameAr(plan.display_name_ar || plan.display_name);
       setPlanPriceMonthly(plan.price_monthly);
       setPlanPriceYearly(plan.price_yearly);
+      setOriginalPriceMonthly(plan.original_price_monthly ?? 0);
+      setOriginalPriceYearly(plan.original_price_yearly ?? 0);
       setIsActive(plan.is_active);
       setIsHighlighted(plan.highlighted ?? false);
+      setBadgeType(plan.badge_type || (plan.highlighted ? 'popular' : ''));
       setValidityDays(plan.validity_days ?? 30);
       
       const mappedModules: PlanModule[] = libraryFeatures.map(feat => {
@@ -298,6 +313,7 @@ export default function AdminSubscriptionsPage() {
           usage_limit: assignment ? assignment.usage_limit : -1,
           bulk_limit: assignment ? assignment.bulk_limit : -1,
           show_on_landing: assignment ? assignment.show_on_landing : true,
+          yearly_only: assignment ? assignment.yearly_only : false,
         };
       });
       setModules(mappedModules);
@@ -316,12 +332,17 @@ export default function AdminSubscriptionsPage() {
         ]);
       }
     } else {
+      setEditingPlan(null);
       setPlanName('');
       setPlanDisplayName('');
-      setPlanPriceMonthly(0);
+      setPlanDisplayNameAr('');
+      setPlanPriceMonthly('');
       setPlanPriceYearly(0);
+      setOriginalPriceMonthly(0);
+      setOriginalPriceYearly(0);
       setIsActive(true);
       setIsHighlighted(false);
+      setBadgeType('');
       setValidityDays(30);
       
       const defaultModules: PlanModule[] = libraryFeatures.map(feat => ({
@@ -332,6 +353,7 @@ export default function AdminSubscriptionsPage() {
         usage_limit: -1,
         bulk_limit: -1,
         show_on_landing: true,
+        yearly_only: false,
       }));
       setModules(defaultModules);
       setTrialEnabled(false);
@@ -359,29 +381,37 @@ export default function AdminSubscriptionsPage() {
       let monthlyPrice = Number(planPriceMonthly);
       let yearlyPrice = Number(planPriceYearly);
       
-      const finalOptions = billingOptions.length > 0
-        ? billingOptions
-        : [
-            { type: 'monthly', price: Number(planPriceMonthly) },
-            { type: 'yearly', price: Number(planPriceYearly) }
-          ];
+      const finalOptions = [...billingOptions];
+      
+      const monthlyIdx = finalOptions.findIndex(o => o.type === 'monthly');
+      if (monthlyIdx >= 0) {
+        finalOptions[monthlyIdx].price = monthlyPrice;
+      } else {
+        finalOptions.push({ type: 'monthly', price: monthlyPrice });
+      }
 
-      const monthlyOpt = finalOptions.find(o => o.type === 'monthly');
-      const yearlyOpt = finalOptions.find(o => o.type === 'yearly');
-      if (monthlyOpt) monthlyPrice = Number(monthlyOpt.price);
-      if (yearlyOpt) yearlyPrice = Number(yearlyOpt.price);
+      const yearlyIdx = finalOptions.findIndex(o => o.type === 'yearly');
+      if (yearlyIdx >= 0) {
+        finalOptions[yearlyIdx].price = yearlyPrice;
+      } else {
+        finalOptions.push({ type: 'yearly', price: yearlyPrice });
+      }
 
       const planPayload = {
         name: planName.trim().toLowerCase(),
         display_name: planDisplayName.trim(),
+        display_name_ar: planDisplayNameAr.trim(),
         price_monthly: monthlyPrice,
         price_yearly: yearlyPrice,
+        original_price_monthly: originalPriceMonthly > 0 ? Number(originalPriceMonthly) : null,
+        original_price_yearly: originalPriceYearly > 0 ? Number(originalPriceYearly) : null,
         trial_period_days: trialEnabled ? Number(trialPeriodDays) : 0,
         billing_options: finalOptions,
         is_active: isActive,
-        highlighted: isHighlighted,
+        highlighted: isHighlighted || badgeType === 'popular',
+        badge_type: badgeType || null,
         validity_days: Number(validityDays),
-        limits: { contacts: 1000, broadcasts: 100, agents: 10, automations: 10 },
+        limits: { ...editingPlan?.limits, validity_days: validityDays },
       };
 
       let planIdToUse = editingPlan?.id;
@@ -414,6 +444,7 @@ export default function AdminSubscriptionsPage() {
           usage_limit: mod.usage_limit,
           bulk_limit: mod.bulk_limit,
           show_on_landing: mod.show_on_landing,
+          yearly_only: mod.yearly_only,
         }));
         
         if (assignmentsToSave.length > 0) {
@@ -786,7 +817,7 @@ export default function AdminSubscriptionsPage() {
                     <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800 text-xs font-mono text-slate-600 dark:text-slate-400">1</span>
                     {t.packageDetails}
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">{t.internalName}</label>
                       <input
@@ -799,7 +830,7 @@ export default function AdminSubscriptionsPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">{t.displayName}</label>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">{isAr ? 'الاسم الظاهر (إنجليزي)' : 'Display Name (English)'}</label>
                       <input
                         type="text"
                         required
@@ -807,6 +838,17 @@ export default function AdminSubscriptionsPage() {
                         onChange={(e) => setPlanDisplayName(e.target.value)}
                         className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#0B1121] px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none transition-shadow"
                         placeholder="e.g. Pro Plan"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">{isAr ? 'الاسم الظاهر (عربي)' : 'Display Name (Arabic)'}</label>
+                      <input
+                        type="text"
+                        required
+                        value={planDisplayNameAr}
+                        onChange={(e) => setPlanDisplayNameAr(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#0B1121] px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none transition-shadow"
+                        placeholder="e.g. الخطة الأساسية"
                       />
                     </div>
                     <div>
@@ -834,6 +876,41 @@ export default function AdminSubscriptionsPage() {
                           value={planPriceYearly}
                           onChange={(e) => setPlanPriceYearly(Number(e.target.value))}
                           className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#0B1121] pl-8 pr-4 py-2.5 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none font-mono transition-shadow"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/60">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">
+                        {isAr ? 'السعر القديم المشطوب (شهري) - اختياري' : 'Original Monthly Price (Strikethrough)'}
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={originalPriceMonthly || ''}
+                          onChange={(e) => setOriginalPriceMonthly(Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#0B1121] pl-8 pr-4 py-2.5 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none font-mono transition-shadow"
+                          placeholder="e.g. 29.99"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">
+                        {isAr ? 'السعر القديم المشطوب (سنوي) - اختياري' : 'Original Yearly Price (Strikethrough)'}
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={originalPriceYearly || ''}
+                          onChange={(e) => setOriginalPriceYearly(Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#0B1121] pl-8 pr-4 py-2.5 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none font-mono transition-shadow"
+                          placeholder="e.g. 299.99"
                         />
                       </div>
                     </div>
@@ -867,22 +944,61 @@ export default function AdminSubscriptionsPage() {
                       </label>
                     </div>
                     <div className="flex flex-col justify-end pb-3">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">
+                        {isAr ? 'شعار التميز (Badge)' : 'Plan Badge'}
+                      </label>
+                      <select
+                        value={badgeType}
+                        onChange={(e) => {
+                          setBadgeType(e.target.value);
+                          if (e.target.value === 'popular') setIsHighlighted(true);
+                          else setIsHighlighted(false);
+                        }}
+                        className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#0B1121] px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none transition-shadow cursor-pointer"
+                      >
+                        <option value="">{isAr ? 'بدون شعار' : 'None'}</option>
+                        <option value="popular">{isAr ? 'الأكثر شيوعاً' : 'Most Popular'}</option>
+                        <option value="bestseller">{isAr ? 'الأكثر مبيعاً' : 'Best Seller'}</option>
+                        <option value="value">{isAr ? 'القيمة الأفضل' : 'Best Value'}</option>
+                        <option value="recommended">{isAr ? 'نوصي به' : 'Recommended'}</option>
+                        <option value="limited">{isAr ? 'عرض لفترة محدودة' : 'Limited Time'}</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/60">
+                    <div className="flex flex-col justify-center pb-3">
                       <label className="flex items-center gap-3 cursor-pointer group">
                         <div className="relative flex items-center justify-center">
                           <input
                             type="checkbox"
-                            checked={isHighlighted}
-                            onChange={(e) => setIsHighlighted(e.target.checked)}
+                            checked={trialEnabled}
+                            onChange={(e) => setTrialEnabled(e.target.checked)}
                             className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-[#0B1121] transition-all checked:border-violet-600 checked:bg-violet-600 dark:checked:border-violet-500 dark:checked:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
-                            id="isHighCheck"
+                            id="trialEnabledCheck"
                           />
                           <Check className="pointer-events-none absolute h-3 w-3 text-white opacity-0 transition-opacity peer-checked:opacity-100" strokeWidth={3} />
                         </div>
                         <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
-                          {t.highlightedPackage}
+                          {isAr ? 'تفعيل التجربة المجانية' : 'Enable Free Trial'}
                         </span>
                       </label>
                     </div>
+                    {trialEnabled && (
+                      <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">
+                          {isAr ? 'عدد أيام التجربة المجانية' : 'Free Trial Days'}
+                        </label>
+                        <input
+                          type="number"
+                          value={trialPeriodDays}
+                          onChange={(e) => setTrialPeriodDays(Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#0B1121] px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 focus:outline-none font-mono transition-shadow"
+                          placeholder="e.g. 7"
+                          min="1"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -910,6 +1026,7 @@ export default function AdminSubscriptionsPage() {
                           <th className="px-6 py-4 w-40 text-center">{t.usageLimit}</th>
                           <th className="px-6 py-4 w-40 text-center">{t.bulkLimit}</th>
                           <th className="px-6 py-4 w-32 text-center">{t.landingPage}</th>
+                          <th className="px-6 py-4 w-32 text-center">{t.yearlyOnly}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -984,10 +1101,20 @@ export default function AdminSubscriptionsPage() {
                               <button
                                 type="button"
                                 onClick={() => mod.is_enabled && updateModule(idx, 'show_on_landing', !mod.show_on_landing)}
-                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${mod.show_on_landing ? 'bg-violet-600' : 'bg-slate-200 dark:bg-slate-700'} ${!mod.is_enabled && 'opacity-50 pointer-events-none'}`}
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${mod.show_on_landing ? 'bg-violet-600' : 'bg-slate-200 dark:bg-slate-700'} ${!mod.is_enabled && 'opacity-50 pointer-events-none'}`}
                               >
                                 <span className="sr-only">Toggle</span>
                                 <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${mod.show_on_landing ? (dir === 'rtl' ? '-translate-x-5' : 'translate-x-5') : 'translate-x-0'}`} />
+                              </button>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <button
+                                type="button"
+                                onClick={() => mod.is_enabled && updateModule(idx, 'yearly_only', !mod.yearly_only)}
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${mod.yearly_only ? 'bg-violet-600' : 'bg-slate-200 dark:bg-slate-700'} ${!mod.is_enabled && 'opacity-50 pointer-events-none'}`}
+                              >
+                                <span className="sr-only">Toggle</span>
+                                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${mod.yearly_only ? (dir === 'rtl' ? '-translate-x-5' : 'translate-x-5') : 'translate-x-0'}`} />
                               </button>
                             </td>
                           </tr>

@@ -8,7 +8,7 @@ const supabaseAdmin = createClient(
 
 async function testTrialActivationRLS() {
   const testEmail = 'telegram_1953151552@placeholder.local'; // Real user (owner of Valarant account)
-  const starterPlanId = '84843eda-81c3-4804-be6d-5ee7c623b0a1'; // Starter plan id
+  const starterPlanId = 'd31b7cde-5d54-4712-858a-77bb345dd260'; // Starter plan id
 
   console.log('=== TESTING TRIAL ACTIVATION RLS (VALARANT) ===\n');
 
@@ -45,7 +45,7 @@ async function testTrialActivationRLS() {
     .from('profiles')
     .select('account_id, account_role')
     .maybeSingle();
-  
+
   console.log('User Profile:', profile);
 
   if (!profile || profile.account_role !== 'owner') {

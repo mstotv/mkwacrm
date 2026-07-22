@@ -20,7 +20,7 @@ export async function GET() {
     // Fetch active plans ordered by sort_order then price
     const { data: plans, error: plansError } = await supabase
       .from('subscription_plans')
-      .select('id, name, display_name, description, price_monthly, price_yearly, sort_order, limits, features_ar, features_en, highlighted')
+      .select('id, name, display_name, display_name_ar, description, price_monthly, price_yearly, original_price_monthly, original_price_yearly, sort_order, limits, features_ar, features_en, highlighted, trial_period_days, badge_type')
       .eq('is_active', true)
       .order('price_monthly', { ascending: true });
 
@@ -32,7 +32,7 @@ export async function GET() {
     // Fetch all feature assignments with feature details, specifically those shown on landing
     const { data: assignments, error: assignError } = await supabase
       .from('plan_feature_assignments')
-      .select('plan_id, is_enabled, usage_limit, bulk_limit, show_on_landing, feature:plan_features_library(id, name_ar, name_en, sort_order)')
+      .select('plan_id, is_enabled, usage_limit, bulk_limit, show_on_landing, yearly_only, feature:plan_features_library(id, name_ar, name_en, sort_order)')
       .eq('is_enabled', true)
       .eq('show_on_landing', true);
 
@@ -62,6 +62,7 @@ export async function GET() {
         sort_order: feature.sort_order ?? 0,
         usage_limit: assignment.usage_limit,
         bulk_limit: assignment.bulk_limit,
+        yearly_only: assignment.yearly_only,
       });
     }
 
@@ -77,12 +78,17 @@ export async function GET() {
         id: plan.id,
         name: plan.name,
         display_name: plan.display_name,
+        display_name_ar: plan.display_name_ar,
         description: plan.description,
         price_monthly: plan.price_monthly,
         price_yearly: plan.price_yearly,
+        original_price_monthly: plan.original_price_monthly,
+        original_price_yearly: plan.original_price_yearly,
+        trial_period_days: plan.trial_period_days,
         sort_order: plan.sort_order,
         limits: plan.limits,
         highlighted: plan.highlighted,
+        badge_type: plan.badge_type,
         features: libraryFeatures,
       };
     });
