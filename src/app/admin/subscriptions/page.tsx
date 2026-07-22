@@ -14,7 +14,7 @@ interface PlanModule {
   usage_limit: number;
   bulk_limit: number;
   show_on_landing: boolean;
-  yearly_only: boolean;
+  yearly_only?: boolean;
 }
 
 interface PlanAssignment {
@@ -31,6 +31,7 @@ interface Plan {
   id: string;
   name: string;
   display_name: string;
+  display_name_ar?: string;
   price_monthly: number;
   price_yearly: number;
   original_price_monthly?: number;
@@ -38,6 +39,7 @@ interface Plan {
   is_active: boolean;
   assignments?: PlanAssignment[];
   highlighted?: boolean;
+  badge_type?: string;
   validity_days?: number;
   trial_period_days?: number;
   billing_options?: any[];
