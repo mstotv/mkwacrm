@@ -264,7 +264,7 @@ export default function AdminAnalyticsPage() {
           </div>
 
           <div className="h-80 w-full text-xs">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
               <LineChart data={data.monthlyGrowth}>
                 <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#1e293b' : '#e2e8f0'} />
                 <XAxis dataKey="month" stroke={isDark ? '#64748b' : '#94a3b8'} />
@@ -297,7 +297,7 @@ export default function AdminAnalyticsPage() {
 
           <div className="h-60 w-full flex items-center justify-center">
             {data.planBreakdown.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <PieChart>
                   <Pie
                     data={data.planBreakdown}
@@ -348,7 +348,7 @@ export default function AdminAnalyticsPage() {
         </div>
 
         <div className="h-64 w-full text-xs">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
             <BarChart
               data={[
                 { name: 'جهات الاتصال المدارة', count: data.totalContacts },

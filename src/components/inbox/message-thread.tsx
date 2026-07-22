@@ -8,10 +8,10 @@ import type {
   Conversation,
   Message,
   MessageReaction,
-  Contact,
   ConversationStatus,
   MessageTemplate,
-  Profile,
+  AccountMember,
+  Contact,
 } from "@/types";
 import {
   MessageSquare,
@@ -153,7 +153,7 @@ export function MessageThread({
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [profiles, setProfiles] = useState<AccountMember[]>([]);
   const [reactions, setReactions] = useState<MessageReaction[]>([]);
   // Purely visual spin state for the manual-refresh button. The actual
   // refetch is fire-and-forget through `onRefresh` (which bumps the
@@ -184,19 +184,15 @@ export function MessageThread({
   // shape ready for shared-team workspaces without a refactor.
   useEffect(() => {
     let cancelled = false;
-    const supabase = createClient();
-    supabase
-      .from("profiles")
-      .select("*")
-      .order("full_name")
-      .then(({ data, error }) => {
+    fetch("/api/account/members")
+      .then((res) => res.json())
+      .then((data) => {
         if (cancelled) return;
-        if (error) {
-          console.error("Failed to fetch profiles:", error);
-          return;
+        if (data.members) {
+          setProfiles(data.members);
         }
-        setProfiles((data as Profile[]) ?? []);
-      });
+      })
+      .catch((err) => console.error("Failed to fetch profiles:", err));
     return () => {
       cancelled = true;
     };
@@ -895,7 +891,7 @@ export function MessageThread({
                   const isSelected = p.user_id === assignedAgentId;
                   return (
                     <DropdownMenuItem
-                      key={p.id}
+                      key={p.user_id}
                       onClick={() => handleAssignChange(p.user_id)}
                       className={cn(
                         "text-sm",
@@ -903,7 +899,7 @@ export function MessageThread({
                       )}
                     >
                       <span className="flex-1">
-                        {p.full_name}
+                        {p.full_name || p.email}
                         {p.user_id === user?.id ? " (me)" : ""}
                       </span>
                       {isSelected && <Check className="ml-2 h-3 w-3" />}

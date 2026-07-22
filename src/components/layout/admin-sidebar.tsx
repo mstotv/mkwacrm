@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useSiteSettings } from '@/hooks/use-site-settings';
-import { useTheme } from 'next-themes';
+import { useTheme } from '@/hooks/use-theme';
 import { useAdminLanguage } from '@/contexts/admin-language-provider';
 import { adminDict } from '@/locales/admin';
 import {
@@ -19,7 +19,9 @@ import {
   Moon,
   Sun,
   Globe,
-  Key
+  Key,
+  Menu,
+  X
 } from 'lucide-react';
 import { useEffect, useState, useRef, useCallback } from 'react';
 
@@ -27,14 +29,19 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const { profile } = useAuth();
   const { settings } = useSiteSettings();
-  const { theme, setTheme } = useTheme();
+  const { colorMode, toggleColorMode } = useTheme();
   const { lang, setLang, dir } = useAdminLanguage();
   const t = adminDict[lang].sidebar;
 
   const [mounted, setMounted] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(280); // Default to a bit wider (280px)
   const [isResizing, setIsResizing] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     setMounted(true);
@@ -106,16 +113,41 @@ export function AdminSidebar() {
   });
 
   return (
-    <aside 
-      ref={sidebarRef}
-      style={{ width: `${sidebarWidth}px` }}
-      className="relative flex h-full flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 transition-colors duration-200 shrink-0"
-    >
-      {/* Resizer Handle */}
-      <div 
-        onMouseDown={startResizing}
-        className={`absolute top-0 bottom-0 w-2 cursor-col-resize flex items-center justify-center transition-colors group z-50 ${dir === 'rtl' ? '-left-1' : '-right-1'}`}
+    <>
+      {/* Mobile Header */}
+      <div className="md:hidden flex h-14 shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-4">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsMobileOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <span className="font-semibold text-slate-900 dark:text-white truncate">
+            {settings.site_name}
+          </span>
+        </div>
+      </div>
+
+      {/* Mobile Backdrop */}
+      {isMobileOpen && (
+        <div 
+          className="md:hidden fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside 
+        ref={sidebarRef}
+        style={{ width: `${sidebarWidth}px` }}
+        className={`fixed inset-y-0 ${dir === 'rtl' ? 'right-0 border-l' : 'left-0 border-r'} z-50 flex h-full flex-col border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 transition-transform duration-300 shrink-0 md:relative md:translate-x-0 ${isMobileOpen ? 'translate-x-0' : (dir === 'rtl' ? 'translate-x-full' : '-translate-x-full')}`}
       >
+        {/* Resizer Handle */}
+        <div 
+          onMouseDown={startResizing}
+          className={`absolute top-0 bottom-0 w-2 cursor-col-resize hidden md:flex items-center justify-center transition-colors group z-50 ${dir === 'rtl' ? '-left-1' : '-right-1'}`}
+        >
         <div className={`h-full w-0.5 bg-transparent group-hover:bg-violet-500/50 ${isResizing ? 'bg-violet-500' : ''}`} />
       </div>
 
@@ -128,12 +160,18 @@ export function AdminSidebar() {
             <Zap className="h-5 w-5 text-white" />
           </div>
         )}
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{settings.site_name}</p>
           <p className="text-xs text-violet-600 dark:text-violet-400">
             {role === 'super_admin' ? 'Super Admin' : 'Assistant Admin'}
           </p>
         </div>
+        <button
+          onClick={() => setIsMobileOpen(false)}
+          className="md:hidden flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Navigation */}
@@ -167,12 +205,12 @@ export function AdminSidebar() {
       <div className="border-t border-slate-200 dark:border-slate-800 p-4 space-y-2">
         {mounted && (
           <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            onClick={toggleColorMode}
             className="w-full flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-300"
           >
             <div className="flex items-center gap-2">
-              {theme === 'dark' ? <Sun className="h-4 w-4 flex-shrink-0" /> : <Moon className="h-4 w-4 flex-shrink-0" />}
-              <span className="whitespace-nowrap overflow-hidden text-ellipsis">{theme === 'dark' ? t.themeLight : t.themeDark}</span>
+              {colorMode === 'dark' ? <Sun className="h-4 w-4 flex-shrink-0" /> : <Moon className="h-4 w-4 flex-shrink-0" />}
+              <span className="whitespace-nowrap overflow-hidden text-ellipsis">{colorMode === 'dark' ? t.themeLight : t.themeDark}</span>
             </div>
           </button>
         )}
@@ -198,5 +236,6 @@ export function AdminSidebar() {
         </Link>
       </div>
     </aside>
+    </>
   );
 }
