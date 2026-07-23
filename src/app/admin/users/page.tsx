@@ -401,7 +401,7 @@ export default function AdminUsersPage() {
             className={`w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 py-2 ${dir === 'rtl' ? 'pr-9 pl-4' : 'pl-9 pr-4'} text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500`}
           />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <select
             value={filterPlan}
             onChange={(e) => setFilterPlan(e.target.value)}
@@ -458,15 +458,15 @@ export default function AdminUsersPage() {
                 filteredUsers.map((user) => (
                   <tr key={user.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
                     {/* INFO */}
-                    <td className={`px-6 py-4 ${dir === 'rtl' ? 'text-right' : 'text-left'}`}>
+                    <td className={`px-6 py-4 max-w-[200px] sm:max-w-xs ${dir === 'rtl' ? 'text-right' : 'text-left'}`}>
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 shrink-0 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center border border-slate-300 dark:border-slate-700">
                           <User className="h-5 w-5 text-slate-500 dark:text-slate-400" />
                         </div>
-                        <div>
-                          <p className="font-bold text-slate-900 dark:text-white">{user.full_name}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
-                          <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5" title="User UUID">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-slate-900 dark:text-white truncate">{user.full_name}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 truncate" title="User UUID">
                             {user.id.substring(0, 8)}...
                           </p>
                         </div>

@@ -265,15 +265,15 @@ export default function AdminDashboardPage() {
             recentAccounts.map((account) => (
               <div
                 key={account.id}
-                className="flex items-center justify-between px-6 py-4"
+                className="flex items-center justify-between px-6 py-4 gap-4"
               >
-                <div>
-                  <p className="text-sm font-medium text-slate-900 dark:text-white">{account.name}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{account.name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     {new Date(account.created_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US')}
                   </p>
                 </div>
-                <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs text-slate-600 dark:text-slate-400">
+                <span className="shrink-0 rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs text-slate-600 dark:text-slate-400">
                   {account.plan === 'Free' ? t.free : account.plan}
                 </span>
               </div>
