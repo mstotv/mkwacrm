@@ -22,6 +22,7 @@ import { supabaseAdmin } from './admin-client'
 import { engineSendText, engineSendTemplate } from './meta-send'
 import { getFreshTokenForAccount, getGoogleSheetsConfig } from '@/lib/whatsapp/google-sheets'
 import { hasFeatureAccess } from '@/lib/auth/features'
+import { parseRelativeTime } from '@/lib/whatsapp/auto-responder'
 import {
   notifyAccountViaTelegram,
   formatAppointmentNotification,
@@ -897,17 +898,24 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         const targetDateStr = followUpMatch[3].trim()
 
         try {
-          // Parse date
-          let scheduledAt = new Date(targetDateStr)
-          if (isNaN(scheduledAt.getTime())) {
-            // fallback to tomorrow
-            scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+          // Parse date using the helper first
+          let scheduledAt = parseRelativeTime(relativeDesc || targetDateStr)
+          
+          // If parseRelativeTime returned fallback and targetDateStr is a valid specific ISO time, use it
+          if (targetDateStr && targetDateStr.includes(':') && !isNaN(new Date(targetDateStr).getTime())) {
+            const parsedTarget = new Date(targetDateStr)
+            if (parsedTarget.getTime() > Date.now()) {
+              scheduledAt = parsedTarget;
+            }
+          } else {
+            // Apply default follow-up time ONLY if relativeDesc is NOT a short relative offset (minutes/hours)
+            const isShortOffset = /دقيق|ساع|minute|hour|h|min/i.test(relativeDesc || '');
+            if (!isShortOffset) {
+              const defaultTimeStr = accountData?.follow_up_default_time || '10:00'
+              const [hours, minutes] = defaultTimeStr.split(':').map(Number)
+              scheduledAt.setHours(hours || 10, minutes || 0, 0, 0)
+            }
           }
-
-          // Apply account's default follow-up time (e.g. "10:00")
-          const defaultTimeStr = accountData?.follow_up_default_time || '10:00'
-          const [hours, minutes] = defaultTimeStr.split(':').map(Number)
-          scheduledAt.setHours(hours || 10, minutes || 0, 0, 0)
 
           // Insert into follow_ups table
           const { error: fupErr } = await db.from('follow_ups').insert({
@@ -923,7 +931,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           if (fupErr) {
             console.error('[Follow-up] Database insert failed:', fupErr.message)
           } else {
-            console.log('[Follow-up] Scheduled follow-up successfully:', reason, scheduledAt)
+            console.log('[Follow-up] Scheduled follow-up successfully:', reason, scheduledAt.toISOString())
           }
         } catch (err: any) {
           console.error('[Follow-up] Error calculating/saving follow-up:', err.message)

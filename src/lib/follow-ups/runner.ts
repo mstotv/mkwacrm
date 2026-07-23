@@ -39,7 +39,12 @@ export async function processDueFollowUps(): Promise<number> {
     .order('scheduled_at', { ascending: true })
     .limit(50)
 
-  if (fetchErr || !dueFollowUps || dueFollowUps.length === 0) {
+  if (fetchErr) {
+    console.error('[Follow-up Runner] DB Fetch error:', fetchErr.message);
+    return 0;
+  }
+
+  if (!dueFollowUps || dueFollowUps.length === 0) {
     return 0
   }
 
@@ -57,6 +62,8 @@ export async function processDueFollowUps(): Promise<number> {
     if (claimErr || !claimed || claimed.length === 0) {
       continue // Row was claimed by another thread or failed to update
     }
+
+    let processedSuccessfully = false;
 
     try {
       // 2) Load account data and contact details
@@ -77,8 +84,7 @@ export async function processDueFollowUps(): Promise<number> {
       const contact = contactRes.data
 
       if (!account || !contact) {
-        console.warn(`[Follow-up Runner] Missing account/contact context for followUp ID: ${followUp.id}`)
-        continue
+        throw new Error(`Missing account (exists: ${!!account}) or contact (exists: ${!!contact}) context`);
       }
 
       const contactName = contact.name || 'عميل واتساب'
@@ -91,7 +97,7 @@ export async function processDueFollowUps(): Promise<number> {
           .replace(/{name}/g, contactName)
           .replace(/{reason}/g, followUp.reason)
 
-        console.log(`[Follow-up Runner] Sending WhatsApp reminder to contact ${followUp.contact_id}: ${customMessage}`)
+        console.log(`[Follow-up Runner] Sending WhatsApp reminder to contact ${followUp.contact_id}: "${customMessage}"`)
         
         await engineSendText({
           accountId: followUp.account_id,
@@ -122,14 +128,26 @@ export async function processDueFollowUps(): Promise<number> {
           `<i>تذكير تلقائي من منصة MKWhats</i>`
 
         console.log(`[Follow-up Runner] Sending Telegram notification for account ${followUp.account_id}`)
-        await notifyAccountViaTelegram(followUp.account_id, telegramText).catch(err => {
-          console.error('[Follow-up Runner] Telegram notification failed:', err)
-        })
+        await notifyAccountViaTelegram(followUp.account_id, telegramText)
       }
 
+      processedSuccessfully = true;
       processedCount++
+      console.log(`[Follow-up Runner] Success: processed followUp ID ${followUp.id}`);
     } catch (err: any) {
-      console.error(`[Follow-up Runner] Failed to process followUp ID ${followUp.id}:`, err.message)
+      console.error(`[Follow-up Runner] Failure: failed to process followUp ID ${followUp.id}:`, err.message)
+      
+      // Revert status to 'pending' so it can retry in the next run
+      const { error: revertErr } = await db
+        .from('follow_ups')
+        .update({ status: 'pending' })
+        .eq('id', followUp.id);
+
+      if (revertErr) {
+        console.error(`[Follow-up Runner] Critical: Failed to revert followUp ID ${followUp.id} to pending:`, revertErr.message);
+      } else {
+        console.log(`[Follow-up Runner] Reverted followUp ID ${followUp.id} back to pending for retry.`);
+      }
     }
   }
 

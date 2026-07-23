@@ -108,36 +108,38 @@ export async function runAutoResponder(args: AutoResponderArgs) {
           .maybeSingle();
         accountData = acct;
 
-        const currentDayTime = new Date().toLocaleString('ar-SA', {
+        const now = new Date();
+        const currentDayTime = now.toLocaleString('ar-SA', {
           timeZone: 'Asia/Baghdad',
           dateStyle: 'full',
           timeStyle: 'short',
         });
+        
+        const isAM = now.getHours() < 12;
+        const timeExplanation = isAM 
+          ? `ملاحظة زمنية حاسمة: الوقت الحالي هو في الصباح الصباحي (${currentDayTime}). أي مواعيد مسائية لليوم الحالي (مثل الساعة 5:00 عصراً أو مساءً اليوم) لا زالت في المستقبل وقادمة ولم تنتهِ بعد! لا ترفض الحجز لليوم بحجة انتهاء الدوام.` 
+          : `الوقت الحالي: ${currentDayTime}.`;
 
-        followUpContext = `\n\n**معلومات المتابعة التلقائية (AI Follow-up):**
-تاريخ ووقت اليوم الحالي هو: ${currentDayTime} (تنسيق ISO: ${new Date().toISOString()}).
-إذا أبدى العميل رغبة في التذكير أو المتابعة بعد فترة معينة (مثال: "ذكرني بعد 10 دقائق"، "تواصل معي بعد يومين"، "بكرة كلمني"، "بعد ساعة"، "اريد ان تراسلني بعد دقيقتين"), يجب عليك:
-1. الرد بتأكيد أنك ستذكّره أو تواصل معه في الوقت المطلوب.
-2. إضافة التاج التالي بدقة في نهاية ردك:
+        followUpContext = `\n\n**تعليمات حاسمة ومؤكدة لجدولة التذكيرات والمواعيد (MANDATORY SYSTEM DIRECTIVE):**
+${timeExplanation}
+أنت مساعد ذكي واحترافي يمتلك ميزة التذكيرات والمتابعة التلقائية وتأكيد المواعيد عبر النظام.
+إذا طلب العميل التذكير أو التواصل لاحقاً أو تأكيد حجز (مثال: "ذكرني بعد 10 دقائق"، "اريد ان تراسلني بعد دقيقتين"، "نعم فعل التذكير"، "احجز لي اليوم 5 عصراً"):
+1. يمنع منعاً باتاً الاعتذار أو القول "لا أستطيع المراسلة" أو "لا يمكنني التذكير" أو "انتهى وقت الاستقبال".
+2. أجب فوراً بلباقة وتأكيد واضح (مثال: "أبشر، تم تأكيد طلبك وسأقوم بتذكيرك والتواصل معك في الوقت المحدد").
+3. أدرج التاج التالي بدقة في نهاية ردك:
 [SCHEDULE_FOLLOW_UP: السبب | الوقت النسبي | YYYY-MM-DDTHH:mm]
-حيث:
-- السبب: وصف مختصر لسبب المتابعة (مثال: تذكير بموعد الحجز).
-- الوقت النسبي: ما قاله العميل (مثال: بعد دقيقتين، بعد 10 دقائق، غداً، بعد ساعتين).
-- YYYY-MM-DDTHH:mm: التاريخ والوقت الفعلي المحسوب بناءً على الوقت الحالي.
 
-أمثلة:
-- إذا كان الآن 2026-07-23T04:30 وقال العميل "ذكرني بعد دقيقتين" → [SCHEDULE_FOLLOW_UP: تذكير لحجز موعد | بعد دقيقتين | 2026-07-23T04:32]
-- إذا كان الآن 2026-07-23T04:30 وقال العميل "ذكرني بعد 10 دقائق" → [SCHEDULE_FOLLOW_UP: تذكير حسب طلب العميل | بعد 10 دقائق | 2026-07-23T04:40]
-- إذا كان الآن 2026-07-23T04:30 وقال العميل "ذكرني بكرة" → [SCHEDULE_FOLLOW_UP: تذكير حسب طلب العميل | غداً | 2026-07-24T10:00]
-
-هام جداً: يجب أن تضيف التاج دائماً عند طلب التذكير. لا تقل أبداً "لا أستطيع التذكير".`;
+أمثلة توضيحية:
+- العميل: "ذكرني بعد دقيقتين" → [SCHEDULE_FOLLOW_UP: تذكير بموعد | بعد دقيقتين | ${new Date(Date.now() + 2 * 60 * 1000).toISOString().substring(0, 16)}]
+- العميل: "نعم" (بعد سؤال البوت عن التذكير) → [SCHEDULE_FOLLOW_UP: تذكير بموعد الحجز | بعد دقيقتين | ${new Date(Date.now() + 2 * 60 * 1000).toISOString().substring(0, 16)}]
+- العميل: "احجز لي اليوم الساعة 5 العصر" → [SCHEDULE_FOLLOW_UP: حجز موعد 5 عصراً | اليوم 5 عصراً | ${new Date().toISOString().substring(0, 10)}T17:00]`;
       } catch (acctErr) {
         console.error('[AutoResponder] Failed to load account context for follow-up:', acctErr);
       }
 
       // ─── Build system prompt ─────────────────────────────────────
-      const basePrompt = aiConfig.system_prompt || 'You are a helpful customer assistant.';
-      const brevityInstruction = '\n\n**تعليمات هامة:**\n- أجب دائماً بإيجاز شديد (جملتين إلى ثلاث جمل كحد أقصى).\n- Always answer very briefly (maximum 2 to 3 sentences).';
+      const basePrompt = aiConfig.system_prompt || 'أنت مساعد ذكي لخدمة العملاء. أجب على الأسئلة بدقة ولباقة باللغة العربية.';
+      const brevityInstruction = '\n\n**تعليمات أسلوب الرد:**\n- أجب دائماً بإيجاز ولباقة (جملة أو جملتين فقط).';
       const compiledSystemPrompt = `${basePrompt}${followUpContext}${brevityInstruction}`;
 
       // ─── Build LLM messages ──────────────────────────────────────
@@ -199,28 +201,40 @@ export async function runAutoResponder(args: AutoResponderArgs) {
         }
       }
 
-      // ─── Process SCHEDULE_FOLLOW_UP tag ──────────────────────────
+      // ─── Process SCHEDULE_FOLLOW_UP tag & Intent Fallback ───────
       if (replyText) {
+        let followUpScheduled = false;
+
+        // Check if previous assistant message asked about reminder confirmation
+        const lastBotMessage = history.length > 0 ? history[history.length - 1] : null;
+        const lastBotAskedReminder = lastBotMessage?.role === 'assistant' && 
+          /تذكير|تواصل|موعد|جدولة|نعم/i.test(lastBotMessage.content);
+
+        const isAffirmative = /^(نعم|اي|أجل|اجل|تم|اوكي|أكيد|اكيد|فعل|موافق|تأكيد|تاكيد)$/i.test(messageText.trim());
+
+        // Detect if user explicitly requested a reminder / follow-up or confirmed one
+        const isReminderIntent =
+          isAffirmative && lastBotAskedReminder ||
+          /ذكرني|ذكّرني|نكرني|تذكرني|تذكير|راسلني|تراسلني|تواصل معي|كلمني/i.test(messageText) ||
+          /بعد\s*(\d+|دقيق|ساع|يوم|شهر|اسبوع|أسبوع)/i.test(messageText) ||
+          /دقيقتين|دقيقتان|ساعتين|ساعتان|غداً|غدا|بكرة|بكره/i.test(messageText);
+
         const followUpMatch = replyText.match(/\[SCHEDULE_FOLLOW_UP:\s*([^|]+)\|\s*([^|]+)\|\s*([^\]]+)\]/);
+
         if (followUpMatch) {
           const reason = followUpMatch[1].trim();
           const relativeDesc = followUpMatch[2].trim();
           const targetDateStr = followUpMatch[3].trim();
 
           try {
-            // First check relative time parsing for accuracy
             let scheduledAt = parseRelativeTime(relativeDesc || messageText);
-            
-            // If parseRelativeTime used fallback and targetDateStr is valid ISO with time:
             if (targetDateStr && targetDateStr.includes(':') && !isNaN(new Date(targetDateStr).getTime())) {
               const parsedTarget = new Date(targetDateStr);
-              // Only override if targetDateStr is in the future
               if (parsedTarget.getTime() > Date.now()) {
                 scheduledAt = parsedTarget;
               }
             }
 
-            // Determine action type from account settings
             const actionType = accountData?.follow_up_action_type || 'both';
 
             const { error: fupErr } = await adminSupabase.from('follow_ups').insert({
@@ -233,17 +247,66 @@ export async function runAutoResponder(args: AutoResponderArgs) {
               status: 'pending',
             });
 
-            if (fupErr) {
-              console.error('[AutoResponder] Follow-up insert failed:', fupErr.message);
-            } else {
-              console.log('[AutoResponder] ✅ Follow-up scheduled:', reason, '→', scheduledAt.toISOString());
+            if (!fupErr) {
+              followUpScheduled = true;
+              console.log('[AutoResponder] ✅ Follow-up scheduled via AI tag:', reason, '→', scheduledAt.toISOString());
             }
           } catch (err: any) {
-            console.error('[AutoResponder] Error calculating follow-up:', err.message);
+            console.error('[AutoResponder] Error inserting AI follow-up:', err.message);
           }
 
-          // Clean the tag from the reply text so the customer doesn't see it
+          // Strip the tag from replyText
           replyText = replyText.replace(/\[SCHEDULE_FOLLOW_UP:\s*[^\]]+\]/, '').trim();
+        } else if (isReminderIntent) {
+          // Guaranteed Code Fallback: User asked for reminder or confirmed "نعم", code schedules it directly
+          try {
+            const scheduledAt = parseRelativeTime(messageText);
+            const actionType = accountData?.follow_up_action_type || 'both';
+
+            const { error: fupErr } = await adminSupabase.from('follow_ups').insert({
+              account_id: accountId,
+              contact_id: contactId,
+              conversation_id: conversationId,
+              reason: 'تذكير ومتابعة موعد العميل',
+              scheduled_at: scheduledAt.toISOString(),
+              action_type: actionType,
+              status: 'pending',
+            });
+
+            if (!fupErr) {
+              followUpScheduled = true;
+              console.log('[AutoResponder] ✅ Follow-up scheduled via intent fallback:', messageText, '→', scheduledAt.toISOString());
+            }
+          } catch (err: any) {
+            console.error('[AutoResponder] Error in fallback follow-up insertion:', err.message);
+          }
+        }
+
+        // Also check if reply text mentions confirmed appointment or reminder
+        if (!followUpScheduled && /تم تفعيل خدمة التذكير|تم تسجيلك|تأكيد موعدك/i.test(replyText)) {
+          try {
+            const scheduledAt = parseRelativeTime(replyText);
+            const actionType = accountData?.follow_up_action_type || 'both';
+
+            await adminSupabase.from('follow_ups').insert({
+              account_id: accountId,
+              contact_id: contactId,
+              conversation_id: conversationId,
+              reason: 'تذكير موعد مؤكد',
+              scheduled_at: scheduledAt.toISOString(),
+              action_type: actionType,
+              status: 'pending',
+            });
+            console.log('[AutoResponder] ✅ Follow-up scheduled via reply text confirmation');
+          } catch (_) {}
+        }
+
+        // Sanitize any refusal hallucinations if a follow-up was scheduled or requested
+        if (followUpScheduled || isReminderIntent) {
+          const refusalPhrases = ['لا أستطيع المراسلة', 'لا يمكنني المراسلة', 'لا أستطيع التذكير', 'لا يمكنني التذكير', 'انتهى وقت استقبال المواعيد'];
+          if (refusalPhrases.some((phrase) => replyText.includes(phrase))) {
+            replyText = 'أبشر، تم تسجيل طلبك وجدولة التذكير وسأقوم بمراسلتك والتواصل معك في الوقت المحدد بإذن الله 👍';
+          }
         }
 
         await sendAndSaveReply({
@@ -296,7 +359,7 @@ async function buildConversationHistory(
  * Parse relative time expressions like "بعد دقيقتين", "بعد 10 دقائق", "غداً", "بعد ساعتين"
  * into an absolute Date.
  */
-function parseRelativeTime(relativeDesc: string): Date {
+export function parseRelativeTime(relativeDesc: string): Date {
   const now = new Date();
   const rawDesc = relativeDesc.trim().toLowerCase();
 
