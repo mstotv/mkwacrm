@@ -246,6 +246,19 @@ wacrm/
 4. **حلقة المعالجة التفاعلية (AI Multi-turn Loop):** برمجة حلقة تفاعلية في [auto-responder.ts](file:///c:/Users/Mustafa/Desktop/wacrm/src/lib/whatsapp/auto-responder.ts) و [engine.ts](file:///c:/Users/Mustafa/Desktop/wacrm/src/lib/automations/engine.ts) لاعتراض تاغات المواعيد `[FIND_MY_APPOINTMENTS]` و `[CANCEL_APPOINTMENT: id]` لتنفيذ أوامر الاستعلام البرمجية والإلغاء خلف الكواليس وتمرير نتائجها للنموذج قبل صياغة الرسالة النهائية للعميل.
 5. **معالجة أخطاء التجميع وبناء المشروع (Coolify build fixes):** إصلاح استيراد `deleteCalendarEvent` المفقود في المستجيب التلقائي، وحل تضارب تعريف متغير `busySlotsText` في دالة الأتمتة مما يضمن تجميع وبناء مشروع Next.js ناجحاً بنسبة 100% وخالياً من الأخطاء في خوادم Coolify.
 
+### ف. إصلاحات وتحديثات الذكاء الاصطناعي والاستخراج الذكي للطلبات (AI System Prompt Persistence, Anti-Hallucination & Smart Order Extraction):
+1. **استقرار حفظ إعدادات الذكاء الاصطناعي ومفتاح الـ API (`ai-panel.tsx`):**
+   - **إصلاح زر التفعيل (Toggle persistence):** تعديل دالة الحفظ والتفعيل الفوري لزر الرد التلقائي لاستخدام `upsert` مع `onConflict: 'account_id'` في جدول `ai_config` لمنع إلغاء التفعيل المباشر أو الرجوع التلقائي للوضع المفعل عند تحديث الصفحة.
+   - **فصل موجه النظام (System Prompt Isolation):** إصلاح إعادة تعيين الـ System Prompt ومنع رجوعه للبرومبت الافتراضي عند الحفظ، مما يتيح إيقاف البوت العام وتوجيهه حصراً من داخل خطوات مسارات العمل (Workflows).
+2. **تطهير حاقن النصوص التوجيهية ومنع الهلوسة (Prompt Neutralization & Anti-Hallucination):**
+   - **تجريد البرومبت العام:** إعادة بناء طريقة تكوين الرسائل التوجيهية في كل من [auto-responder.ts](file:///C:/Users/Mustafa/Desktop/wacrm/src/lib/whatsapp/auto-responder.ts) و [engine.ts](file:///C:/Users/Mustafa/Desktop/wacrm/src/lib/automations/engine.ts) لتكون محايدة بالكامل وتعتمد 100% على توجيهات صاحب العمل بدلاً من التوجيه المفروض مسبقاً لمجال المواعيد.
+   - **المنع الصارم للخلط بين المنتجات والمواعيد:** إضافة تعليمات فنية عامة تمنع البوت من قفز منطق فحص التقويم عند طلب شراء منتج عادي، ومنع اختراع تفاصيل دفع أو توصيل أو رسوم شحن غير مذكورة صراحة.
+3. **الاستخراج الذكي التلقائي لبيانات الطلبات (Smart Order Extraction for Sheets & Telegram):**
+   - **ربط البيانات بالورق وقواعد البيانات:** حل الفجوة الناتجة عن تجميع الذكاء الاصطناعي لبيانات الطلب في نص المحادثة دون حفظها في سجل جهة الاتصال.
+   - **معالجة المحادثة الكاملة:** بعد كل رد للذكاء الاصطناعي، يقرأ المحرك آخر 20 رسالة ويطلب من النموذج استخراج كائن JSON مُهيكل يتضمن: (`customer_name`, `customer_phone`, `customer_address`, `product_name`, `product_color`, `product_size`, `quantity`, `unit_price`, `shipping_cost`, `total_price`, `payment_method`, `notes`).
+   - **تحديث جهة الاتصال ومتغيرات الوركفلو:** كتابة الاسم، العنوان، واللون مباشرة في سجل جدول `contacts` لضمان قراءة حقول `contact.name` و `contact.address` و `contact.color` في Google Sheets بنجاح، إضافة إلى تخزين المتغيرات بصيغة `vars.order_*` و `vars.order_summary`.
+   - **إثراء إشعارات تليجرام:** دمج كافة البيانات المستخرجة في نص إشعار التلغرام لردود الأتمتة وجوجل شيت لضمان إخطار صاحب المتجر ببيانات الطلب الكاملة فوراً.
+
 ---
 
 ## 9. تكاملات ونقاط الربط (Integration Endpoints)
@@ -255,5 +268,6 @@ wacrm/
 ---
 
 هذا المستند هو دليلك الشامل، ويجب تحديثه باستمرار في حال حدوث تغييرات جوهرية في معمارية النظام أو جداول قاعدة البيانات.
+
 
 
