@@ -1450,7 +1450,7 @@ async function markPending(id: string, status: 'done' | 'failed') {
 // Google Calendar Helpers
 // ------------------------------------------------------------
 
-async function fetchCalendarBusySlots(accountId: string, token: string, calendarId: string): Promise<string> {
+export async function fetchCalendarBusySlots(accountId: string, token: string, calendarId: string): Promise<string> {
   try {
     const timeMin = new Date().toISOString()
     const timeMax = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // next 7 days
@@ -1499,7 +1499,7 @@ async function fetchCalendarBusySlots(accountId: string, token: string, calendar
   }
 }
 
-async function createCalendarEvent(
+export async function createCalendarEvent(
   accountId: string,
   token: string,
   calendarId: string,

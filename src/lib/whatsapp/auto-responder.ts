@@ -4,6 +4,8 @@ import { sendEvolutionTextMessage } from './evolution-api';
 
 import { hasFeatureAccess } from '@/lib/auth/features';
 import { startFollowUpBackgroundWorker } from '@/lib/follow-ups/runner';
+import { getGoogleSheetsConfig, getFreshTokenForAccount } from '@/lib/whatsapp/google-sheets';
+import { fetchCalendarBusySlots, createCalendarEvent } from '@/lib/automations/engine';
 
 // Admin client to safely read configurations and update messages
 const adminSupabase = createClient(
@@ -97,6 +99,35 @@ export async function runAutoResponder(args: AutoResponderArgs) {
       // ─── Build conversation history ──────────────────────────────
       const history = await buildConversationHistory(conversationId);
 
+      // ─── Fetch calendar busy slots if a Google Account is connected ──────
+      let calendarContext = '';
+      let googleToken = '';
+      let googleAccountId = '';
+      let calendarId = 'primary';
+      try {
+        const { accounts } = await getGoogleSheetsConfig(accountId);
+        if (accounts && accounts.length > 0) {
+          googleAccountId = accounts[0].id;
+          googleToken = await getFreshTokenForAccount(accountId, googleAccountId);
+          calendarId = accounts[0].calendar_id || 'primary';
+          const busySlotsText = await fetchCalendarBusySlots(accountId, googleToken, calendarId);
+          if (busySlotsText) {
+            calendarContext = `\n\n**معلومات المواعيد في تقويم Google Calendar (هام جداً):**
+تاريخ اليوم الحالي هو: ${new Date().toISOString().split('T')[0]}
+${busySlotsText}
+
+**تعليمات الحجز والتقويم:**
+- يُحظر تماماً اقتراح أو تأكيد أي موعد للعميل يقع في الأوقات المحجوزة أعلاه.
+- لا يجوز أبداً تأكيد حجز أي موعد للعميل نصياً إلا بعد إرفاق التاج التالي بدقة في نهاية ردك:
+[BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss]
+حيث YYYY-MM-DDTHH:mm:ss هو تاريخ ووقت الموعد المتفق عليه بتنسيق ISO.
+- في حال كان الوقت المطلوب من العميل محجوزاً أو خارج ساعات العمل (من 2:00 ظهراً وحتى 8:00 مساءً)، اعتذر للعميل واقترح عليه موعداً بديلاً متوفراً حقيقياً من الأوقات المتاحة، ولا تخترع أي موعد وهمي.`;
+          }
+        }
+      } catch (calErr) {
+        console.error('[AutoResponder] Failed to load calendar context:', calErr);
+      }
+
       // ─── Build follow-up context with current date/time ─────────
       let followUpContext = '';
       let accountData: any = null;
@@ -140,7 +171,7 @@ ${timeExplanation}
       // ─── Build system prompt ─────────────────────────────────────
       const basePrompt = aiConfig.system_prompt || 'أنت مساعد ذكي لخدمة العملاء. أجب على الأسئلة بدقة ولباقة باللغة العربية.';
       const brevityInstruction = '\n\n**تعليمات أسلوب الرد:**\n- أجب دائماً بإيجاز ولباقة (جملة أو جملتين فقط).';
-      const compiledSystemPrompt = `${basePrompt}${followUpContext}${brevityInstruction}`;
+      const compiledSystemPrompt = `${basePrompt}${calendarContext}${followUpContext}${brevityInstruction}`;
 
       // ─── Build LLM messages ──────────────────────────────────────
       const llmMessages: { role: string; content: string }[] = [
@@ -198,6 +229,65 @@ ${timeExplanation}
           replyText = resData.choices[0].message.content.trim();
         } else {
           console.error('[AutoResponder] DeepSeek API error:', resData.error || resData);
+        }
+      }
+
+      // ─── Process BOOK_APPOINTMENT tag ────────────────────────────
+      let appointmentBookedSuccessfully = false;
+      let hasBookTag = false;
+
+      if (replyText) {
+        const bookMatch = replyText.match(/\[BOOK_APPOINTMENT:\s*([^\]]+)\]/);
+        if (bookMatch) {
+          hasBookTag = true;
+          const appointmentTime = bookMatch[1].trim();
+          try {
+            let contactName = 'عميل واتساب';
+            let contactPhone = '';
+            const { data: contactData } = await adminSupabase
+               .from('contacts')
+               .select('name, phone')
+               .eq('id', contactId)
+               .maybeSingle();
+            if (contactData) {
+              contactName = contactData.name || contactName;
+              contactPhone = contactData.phone || '';
+            }
+
+            const summary = `موعد مع العميل: ${contactName}`;
+            const description = `تم الحجز تلقائياً عبر واتساب.\nالاسم: ${contactName}\nالهاتف: ${contactPhone}`;
+
+            console.log('[AutoResponder Calendar] Attempting to book event at:', appointmentTime);
+            const eventId = await createCalendarEvent(
+              accountId,
+              googleToken,
+              calendarId,
+              summary,
+              description,
+              appointmentTime
+            );
+            
+            if (eventId) {
+              appointmentBookedSuccessfully = true;
+              console.log('[AutoResponder Calendar] Booked event successfully. ID:', eventId);
+
+              // Send Telegram notification
+              try {
+                const { notifyAccountViaTelegram, formatAppointmentNotification } = require('@/lib/notifications/telegram');
+                await notifyAccountViaTelegram(
+                  accountId,
+                  formatAppointmentNotification(contactName, contactPhone, appointmentTime, description)
+                );
+              } catch (telErr) {
+                console.error('[AutoResponder Calendar] Telegram notification failed:', telErr);
+              }
+            }
+          } catch (bookErr: any) {
+            console.error('[AutoResponder Calendar] Auto booking failed:', bookErr.message);
+          }
+
+          // Clean the tag from replyText
+          replyText = replyText.replace(/\[BOOK_APPOINTMENT:\s*[^\]]+\]/, '').trim();
         }
       }
 
@@ -307,6 +397,13 @@ ${timeExplanation}
           if (refusalPhrases.some((phrase) => replyText.includes(phrase))) {
             replyText = 'أبشر، تم تسجيل طلبك وجدولة التذكير وسأقوم بمراسلتك والتواصل معك في الوقت المحدد بإذن الله 👍';
           }
+        }
+
+        // ─── Strict Calendar Protection: Intercept fake/hallucinated confirmations ───
+        const mentionsAppointmentConfirmation = /تم تسجيل موعدك|تم تأكيد موعدك|تم حجز موعدك/i.test(replyText);
+        if (mentionsAppointmentConfirmation && (!hasBookTag || !appointmentBookedSuccessfully)) {
+          console.warn('[AutoResponder] Strict Calendar Protection triggered: AI hallucinated appointment confirmation.');
+          replyText = 'عذراً، لم نتمكن من حجز هذا الموعد في التقويم حالياً (قد يكون الوقت غير متاح أو محجوزاً مسبقاً). يرجى مراجعة الأوقات المتاحة واختيار موعد آخر مناسب 👍';
         }
 
         await sendAndSaveReply({
