@@ -3,6 +3,7 @@ import { sendTextMessage } from './meta-api';
 import { sendEvolutionTextMessage } from './evolution-api';
 
 import { hasFeatureAccess } from '@/lib/auth/features';
+import { startFollowUpBackgroundWorker } from '@/lib/follow-ups/runner';
 
 // Admin client to safely read configurations and update messages
 const adminSupabase = createClient(
@@ -23,6 +24,9 @@ interface AutoResponderArgs {
 }
 
 export async function runAutoResponder(args: AutoResponderArgs) {
+  // Ensure in-app follow-up worker is running
+  startFollowUpBackgroundWorker();
+
   const {
     accountId,
     contactId,
@@ -112,21 +116,21 @@ export async function runAutoResponder(args: AutoResponderArgs) {
 
         followUpContext = `\n\n**معلومات المتابعة التلقائية (AI Follow-up):**
 تاريخ ووقت اليوم الحالي هو: ${currentDayTime} (تنسيق ISO: ${new Date().toISOString()}).
-إذا أبدى العميل رغبة في التذكير أو المتابعة بعد فترة معينة (مثال: "ذكرني بعد 10 دقائق"، "تواصل معي بعد يومين"، "بكرة كلمني"، "بعد ساعة")، يجب عليك:
-1. الرد بتأكيد أنك ستذكّره في الوقت المطلوب.
+إذا أبدى العميل رغبة في التذكير أو المتابعة بعد فترة معينة (مثال: "ذكرني بعد 10 دقائق"، "تواصل معي بعد يومين"، "بكرة كلمني"، "بعد ساعة"، "اريد ان تراسلني بعد دقيقتين"), يجب عليك:
+1. الرد بتأكيد أنك ستذكّره أو تواصل معه في الوقت المطلوب.
 2. إضافة التاج التالي بدقة في نهاية ردك:
 [SCHEDULE_FOLLOW_UP: السبب | الوقت النسبي | YYYY-MM-DDTHH:mm]
 حيث:
 - السبب: وصف مختصر لسبب المتابعة (مثال: تذكير بموعد الحجز).
-- الوقت النسبي: ما قاله العميل (مثال: بعد 10 دقائق، غداً، بعد ساعتين).
+- الوقت النسبي: ما قاله العميل (مثال: بعد دقيقتين، بعد 10 دقائق، غداً، بعد ساعتين).
 - YYYY-MM-DDTHH:mm: التاريخ والوقت الفعلي المحسوب بناءً على الوقت الحالي.
 
 أمثلة:
+- إذا كان الآن 2026-07-23T04:30 وقال العميل "ذكرني بعد دقيقتين" → [SCHEDULE_FOLLOW_UP: تذكير لحجز موعد | بعد دقيقتين | 2026-07-23T04:32]
 - إذا كان الآن 2026-07-23T04:30 وقال العميل "ذكرني بعد 10 دقائق" → [SCHEDULE_FOLLOW_UP: تذكير حسب طلب العميل | بعد 10 دقائق | 2026-07-23T04:40]
 - إذا كان الآن 2026-07-23T04:30 وقال العميل "ذكرني بكرة" → [SCHEDULE_FOLLOW_UP: تذكير حسب طلب العميل | غداً | 2026-07-24T10:00]
-- إذا كان الآن 2026-07-23T04:30 وقال العميل "ذكرني بعد ساعتين" → [SCHEDULE_FOLLOW_UP: تذكير حسب طلب العميل | بعد ساعتين | 2026-07-23T06:30]
 
-هام: يجب أن تضيف التاج دائماً عند طلب التذكير. لا تقل أبداً "لا أستطيع التذكير".`;
+هام جداً: يجب أن تضيف التاج دائماً عند طلب التذكير. لا تقل أبداً "لا أستطيع التذكير".`;
       } catch (acctErr) {
         console.error('[AutoResponder] Failed to load account context for follow-up:', acctErr);
       }
@@ -200,14 +204,20 @@ export async function runAutoResponder(args: AutoResponderArgs) {
         const followUpMatch = replyText.match(/\[SCHEDULE_FOLLOW_UP:\s*([^|]+)\|\s*([^|]+)\|\s*([^\]]+)\]/);
         if (followUpMatch) {
           const reason = followUpMatch[1].trim();
-          const _relativeDesc = followUpMatch[2].trim();
+          const relativeDesc = followUpMatch[2].trim();
           const targetDateStr = followUpMatch[3].trim();
 
           try {
-            let scheduledAt = new Date(targetDateStr);
-            if (isNaN(scheduledAt.getTime())) {
-              // Fallback: try parsing relative time from the original text
-              scheduledAt = parseRelativeTime(_relativeDesc);
+            // First check relative time parsing for accuracy
+            let scheduledAt = parseRelativeTime(relativeDesc || messageText);
+            
+            // If parseRelativeTime used fallback and targetDateStr is valid ISO with time:
+            if (targetDateStr && targetDateStr.includes(':') && !isNaN(new Date(targetDateStr).getTime())) {
+              const parsedTarget = new Date(targetDateStr);
+              // Only override if targetDateStr is in the future
+              if (parsedTarget.getTime() > Date.now()) {
+                scheduledAt = parsedTarget;
+              }
             }
 
             // Determine action type from account settings
@@ -283,45 +293,75 @@ async function buildConversationHistory(
 }
 
 /**
- * Parse relative time expressions like "بعد 10 دقائق", "غداً", "بعد ساعتين"
- * into an absolute Date. Falls back to 1 hour from now if unparseable.
+ * Parse relative time expressions like "بعد دقيقتين", "بعد 10 دقائق", "غداً", "بعد ساعتين"
+ * into an absolute Date.
  */
 function parseRelativeTime(relativeDesc: string): Date {
   const now = new Date();
-  const desc = relativeDesc.trim().toLowerCase();
+  const rawDesc = relativeDesc.trim().toLowerCase();
 
-  // Match "بعد X دقيقة/دقائق"
-  const minuteMatch = desc.match(/(\d+)\s*(دقيق|minute)/);
+  // Convert Arabic numerals (٠١٢٣٤٥٦٧٨٩) to Latin (0123456789)
+  const desc = rawDesc.replace(/[٠-٩]/g, (d) =>
+    (d.charCodeAt(0) - 1632).toString()
+  );
+
+  // 1. Dual minutes: "دقيقتين", "دقيقتان"
+  if (desc.includes('دقيقتين') || desc.includes('دقيقتان')) {
+    return new Date(now.getTime() + 2 * 60 * 1000);
+  }
+
+  // 2. Single minute: "دقيقة" without number
+  if (desc.includes('دقيقة') && !/\d/.test(desc)) {
+    return new Date(now.getTime() + 1 * 60 * 1000);
+  }
+
+  // 3. Dual hours: "ساعتين", "ساعتان"
+  if (desc.includes('ساعتين') || desc.includes('ساعتان')) {
+    return new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  }
+
+  // 4. Single hour: "ساعة" without number
+  if (desc.includes('ساعة') && !desc.includes('نصف') && !desc.includes('نص') && !/\d/.test(desc)) {
+    return new Date(now.getTime() + 1 * 60 * 60 * 1000);
+  }
+
+  // 5. Half hour: "نصف ساعة" or "نص ساعة"
+  if (desc.includes('نصف ساعة') || desc.includes('نص ساعة')) {
+    return new Date(now.getTime() + 30 * 60 * 1000);
+  }
+
+  // 6. Match "بعد X دقيقة/دقائق" or "X دقيقة"
+  const minuteMatch = desc.match(/(\d+)\s*(دقيق|d|min|minute)/);
   if (minuteMatch) {
-    return new Date(now.getTime() + parseInt(minuteMatch[1]) * 60 * 1000);
+    return new Date(now.getTime() + parseInt(minuteMatch[1], 10) * 60 * 1000);
   }
 
-  // Match "بعد X ساعة/ساعات"
-  const hourMatch = desc.match(/(\d+)\s*(ساع|hour)/);
+  // 7. Match "بعد X ساعة/ساعات" or "X ساعة"
+  const hourMatch = desc.match(/(\d+)\s*(ساع|h|hr|hour)/);
   if (hourMatch) {
-    return new Date(now.getTime() + parseInt(hourMatch[1]) * 60 * 60 * 1000);
+    return new Date(now.getTime() + parseInt(hourMatch[1], 10) * 60 * 60 * 1000);
   }
 
-  // Match "بعد X يوم/أيام"
+  // 8. Match "بعد X يوم/أيام" or "X يوم"
   const dayMatch = desc.match(/(\d+)\s*(يوم|أيام|day)/);
   if (dayMatch) {
-    return new Date(now.getTime() + parseInt(dayMatch[1]) * 24 * 60 * 60 * 1000);
+    return new Date(now.getTime() + parseInt(dayMatch[1], 10) * 24 * 60 * 60 * 1000);
   }
 
-  // Match "غداً" or "بكرة" or "بكره"
+  // 9. Match "غداً" or "بكرة" or "بكره"
   if (desc.includes('غد') || desc.includes('بكر') || desc.includes('tomorrow')) {
     const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     tomorrow.setHours(10, 0, 0, 0);
     return tomorrow;
   }
 
-  // Match "الأسبوع القادم" / "الاسبوع الجاي"
+  // 10. Match "الأسبوع القادم" / "الاسبوع الجاي"
   if (desc.includes('أسبوع') || desc.includes('اسبوع') || desc.includes('week')) {
     return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   }
 
-  // Fallback: 1 hour from now
-  return new Date(now.getTime() + 60 * 60 * 1000);
+  // Fallback: 10 minutes from now if unparseable
+  return new Date(now.getTime() + 10 * 60 * 1000);
 }
 
 interface SendAndSaveArgs {
