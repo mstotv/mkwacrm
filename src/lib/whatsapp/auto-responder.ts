@@ -6,6 +6,7 @@ import { hasFeatureAccess } from '@/lib/auth/features';
 import { startFollowUpBackgroundWorker } from '@/lib/follow-ups/runner';
 import { getGoogleSheetsConfig, getFreshTokenForAccount } from '@/lib/whatsapp/google-sheets';
 import { fetchCalendarBusySlots, createCalendarEvent } from '@/lib/automations/engine';
+import { getBaghdadParts, createDateFromBaghdadParts, parseLocalTimeString } from './timezone-utils';
 
 // Admin client to safely read configurations and update messages
 const adminSupabase = createClient(
@@ -271,6 +272,23 @@ ${timeExplanation}
               appointmentBookedSuccessfully = true;
               console.log('[AutoResponder Calendar] Booked event successfully. ID:', eventId);
 
+              // Construct deterministic confirmation message to avoid AI timezone hallucinations
+              let formattedTime = '';
+              let formattedDate = '';
+              const partsMatch = appointmentTime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+              if (partsMatch) {
+                const [_, y, m, d, h, min] = partsMatch;
+                // Parse locally to preserve the exact hours/minutes input by the AI
+                const dateObj = new Date(Number(y), Number(m) - 1, Number(d), Number(h), Number(min));
+                formattedTime = dateObj.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: true });
+                formattedDate = dateObj.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
+              } else {
+                const dateObj = new Date(appointmentTime);
+                formattedTime = dateObj.toLocaleTimeString('ar-SA', { timeZone: 'Asia/Baghdad', hour: '2-digit', minute: '2-digit', hour12: true });
+                formattedDate = dateObj.toLocaleDateString('ar-SA', { timeZone: 'Asia/Baghdad', year: 'numeric', month: 'long', day: 'numeric' });
+              }
+              replyText = `تم تسجيل موعدك بنجاح في تقويم العيادة:\nالتاريخ: ${formattedDate}\nالوقت: ${formattedTime} 👍`;
+
               // Send Telegram notification
               try {
                 const { notifyAccountViaTelegram, formatAppointmentNotification } = require('@/lib/notifications/telegram');
@@ -318,8 +336,8 @@ ${timeExplanation}
 
           try {
             let scheduledAt = parseRelativeTime(relativeDesc || messageText);
-            if (targetDateStr && targetDateStr.includes(':') && !isNaN(new Date(targetDateStr).getTime())) {
-              const parsedTarget = new Date(targetDateStr);
+            if (targetDateStr && targetDateStr.includes(':') && !isNaN(parseLocalTimeString(targetDateStr).getTime())) {
+              const parsedTarget = parseLocalTimeString(targetDateStr);
               if (parsedTarget.getTime() > Date.now()) {
                 scheduledAt = parsedTarget;
               }
@@ -510,9 +528,9 @@ export function parseRelativeTime(relativeDesc: string): Date {
 
   // 9. Match "غداً" or "بكرة" or "بكره"
   if (desc.includes('غد') || desc.includes('بكر') || desc.includes('tomorrow')) {
-    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    tomorrow.setHours(10, 0, 0, 0);
-    return tomorrow;
+    const tomorrowInstant = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const tomorrowParts = getBaghdadParts(tomorrowInstant);
+    return createDateFromBaghdadParts(tomorrowParts.year, tomorrowParts.month, tomorrowParts.day, 10, 0, 0);
   }
 
   // 10. Match "الأسبوع القادم" / "الاسبوع الجاي"

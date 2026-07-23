@@ -23,6 +23,7 @@ import { engineSendText, engineSendTemplate } from './meta-send'
 import { getFreshTokenForAccount, getGoogleSheetsConfig } from '@/lib/whatsapp/google-sheets'
 import { hasFeatureAccess } from '@/lib/auth/features'
 import { parseRelativeTime } from '@/lib/whatsapp/auto-responder'
+import { getBaghdadParts, createDateFromBaghdadParts, parseLocalTimeString } from '@/lib/whatsapp/timezone-utils'
 import {
   notifyAccountViaTelegram,
   formatAppointmentNotification,
@@ -901,9 +902,9 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           // Parse date using the helper first
           let scheduledAt = parseRelativeTime(relativeDesc || targetDateStr)
           
-          // If parseRelativeTime returned fallback and targetDateStr is a valid specific ISO time, use it
-          if (targetDateStr && targetDateStr.includes(':') && !isNaN(new Date(targetDateStr).getTime())) {
-            const parsedTarget = new Date(targetDateStr)
+           // If parseRelativeTime returned fallback and targetDateStr is a valid specific ISO time, use it
+          if (targetDateStr && targetDateStr.includes(':') && !isNaN(parseLocalTimeString(targetDateStr).getTime())) {
+            const parsedTarget = parseLocalTimeString(targetDateStr)
             if (parsedTarget.getTime() > Date.now()) {
               scheduledAt = parsedTarget;
             }
@@ -913,7 +914,8 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
             if (!isShortOffset) {
               const defaultTimeStr = accountData?.follow_up_default_time || '10:00'
               const [hours, minutes] = defaultTimeStr.split(':').map(Number)
-              scheduledAt.setHours(hours || 10, minutes || 0, 0, 0)
+              const parts = getBaghdadParts(scheduledAt);
+              scheduledAt = createDateFromBaghdadParts(parts.year, parts.month, parts.day, hours || 10, minutes || 0, 0);
             }
           }
 
@@ -1485,8 +1487,23 @@ export async function fetchCalendarBusySlots(accountId: string, token: string, c
         const start = new Date(slot.start)
         const end = new Date(slot.end)
         const formatDate = (d: Date) => {
-          const pad = (n: number) => String(n).padStart(2, '0')
-          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} الساعة ${pad(d.getHours())}:${pad(d.getMinutes())}`
+          const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Baghdad',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          }).formatToParts(d);
+          
+          const year = parts.find(p => p.type === 'year')?.value;
+          const month = parts.find(p => p.type === 'month')?.value;
+          const day = parts.find(p => p.type === 'day')?.value;
+          const hour = parts.find(p => p.type === 'hour')?.value;
+          const minute = parts.find(p => p.type === 'minute')?.value;
+          
+          return `${year}-${month}-${day} الساعة ${hour}:${minute}`;
         }
         return `- محجوز من: ${formatDate(start)} إلى: ${formatDate(end)}`
       })
@@ -1508,8 +1525,46 @@ export async function createCalendarEvent(
   startTimeIso: string
 ): Promise<string> {
   try {
-    const start = new Date(startTimeIso)
-    const end = new Date(start.getTime() + 60 * 60 * 1000) // default 1 hour duration
+    // Extract numbers to construct local start date strictly to avoid default JS timezone shift
+    const match = startTimeIso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    let startStr = '';
+    let endStr = '';
+
+    if (match) {
+      const [_, y, m, d, h, min] = match;
+      startStr = `${y}-${m}-${d}T${h}:${min}:00`;
+      
+      const startDate = new Date(Number(y), Number(m) - 1, Number(d), Number(h), Number(min));
+      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // 1 hour duration
+      const pad = (n: number) => String(n).padStart(2, '0');
+      endStr = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:00`;
+    } else {
+      const start = new Date(startTimeIso);
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      
+      const formatToBaghdadISO = (date: Date) => {
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Asia/Baghdad',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }).formatToParts(date);
+        const year = parts.find(p => p.type === 'year')?.value;
+        const month = parts.find(p => p.type === 'month')?.value;
+        const day = parts.find(p => p.type === 'day')?.value;
+        const hour = parts.find(p => p.type === 'hour')?.value;
+        const minute = parts.find(p => p.type === 'minute')?.value;
+        const second = parts.find(p => p.type === 'second')?.value;
+        return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+      };
+
+      startStr = formatToBaghdadISO(start);
+      endStr = formatToBaghdadISO(end);
+    }
 
     const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`, {
       method: 'POST',
@@ -1521,10 +1576,12 @@ export async function createCalendarEvent(
         summary,
         description,
         start: {
-          dateTime: start.toISOString(),
+          dateTime: startStr,
+          timeZone: 'Asia/Baghdad',
         },
         end: {
-          dateTime: end.toISOString(),
+          dateTime: endStr,
+          timeZone: 'Asia/Baghdad',
         },
       }),
     })
