@@ -5,7 +5,7 @@ import { sendEvolutionTextMessage } from './evolution-api';
 import { hasFeatureAccess } from '@/lib/auth/features';
 import { startFollowUpBackgroundWorker } from '@/lib/follow-ups/runner';
 import { getGoogleSheetsConfig, getFreshTokenForAccount } from '@/lib/whatsapp/google-sheets';
-import { fetchCalendarBusySlots, createCalendarEvent } from '@/lib/automations/engine';
+import { fetchCalendarBusySlots, createCalendarEvent, deleteCalendarEvent } from '@/lib/automations/engine';
 import { getBaghdadParts, createDateFromBaghdadParts, parseLocalTimeString } from './timezone-utils';
 
 // Admin client to safely read configurations and update messages
