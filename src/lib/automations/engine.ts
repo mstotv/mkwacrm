@@ -1091,6 +1091,161 @@ ${busySlotsText}
       }
       args.context.vars.ai_reply = replyText
 
+      // ─── Smart Order Data Extraction from Full Conversation ─────
+      // After the AI reply is ready, extract structured order/customer data
+      // from the FULL conversation so that subsequent steps (Google Sheets,
+      // Telegram) can access them via contact.* fields and vars.order_* variables.
+      try {
+        // 1) Read full conversation history (last 20 messages) for extraction
+        const { data: extractMsgs } = await db
+          .from('messages')
+          .select('sender_type, content_text')
+          .eq('conversation_id', conversationId)
+          .order('created_at', { ascending: false })
+          .limit(20)
+
+        const extractHistory = (extractMsgs ?? [])
+          .reverse()
+          .map(m => `${m.sender_type === 'customer' ? 'العميل' : 'المساعد'}: ${m.content_text || ''}`)
+          .filter(line => line.length > 5)
+          .join('\n')
+
+        if (extractHistory.length > 50) {
+          // 2) Build extraction prompt (business-neutral, extracts ALL mentioned details)
+          const extractionSystemPrompt = `You are a precise data extraction assistant. Read the following conversation between a customer and an AI assistant, then extract ALL mentioned customer and order details into a single flat JSON object.
+
+Keys to extract (use null if not mentioned):
+- customer_name: Full name of the customer
+- customer_phone: Phone number
+- customer_address: Delivery/location address
+- product_name: Name of the product or service requested
+- product_color: Color mentioned
+- product_size: Size/measurement mentioned
+- quantity: Quantity mentioned
+- unit_price: Unit price mentioned
+- shipping_cost: Shipping/delivery cost mentioned
+- total_price: Total price mentioned
+- payment_method: Payment method mentioned
+- notes: Any additional notes or special requests
+
+IMPORTANT: Only extract values explicitly mentioned in the conversation. Do NOT invent or assume any values. Return raw JSON only, no markdown.`
+
+          const extractionUserMessage = `Extract all customer and order details from this conversation:\n\n${extractHistory}`
+
+          let extractedJson: any = null
+          const extractMessages = [
+            { role: 'system', content: extractionSystemPrompt },
+            { role: 'user', content: extractionUserMessage }
+          ]
+
+          // 3) Call AI model for extraction (same provider/key as the main AI)
+          if (aiConfig.provider === 'openai') {
+            const extractRes = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${aiConfig.api_key}`,
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: extractMessages,
+                response_format: { type: 'json_object' },
+                max_tokens: 400,
+              }),
+            })
+            const extractData = await extractRes.json()
+            if (extractRes.ok && extractData.choices?.[0]?.message?.content) {
+              extractedJson = JSON.parse(extractData.choices[0].message.content.trim())
+            }
+          } else if (aiConfig.provider === 'deepseek') {
+            const extractRes = await fetch('https://api.deepseek.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${aiConfig.api_key}`,
+              },
+              body: JSON.stringify({
+                model: 'deepseek-chat',
+                messages: extractMessages,
+                response_format: { type: 'json_object' },
+                max_tokens: 400,
+              }),
+            })
+            const extractData = await extractRes.json()
+            if (extractRes.ok && extractData.choices?.[0]?.message?.content) {
+              extractedJson = JSON.parse(extractData.choices[0].message.content.trim())
+            }
+          }
+
+          if (extractedJson) {
+            console.log('[automations] Extracted order data from conversation:', JSON.stringify(extractedJson))
+
+            // 4) Save all extracted fields as workflow context variables (vars.order_*)
+            const fieldMap: Record<string, string> = {
+              customer_name: 'order_customer_name',
+              customer_phone: 'order_customer_phone',
+              customer_address: 'order_customer_address',
+              product_name: 'order_product_name',
+              product_color: 'order_product_color',
+              product_size: 'order_product_size',
+              quantity: 'order_quantity',
+              unit_price: 'order_unit_price',
+              shipping_cost: 'order_shipping_cost',
+              total_price: 'order_total_price',
+              payment_method: 'order_payment_method',
+              notes: 'order_notes',
+            }
+
+            for (const [jsonKey, varKey] of Object.entries(fieldMap)) {
+              if (extractedJson[jsonKey] != null) {
+                args.context.vars[varKey] = String(extractedJson[jsonKey])
+              }
+            }
+
+            // Build a formatted order summary for vars.order_summary
+            const summaryParts: string[] = []
+            if (extractedJson.customer_name) summaryParts.push(`الاسم: ${extractedJson.customer_name}`)
+            if (extractedJson.customer_phone) summaryParts.push(`الهاتف: ${extractedJson.customer_phone}`)
+            if (extractedJson.product_name) summaryParts.push(`المنتج: ${extractedJson.product_name}`)
+            if (extractedJson.product_color) summaryParts.push(`اللون: ${extractedJson.product_color}`)
+            if (extractedJson.product_size) summaryParts.push(`المقاس: ${extractedJson.product_size}`)
+            if (extractedJson.quantity) summaryParts.push(`الكمية: ${extractedJson.quantity}`)
+            if (extractedJson.unit_price) summaryParts.push(`السعر: ${extractedJson.unit_price}`)
+            if (extractedJson.shipping_cost) summaryParts.push(`الشحن: ${extractedJson.shipping_cost}`)
+            if (extractedJson.total_price) summaryParts.push(`الإجمالي: ${extractedJson.total_price}`)
+            if (extractedJson.customer_address) summaryParts.push(`العنوان: ${extractedJson.customer_address}`)
+            if (extractedJson.payment_method) summaryParts.push(`الدفع: ${extractedJson.payment_method}`)
+            if (extractedJson.notes) summaryParts.push(`ملاحظات: ${extractedJson.notes}`)
+            args.context.vars.order_summary = summaryParts.join('\n')
+
+            // 5) Update the contact database record so contact.* fields work in Google Sheets mappings
+            if (args.contactId) {
+              const contactUpdate: Record<string, any> = {}
+              if (extractedJson.customer_name) contactUpdate.name = String(extractedJson.customer_name).trim()
+              if (extractedJson.customer_address) contactUpdate.address = String(extractedJson.customer_address).trim()
+              if (extractedJson.product_color) contactUpdate.color = String(extractedJson.product_color).trim()
+
+              if (Object.keys(contactUpdate).length > 0) {
+                contactUpdate.updated_at = new Date().toISOString()
+                const { error: updateErr } = await db
+                  .from('contacts')
+                  .update(contactUpdate)
+                  .eq('id', args.contactId)
+                  .eq('account_id', args.automation.account_id)
+                if (updateErr) {
+                  console.error('[automations] Failed to update contact with extracted order data:', updateErr)
+                } else {
+                  console.log('[automations] Updated contact record with extracted data:', Object.keys(contactUpdate).join(', '))
+                }
+              }
+            }
+          }
+        }
+      } catch (extractErr: any) {
+        // Non-critical: extraction failure should NOT block the AI reply from being sent
+        console.error('[automations] Order data extraction failed (non-blocking):', extractErr.message)
+      }
+
       // 5) Send directly or create human-in-the-loop draft
       if (cfg.human_in_the_loop) {
         const draftId = `ai-draft-${crypto.randomUUID()}`
@@ -1363,6 +1518,27 @@ Only extract values that are explicitly provided in the text. If a value is not 
             case 'message_text':
               resolvedValue = args.context?.message_text || ''
               break
+            case 'order_summary':
+              resolvedValue = String(args.context?.vars?.['order_summary'] || '')
+              break
+            case 'product_name':
+              resolvedValue = String(args.context?.vars?.['order_product_name'] || '')
+              break
+            case 'product_color':
+              resolvedValue = String(args.context?.vars?.['order_product_color'] || contactData?.color || '')
+              break
+            case 'product_size':
+              resolvedValue = String(args.context?.vars?.['order_product_size'] || '')
+              break
+            case 'quantity':
+              resolvedValue = String(args.context?.vars?.['order_quantity'] || '')
+              break
+            case 'total_price':
+              resolvedValue = String(args.context?.vars?.['order_total_price'] || '')
+              break
+            case 'payment_method':
+              resolvedValue = String(args.context?.vars?.['order_payment_method'] || '')
+              break
             default:
               resolvedValue = String(args.context?.vars?.[m.field] || m.field)
               break
@@ -1448,9 +1624,32 @@ Only extract values that are explicitly provided in the text. If a value is not 
           }
         }
 
+        // Enrich Telegram notification with extracted order data from AI
+        const enrichedFields: Record<string, string> = { ...rowValues }
+        const orderVars = args.context?.vars || {}
+        const orderFieldLabels: Record<string, string> = {
+          order_customer_name: 'اسم العميل',
+          order_product_name: 'المنتج',
+          order_product_color: 'اللون',
+          order_product_size: 'المقاس',
+          order_quantity: 'الكمية',
+          order_unit_price: 'السعر',
+          order_shipping_cost: 'الشحن',
+          order_total_price: 'الإجمالي',
+          order_customer_address: 'العنوان',
+          order_payment_method: 'طريقة الدفع',
+          order_notes: 'ملاحظات',
+        }
+        for (const [varKey, label] of Object.entries(orderFieldLabels)) {
+          const val = orderVars[varKey]
+          if (val && String(val).trim() && !Object.values(enrichedFields).includes(String(val))) {
+            enrichedFields[label] = String(val)
+          }
+        }
+
         await notifyAccountViaTelegram(
           args.automation.account_id,
-          formatOrderNotification(contactName, contactPhone, rowValues)
+          formatOrderNotification(contactName, contactPhone, enrichedFields)
         )
       } catch (tgErr) {
         console.error('[Telegram] Failed to send Sheet row notification:', tgErr)

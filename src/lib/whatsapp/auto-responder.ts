@@ -537,6 +537,107 @@ ${busySlotsText}
           replyText = 'عذراً، لم نتمكن من حجز هذا الموعد في التقويم حالياً (قد يكون الوقت غير متاح أو محجوزاً مسبقاً). يرجى مراجعة الأوقات المتاحة واختيار موعد آخر مناسب 👍';
         }
 
+        // ─── Smart Order Data Extraction from Full Conversation ─────
+        // Extract structured order/customer data from the conversation and update contact record
+        try {
+          const extractHistory = history
+            .map(m => `${m.role === 'user' ? 'العميل' : 'المساعد'}: ${m.content}`)
+            .filter(line => line.length > 5)
+            .join('\n');
+
+          if (extractHistory.length > 50) {
+            const extractionSystemPrompt = `You are a precise data extraction assistant. Read the following conversation between a customer and an AI assistant, then extract ALL mentioned customer and order details into a single flat JSON object.
+
+Keys to extract (use null if not mentioned):
+- customer_name: Full name of the customer
+- customer_phone: Phone number
+- customer_address: Delivery/location address
+- product_name: Name of the product or service requested
+- product_color: Color mentioned
+- product_size: Size/measurement mentioned
+- quantity: Quantity mentioned
+- unit_price: Unit price mentioned
+- shipping_cost: Shipping/delivery cost mentioned
+- total_price: Total price mentioned
+- payment_method: Payment method mentioned
+- notes: Any additional notes or special requests
+
+IMPORTANT: Only extract values explicitly mentioned in the conversation. Do NOT invent or assume any values. Return raw JSON only, no markdown.`;
+
+            const extractionUserMessage = `Extract all customer and order details from this conversation:\n\n${extractHistory}`;
+
+            let extractedJson: any = null;
+            const extractMessages = [
+              { role: 'system', content: extractionSystemPrompt },
+              { role: 'user', content: extractionUserMessage }
+            ];
+
+            if (aiConfig.provider === 'openai') {
+              const extractRes = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${aiConfig.api_key}`,
+                },
+                body: JSON.stringify({
+                  model: 'gpt-4o-mini',
+                  messages: extractMessages,
+                  response_format: { type: 'json_object' },
+                  max_tokens: 400,
+                }),
+              });
+              const extractData = await extractRes.json();
+              if (extractRes.ok && extractData.choices?.[0]?.message?.content) {
+                extractedJson = JSON.parse(extractData.choices[0].message.content.trim());
+              }
+            } else if (aiConfig.provider === 'deepseek') {
+              const extractRes = await fetch('https://api.deepseek.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${aiConfig.api_key}`,
+                },
+                body: JSON.stringify({
+                  model: 'deepseek-chat',
+                  messages: extractMessages,
+                  response_format: { type: 'json_object' },
+                  max_tokens: 400,
+                }),
+              });
+              const extractData = await extractRes.json();
+              if (extractRes.ok && extractData.choices?.[0]?.message?.content) {
+                extractedJson = JSON.parse(extractData.choices[0].message.content.trim());
+              }
+            }
+
+            if (extractedJson && contactId) {
+              console.log('[AutoResponder] Extracted order data:', JSON.stringify(extractedJson));
+
+              // Update contact record with extracted data
+              const contactUpdate: Record<string, any> = {};
+              if (extractedJson.customer_name) contactUpdate.name = String(extractedJson.customer_name).trim();
+              if (extractedJson.customer_address) contactUpdate.address = String(extractedJson.customer_address).trim();
+              if (extractedJson.product_color) contactUpdate.color = String(extractedJson.product_color).trim();
+
+              if (Object.keys(contactUpdate).length > 0) {
+                contactUpdate.updated_at = new Date().toISOString();
+                const { error: updateErr } = await adminSupabase
+                  .from('contacts')
+                  .update(contactUpdate)
+                  .eq('id', contactId)
+                  .eq('account_id', accountId);
+                if (updateErr) {
+                  console.error('[AutoResponder] Failed to update contact with extracted data:', updateErr);
+                } else {
+                  console.log('[AutoResponder] Updated contact record:', Object.keys(contactUpdate).join(', '));
+                }
+              }
+            }
+          }
+        } catch (extractErr: any) {
+          console.error('[AutoResponder] Order data extraction failed (non-blocking):', extractErr.message);
+        }
+
         await sendAndSaveReply({
           replyText,
           senderPhone,
