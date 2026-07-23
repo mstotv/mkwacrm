@@ -340,6 +340,61 @@ export function AIPanel() {
     });
   };
 
+  const handleToggleActive = async (checked: boolean) => {
+    if (!account?.id) return;
+    
+    if (checked && !config.api_key) {
+      toast.error('الرجاء إدخال مفتاح الـ API الخاص بك أولاً قبل تفعيل البوت');
+      return;
+    }
+
+    setSaving(true);
+    const supabase = createClient();
+    
+    // Rebuild training data into system prompt before saving
+    const finalPrompt = updatePromptWithTraining(config.system_prompt, trainingEntries);
+
+    try {
+      const { data, error } = await supabase
+        .from('ai_config')
+        .upsert({
+          account_id: account.id,
+          provider: config.provider,
+          api_key: config.api_key,
+          bot_name: config.bot_name,
+          system_prompt: finalPrompt,
+          is_active: checked,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'account_id' })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setConfig({
+          id: data.id,
+          provider: data.provider || 'openai',
+          api_key: data.api_key || '',
+          bot_name: data.bot_name || 'AI Assistant',
+          system_prompt: data.system_prompt || '',
+          is_active: data.is_active ?? false,
+        });
+      }
+
+      toast.success(
+        checked
+          ? 'تم تفعيل الرد التلقائي بالذكاء الاصطناعي بنجاح'
+          : 'تم إيقاف الرد التلقائي بالذكاء الاصطناعي'
+      );
+    } catch (err: any) {
+      console.error('Error toggling AI status:', err);
+      toast.error(err.message || 'فشل تحديث حالة التفعيل');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!account?.id) return;
@@ -350,38 +405,31 @@ export function AIPanel() {
     const finalPrompt = updatePromptWithTraining(config.system_prompt, trainingEntries);
 
     try {
-      if (config.id) {
-        const { error } = await supabase
-          .from('ai_config')
-          .update({
-            provider: config.provider,
-            api_key: config.api_key,
-            bot_name: config.bot_name,
-            system_prompt: finalPrompt,
-            is_active: config.is_active,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', config.id);
+      const { data, error } = await supabase
+        .from('ai_config')
+        .upsert({
+          account_id: account.id,
+          provider: config.provider,
+          api_key: config.api_key,
+          bot_name: config.bot_name,
+          system_prompt: finalPrompt,
+          is_active: config.is_active,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'account_id' })
+        .select()
+        .single();
 
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from('ai_config')
-          .insert({
-            account_id: account.id,
-            provider: config.provider,
-            api_key: config.api_key,
-            bot_name: config.bot_name,
-            system_prompt: finalPrompt,
-            is_active: config.is_active,
-          })
-          .select()
-          .single();
+      if (error) throw error;
 
-        if (error) throw error;
-        if (data) {
-          setConfig(prev => ({ ...prev, id: data.id }));
-        }
+      if (data) {
+        setConfig({
+          id: data.id,
+          provider: data.provider || 'openai',
+          api_key: data.api_key || '',
+          bot_name: data.bot_name || 'AI Assistant',
+          system_prompt: data.system_prompt || '',
+          is_active: data.is_active ?? false,
+        });
       }
 
       // Save follow-up settings in accounts
@@ -518,7 +566,7 @@ export function AIPanel() {
                 id="is_active"
                 disabled={!isOwnerOrAdmin}
                 checked={config.is_active}
-                onChange={e => setConfig(prev => ({ ...prev, is_active: e.target.checked }))}
+                onChange={e => handleToggleActive(e.target.checked)}
                 className="h-4.5 w-4.5 rounded border-slate-700 bg-slate-800 text-violet-600 focus:ring-violet-500"
               />
               <label htmlFor="is_active" className="text-sm font-medium text-white cursor-pointer select-none">
