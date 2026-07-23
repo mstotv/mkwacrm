@@ -12,6 +12,7 @@
 
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { formatBaghdadDateTime, parseLocalTimeString } from '@/lib/whatsapp/timezone-utils'
 
 // ----------------------------------------------------------------
 // Low-level Telegram API
@@ -154,28 +155,55 @@ export function formatAppointmentNotification(
   contactName: string,
   contactPhone: string,
   dateTime: string,
-  notes?: string
+  notes?: string,
+  patientName?: string,
+  patientPhone?: string,
+  googleEventId?: string,
+  htmlLink?: string
 ): string {
-  // Try to format the date nicely
+  // Try to format the date nicely using Baghdad Timezone
   let formattedDate = dateTime
   try {
-    const d = new Date(dateTime)
+    const d = parseLocalTimeString(dateTime)
     if (!isNaN(d.getTime())) {
-      const pad = (n: number) => String(n).padStart(2, '0')
-      formattedDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}  ${pad(d.getHours())}:${pad(d.getMinutes())}`
+      formattedDate = formatBaghdadDateTime(d, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      })
     }
-  } catch {
-    // keep raw string
+  } catch (e) {
+    console.error('[Telegram] Date formatting failed:', e)
   }
 
   let msg = `📅 <b>حجز موعد جديد</b>\n`
   msg += `━━━━━━━━━━━━━━━━━━━━\n`
-  msg += `👤 <b>العميل:</b> ${esc(contactName)}\n`
-  msg += `📱 <b>الهاتف:</b> <code>${esc(contactPhone)}</code>\n`
+  
+  if (patientName && (patientName !== contactName || (patientPhone && patientPhone !== contactPhone))) {
+    msg += `👤 <b>صاحب الموعد:</b> ${esc(patientName)}\n`
+    if (patientPhone) {
+      msg += `📱 <b>هاتف صاحب الموعد:</b> <code>${esc(patientPhone)}</code>\n`
+    }
+    msg += `💬 <b>الحجز عبر واتساب رقم:</b> <code>${esc(contactPhone)}</code> | <b>لصاحب الموعد:</b> ${esc(patientName)} - ${esc(patientPhone || '')}\n`
+  } else {
+    msg += `👤 <b>العميل:</b> ${esc(contactName)}\n`
+    msg += `📱 <b>الهاتف:</b> <code>${esc(contactPhone)}</code>\n`
+  }
+
   msg += `🕐 <b>التاريخ والوقت:</b> ${esc(formattedDate)}\n`
+  
   if (notes) {
     msg += `📝 <b>ملاحظات:</b> ${esc(notes)}\n`
   }
+  if (htmlLink) {
+    msg += `🔗 <b>رابط الحدث:</b> <a href="${esc(htmlLink)}">Google Calendar</a>\n`
+  } else {
+    msg += `✅ <b>تأكيد الإضافة:</b> تم إضافة الحدث بنجاح إلى Google Calendar\n`
+  }
+  
   msg += `━━━━━━━━━━━━━━━━━━━━\n`
   msg += `🔔 <i>إشعار تلقائي من MKWhats</i>`
 
@@ -190,12 +218,12 @@ export function formatOrderNotification(
   contactPhone: string,
   fields: Record<string, unknown>
 ): string {
-  let msg = `🛒 <b>طلب جديد</b>\n`
+  let msg = `🛒 <b>طلب جديد / بيانات مستلمة</b>\n`
   msg += `━━━━━━━━━━━━━━━━━━━━\n`
   msg += `👤 <b>العميل:</b> ${esc(contactName)}\n`
   msg += `📱 <b>الهاتف:</b> <code>${esc(contactPhone)}</code>\n`
   msg += `━━━━━━━━━━━━━━━━━━━━\n`
-  msg += `📋 <b>تفاصيل الطلب:</b>\n\n`
+  msg += `📋 <b>البيانات المجمعة بالكامل:</b>\n\n`
 
   const entries = Object.entries(fields)
   if (entries.length > 0) {

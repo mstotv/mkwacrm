@@ -732,9 +732,8 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           googleAccountId = accounts[0].id
           googleToken = await getFreshTokenForAccount(args.automation.account_id, googleAccountId)
           calendarId = accounts[0].calendar_id || 'primary'
-          const busySlotsText = await fetchCalendarBusySlots(args.automation.account_id, googleToken, calendarId)
           if (busySlotsText) {
-            calendarContext = `\n\n**معلومات المواعيد في تقويم Google Calendar (هام جداً):**\nتاريخ اليوم الحالي هو: ${new Date().toISOString().split('T')[0]}\n${busySlotsText}\n\n**تعليمات الحجز:**\n- لا تقترح على العميل أي موعد يقع في الأوقات المحجوزة أعلاه.\n- عندما يتفق العميل معك على موعد محدد ويؤكده بوضوح، قم بتأكيد الموعد وأرفق في نهاية ردك الوسم التالي بدقة متناهية: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss] حيث YYYY-MM-DDTHH:mm:ss هو تاريخ ووقت الموعد المتفق عليه بتنسيق ISO (مثال: [BOOK_APPOINTMENT: 2026-07-07T14:30:00]).`
+            calendarContext = `\n\n**معلومات المواعيد في تقويم Google Calendar (هام جداً):**\nتاريخ اليوم الحالي هو: ${new Date().toISOString().split('T')[0]}\n${busySlotsText}\n\n**تعليمات الحجز والتقويم:**\n- لا تقترح على العميل أي موعد يقع في الأوقات المحجوزة أعلاه.\n- عندما يتفق العميل معك على موعد محدد ويؤكده بوضوح، قم بتأكيد الموعد وأرفق في نهاية ردك الوسم التالي بدقة متناهية: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss] حيث YYYY-MM-DDTHH:mm:ss هو تاريخ ووقت الموعد المتفق عليه بتنسيق ISO.\n- إذا ذكر العميل أن الحجز لشخص آخر (أو باسم شخص آخر)، يجب استخراج الاسم والرقم (إن وجد) وتمريره في التاج كالتالي: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss | patient_name | patient_phone] (مثال: [BOOK_APPOINTMENT: 2026-07-25T15:00:00 | محمد علي | 07701234567]).\n\n**تعليمات البحث وإلغاء المواعيد:**\n- عندما يطلب العميل معرفة مواعيده، أو إلغاء موعد، أو تعديله، يجب عليك أولاً وقبل كل شيء استدعاء التاج التالي للبحث في قاعدة البيانات: [FIND_MY_APPOINTMENTS]\n- يمنع منعاً باتاً افتراض أي تفاصيل موعد من الذاكرة النصية للمحادثة فقط عند الإلغاء؛ يجب دائماً استدعاء [FIND_MY_APPOINTMENTS] أولاً.\n- بعد استدعاء التاج، سيرجع لك النظام النتائج في الرسالة التالية بصيغة [FIND_MY_APPOINTMENTS_RESULT].\n- بمجرد حصولك على النتائج:\n  * إذا لم يكن هناك موعد، أبلغ العميل بلباقة.\n  * إذا كان هناك موعد واحد وطلب العميل إلغاءه، استدعِ التاج: [CANCEL_APPOINTMENT: appointment_id] (استبدل appointment_id بالمعرف الفعلي للموعد المسترجع).\n  * إذا وجد أكثر من موعد، اعرضها واسأله أيها يقصد بالتحديد، ثم بعد استجابته استدعِ [CANCEL_APPOINTMENT: appointment_id] للموعد المختار.`
           }
         }
       } catch (calErr) {
@@ -794,101 +793,219 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
 
       // 4) Query AI model
       let replyText = ''
-      if (aiConfig.provider === 'openai') {
-        // Future recommendation: Consider migrating to Responses API (v1/responses)
-        // for reduced cost (40-80% savings) and optimized performance with modern models.
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${aiConfig.api_key}`,
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: llmMessages,
-            max_tokens: 200, // Reduced max_tokens to 200 for brevity and token savings
-          }),
-        })
+      let loopCount = 0
+      const maxLoops = 3
+      const aiConfigUpdatedMessages = [...llmMessages]
+      let appointmentBookedSuccessfully = false
+      let hasBookTag = false
 
-        const resData = await response.json()
-        if (response.ok && resData.choices?.[0]?.message?.content) {
-          replyText = resData.choices[0].message.content.trim()
+      while (loopCount < maxLoops) {
+        replyText = ''
+
+        if (aiConfig.provider === 'openai') {
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${aiConfig.api_key}`,
+            },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              messages: aiConfigUpdatedMessages,
+              max_tokens: 500,
+            }),
+          })
+
+          const resData = await response.json()
+          if (response.ok && resData.choices?.[0]?.message?.content) {
+            replyText = resData.choices[0].message.content.trim()
+          } else {
+            throw new Error(`OpenAI API error: ${resData.error?.message || JSON.stringify(resData)}`)
+          }
+        } else if (aiConfig.provider === 'deepseek') {
+          const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${aiConfig.api_key}`,
+            },
+            body: JSON.stringify({
+              model: 'deepseek-chat',
+              messages: aiConfigUpdatedMessages,
+              max_tokens: 500,
+            }),
+          })
+
+          const resData = await response.json()
+          if (response.ok && resData.choices?.[0]?.message?.content) {
+            replyText = resData.choices[0].message.content.trim()
+          } else {
+            throw new Error(`DeepSeek API error: ${resData.error?.message || JSON.stringify(resData)}`)
+          }
         } else {
-          throw new Error(`OpenAI API error: ${resData.error?.message || JSON.stringify(resData)}`)
+          throw new Error(`Unsupported AI provider: ${aiConfig.provider}`)
         }
-      } else if (aiConfig.provider === 'deepseek') {
-        const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${aiConfig.api_key}`,
-          },
-          body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages: llmMessages,
-            max_tokens: 200, // Reduced max_tokens to 200 for brevity and token savings
-          }),
-        })
 
-        const resData = await response.json()
-        if (response.ok && resData.choices?.[0]?.message?.content) {
-          replyText = resData.choices[0].message.content.trim()
-        } else {
-          throw new Error(`DeepSeek API error: ${resData.error?.message || JSON.stringify(resData)}`)
+        if (!replyText) {
+          throw new Error('AI generated an empty reply.')
         }
-      } else {
-        throw new Error(`Unsupported AI provider: ${aiConfig.provider}`)
-      }
 
-      if (!replyText) {
-        throw new Error('AI generated an empty reply.')
-      }
+        // --- 1. Intercept FIND_MY_APPOINTMENTS tag ---
+        if (replyText.includes('[FIND_MY_APPOINTMENTS]')) {
+          console.log('[automations] Tag Intercepted: FIND_MY_APPOINTMENTS')
+          const { data: appts } = await db
+            .from('appointments')
+            .select('id, patient_name, patient_phone, scheduled_at')
+            .eq('contact_id', args.contactId)
+            .eq('status', 'confirmed')
+            .order('scheduled_at', { ascending: true })
 
-      // Check if the AI returned a BOOK_APPOINTMENT tag and we have google tokens
-      const appointmentMatch = replyText.match(/\[BOOK_APPOINTMENT:\s*([^\]]+)\]/)
-      if (appointmentMatch && googleToken) {
-        const appointmentTime = appointmentMatch[1].trim()
-        try {
-          // Fetch contact details for event description
-          let contactName = 'عميل واتساب'
-          let contactPhone = ''
-          if (args.contactId) {
-            const { data: contactData } = await db
-               .from('contacts')
-               .select('name, phone')
-               .eq('id', args.contactId)
-               .maybeSingle()
-            if (contactData) {
-              contactName = contactData.name || contactName
-              contactPhone = contactData.phone || ''
-            }
+          let apptText = ''
+          if (!appts || appts.length === 0) {
+            apptText = 'لا توجد مواعيد مؤكدة حالياً لهذه المحادثة.'
+          } else {
+            apptText = 'النتائج الفعلية للمواعيد المؤكدة المرتبطة بك في قاعدة البيانات:\n' + appts.map((ap, idx) => {
+              const d = new Date(ap.scheduled_at)
+              const formatted = d.toLocaleString('ar-SA', { timeZone: 'Asia/Baghdad', dateStyle: 'full', timeStyle: 'short' })
+              return `- [رقم الموعد: ${ap.id}] صاحب الموعد: ${ap.patient_name} (${ap.patient_phone || 'بدون هاتف'}) | الوقت: ${formatted}`
+            }).join('\n')
           }
 
-          const summary = `موعد مع العميل: ${contactName}`
-          const description = `تم الحجز تلقائياً عبر واتساب.\nالاسم: ${contactName}\nالهاتف: ${contactPhone}`
+          aiConfigUpdatedMessages.push({ role: 'assistant', content: replyText })
+          aiConfigUpdatedMessages.push({ 
+            role: 'user', 
+            content: `[FIND_MY_APPOINTMENTS_RESULT]\n${apptText}\n\nالرجاء صياغة رد للعميل بناءً على هذه المواعيد الحقيقية فقط وسؤاله أي موعد يقصد إن وجد أكثر من موعد، أو تأكيد رغبته في الإلغاء إن كان هناك موعد واحد.` 
+          })
 
-          console.log('[Calendar] Attempting to book event at:', appointmentTime)
-          const eventId = await createCalendarEvent(
-            args.automation.account_id,
-            googleToken,
-            calendarId,
-            summary,
-            description,
-            appointmentTime
-          )
-          console.log('[Calendar] Booked event successfully. Event ID:', eventId)
-
-          // --- Telegram notification (fire-and-forget) ---
-          notifyAccountViaTelegram(
-            args.automation.account_id,
-            formatAppointmentNotification(contactName, contactPhone, appointmentTime, description)
-          ).catch(err => console.error('[Telegram] Appointment notification failed:', err))
-        } catch (bookErr: any) {
-          console.error('[Calendar] Auto booking failed:', bookErr)
+          loopCount++
+          continue
         }
 
-        // Clean the tag from the reply text so the customer doesn't see it
-        replyText = replyText.replace(/\[BOOK_APPOINTMENT:\s*[^\]]+\]/, '').trim()
+        // --- 2. Intercept CANCEL_APPOINTMENT tag ---
+        const cancelMatch = replyText.match(/\[CANCEL_APPOINTMENT:\s*([^\]]+)\]/)
+        if (cancelMatch) {
+          const appointmentId = cancelMatch[1].trim()
+          console.log('[automations] Tag Intercepted: CANCEL_APPOINTMENT for ID:', appointmentId)
+          let cancelResultText = ''
+          
+          try {
+            const { data: appt } = await db
+              .from('appointments')
+              .select('*')
+              .eq('id', appointmentId)
+              .maybeSingle()
+
+            if (appt) {
+              if (googleToken) {
+                const deleted = await deleteCalendarEvent(args.automation.account_id, googleToken, calendarId, appt.calendar_event_id)
+                if (deleted) {
+                  await db
+                    .from('appointments')
+                    .update({ status: 'cancelled' })
+                    .eq('id', appointmentId)
+                  cancelResultText = 'تم إلغاء الموعد بنجاح من تقويم Google Calendar وقاعدة البيانات.'
+                } else {
+                  cancelResultText = 'فشل إلغاء الموعد من Google Calendar.'
+                }
+              } else {
+                cancelResultText = 'فشل الإلغاء لعدم وجود حساب Google مرتبط بالمنصة.'
+              }
+            } else {
+              cancelResultText = 'لم يتم العثور على الموعد المحدد في قاعدة البيانات (قد يكون ملغياً بالفعل).'
+            }
+          } catch (err: any) {
+            cancelResultText = `خطأ أثناء معالجة الإلغاء: ${err.message}`
+          }
+
+          aiConfigUpdatedMessages.push({ role: 'assistant', content: replyText })
+          aiConfigUpdatedMessages.push({ 
+            role: 'user', 
+            content: `[CANCEL_APPOINTMENT_RESULT]\nالنتيجة: ${cancelResultText}\n\nأبلغ العميل بنتيجة الإلغاء بلباقة واختصار.` 
+          })
+
+          loopCount++
+          continue
+        }
+
+        // --- 3. Intercept BOOK_APPOINTMENT tag ---
+        const appointmentMatch = replyText.match(/\[BOOK_APPOINTMENT:\s*([^\]]+)\]/)
+        if (appointmentMatch && googleToken) {
+          hasBookTag = true
+          const parts = appointmentMatch[1].split('|').map(p => p.trim())
+          const appointmentTime = parts[0]
+          let patientName = parts[1] || ''
+          let patientPhone = parts[2] || ''
+
+          try {
+            let contactName = 'عميل واتساب'
+            let contactPhone = ''
+            if (args.contactId) {
+              const { data: contactData } = await db
+                 .from('contacts')
+                 .select('name, phone')
+                 .eq('id', args.contactId)
+                 .maybeSingle()
+              if (contactData) {
+                contactName = contactData.name || contactName
+                contactPhone = contactData.phone || ''
+              }
+            }
+
+            if (!patientName) patientName = contactName
+            if (!patientPhone) patientPhone = contactPhone
+
+            const summary = `موعد مع: ${patientName}`
+            let description = `تم الحجز تلقائياً عبر واتساب.`
+            if (patientName !== contactName || patientPhone !== contactPhone) {
+              description += `\nالحجز عبر واتساب رقم: ${contactPhone} (${contactName})\nلصاحب الموعد الفعلي: ${patientName} | رقم هاتف صاحب الموعد: ${patientPhone}`
+            } else {
+              description += `\nالاسم: ${contactName}\nالهاتف: ${contactPhone}`
+            }
+
+            console.log('[Calendar] Booking event at:', appointmentTime)
+            const eventResult = await createCalendarEvent(
+              args.automation.account_id,
+              googleToken,
+              calendarId,
+              summary,
+              description,
+              appointmentTime,
+              conversationId,
+              args.contactId || undefined,
+              patientName,
+              patientPhone
+            )
+            
+            const eventId = eventResult?.id
+            const htmlLink = eventResult?.htmlLink
+            
+            if (eventId) {
+              appointmentBookedSuccessfully = true
+              console.log('[Calendar] Booked event successfully. Event ID:', eventId)
+
+              // Send Telegram notification
+              notifyAccountViaTelegram(
+                args.automation.account_id,
+                formatAppointmentNotification(
+                  contactName,
+                  contactPhone,
+                  appointmentTime,
+                  description,
+                  patientName,
+                  patientPhone,
+                  eventId,
+                  htmlLink
+                )
+              ).catch(err => console.error('[Telegram] Appointment notification failed:', err))
+            }
+          } catch (bookErr: any) {
+            console.error('[Calendar] Auto booking failed:', bookErr)
+          }
+
+          replyText = replyText.replace(/\[BOOK_APPOINTMENT:\s*[^\]]+\]/, '').trim()
+        }
+
+        break
       }
 
       // Check if the AI returned a SCHEDULE_FOLLOW_UP tag
@@ -1290,6 +1407,30 @@ Only extract values that are explicitly provided in the text. If a value is not 
         throw new Error(`Google Sheets append failed: ${appendData.error?.message || JSON.stringify(appendData)}`)
       }
 
+      // Send Telegram notification with all saved fields
+      try {
+        let contactName = 'عميل واتساب'
+        let contactPhone = ''
+        if (args.contactId) {
+          const { data: cData } = await db
+            .from('contacts')
+            .select('name, phone')
+            .eq('id', args.contactId)
+            .maybeSingle()
+          if (cData) {
+            contactName = cData.name || contactName
+            contactPhone = cData.phone || ''
+          }
+        }
+
+        await notifyAccountViaTelegram(
+          args.automation.account_id,
+          formatOrderNotification(contactName, contactPhone, rowValues)
+        )
+      } catch (tgErr) {
+        console.error('[Telegram] Failed to send Sheet row notification:', tgErr)
+      }
+
       return `Saved row to Google Sheet (${sheetName})`
     }
 
@@ -1522,8 +1663,12 @@ export async function createCalendarEvent(
   calendarId: string,
   summary: string,
   description: string,
-  startTimeIso: string
-): Promise<string> {
+  startTimeIso: string,
+  conversationId?: string,
+  contactId?: string,
+  patientName?: string,
+  patientPhone?: string
+): Promise<{ id: string; htmlLink?: string }> {
   try {
     // Extract numbers to construct local start date strictly to avoid default JS timezone shift
     const match = startTimeIso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
@@ -1591,10 +1736,72 @@ export async function createCalendarEvent(
       throw new Error(data.error?.message || JSON.stringify(data))
     }
 
-    return data.id
+    const eventId = data.id
+    const htmlLink = data.htmlLink
+
+    // Save record in appointments table
+    if (conversationId && contactId) {
+      const db = supabaseAdmin()
+      const cleanPatientName = patientName || summary.replace('موعد مع العميل: ', '').replace('موعد مع: ', '').trim()
+      
+      // We parse the local time string or startTimeIso into ISO standard timestamp to store in DB
+      let dbScheduledAt = startStr;
+      if (!startStr.includes('+')) {
+        // Assume Baghdad offset +03:00 if not specified
+        dbScheduledAt = `${startStr}+03:00`;
+      }
+
+      const { error: dbErr } = await db.from('appointments').insert({
+        account_id: accountId,
+        conversation_id: conversationId,
+        contact_id: contactId,
+        patient_name: cleanPatientName || 'عميل واتساب',
+        patient_phone: patientPhone || '',
+        calendar_event_id: eventId,
+        scheduled_at: dbScheduledAt,
+        status: 'confirmed',
+      })
+      if (dbErr) {
+        console.error('[Calendar] Failed to save appointment record:', dbErr.message)
+      } else {
+        console.log('[Calendar] Saved appointment record in DB for event:', eventId)
+      }
+    }
+
+    return { id: eventId, htmlLink }
   } catch (err: any) {
     console.error('[Calendar] Event creation failed:', err)
     throw new Error(`Failed to create Google Calendar event: ${err.message}`)
+  }
+}
+
+export async function deleteCalendarEvent(
+  accountId: string,
+  token: string,
+  calendarId: string,
+  eventId: string
+): Promise<boolean> {
+  try {
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!res.ok) {
+      if (res.status === 410 || res.status === 404) {
+        console.warn('[Calendar] Event already deleted or not found in Google Calendar:', eventId)
+        return true
+      }
+      const data = await res.json()
+      throw new Error(data.error?.message || JSON.stringify(data))
+    }
+
+    return true
+  } catch (err: any) {
+    console.error('[Calendar] Event deletion failed:', err)
+    throw new Error(`Failed to delete Google Calendar event: ${err.message}`)
   }
 }
 
