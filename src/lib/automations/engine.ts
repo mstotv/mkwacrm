@@ -734,7 +734,21 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           calendarId = accounts[0].calendar_id || 'primary'
           const busySlotsText = await fetchCalendarBusySlots(args.automation.account_id, googleToken, calendarId)
           if (busySlotsText) {
-            calendarContext = `\n\n**معلومات المواعيد في تقويم Google Calendar (هام جداً):**\nتاريخ اليوم الحالي هو: ${new Date().toISOString().split('T')[0]}\n${busySlotsText}\n\n**تعليمات الحجز والتقويم:**\n- لا تقترح على العميل أي موعد يقع في الأوقات المحجوزة أعلاه.\n- عندما يتفق العميل معك على موعد محدد ويؤكده بوضوح، قم بتأكيد الموعد وأرفق في نهاية ردك الوسم التالي بدقة متناهية: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss] حيث YYYY-MM-DDTHH:mm:ss هو تاريخ ووقت الموعد المتفق عليه بتنسيق ISO.\n- إذا ذكر العميل أن الحجز لشخص آخر (أو باسم شخص آخر)، يجب استخراج الاسم والرقم (إن وجد) وتمريره في التاج كالتالي: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss | patient_name | patient_phone] (مثال: [BOOK_APPOINTMENT: 2026-07-25T15:00:00 | محمد علي | 07701234567]).\n\n**تعليمات البحث وإلغاء المواعيد:**\n- عندما يطلب العميل معرفة مواعيده، أو إلغاء موعد، أو تعديله، يجب عليك أولاً وقبل كل شيء استدعاء التاج التالي للبحث في قاعدة البيانات: [FIND_MY_APPOINTMENTS]\n- يمنع منعاً باتاً افتراض أي تفاصيل موعد من الذاكرة النصية للمحادثة فقط عند الإلغاء؛ يجب دائماً استدعاء [FIND_MY_APPOINTMENTS] أولاً.\n- بعد استدعاء التاج، سيرجع لك النظام النتائج في الرسالة التالية بصيغة [FIND_MY_APPOINTMENTS_RESULT].\n- بمجرد حصولك على النتائج:\n  * إذا لم يكن هناك موعد، أبلغ العميل بلباقة.\n  * إذا كان هناك موعد واحد وطلب العميل إلغاءه، استدعِ التاج: [CANCEL_APPOINTMENT: appointment_id] (استبدل appointment_id بالمعرف الفعلي للموعد المسترجع).\n  * إذا وجد أكثر من موعد، اعرضها واسأله أيها يقصد بالتحديد، ثم بعد استجابته استدعِ [CANCEL_APPOINTMENT: appointment_id] للموعد المختار.`
+            calendarContext = `
+
+**تعليمات تقنية لإدارة وحجز المواعيد (Technical Calendar API Instructions - Business-Neutral):**
+- تاريخ اليوم الحالي هو: ${new Date().toISOString().split('T')[0]}
+- تتوفر لديك أداة للتحقق من المواعيد وحجزها في تقويم عيادة/مركز العمل.
+- **الأوقات المزدحمة المحجوزة حالياً (يُمنع الحجز فيها):**
+${busySlotsText}
+- **شروط حجز موعد جديد:**
+  * استخدم أداة الحجز فقط إذا طلب العميل **صراحة** حجز موعد أو موعد زيارة أو تحديد وقت محدد للقاء.
+  * **يُمنع منعاً باتاً** استخدام وسوم المواعيد أو إرفاقها لطلبات الشراء العادية، أو حجز المنتجات المادية (مثل الأحذية أو الملابس)، أو طلبات التوصيل/الطعام.
+  * لحجز موعد متفق عليه، أدرج الوسم التالي بدقة في نهاية ردك: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss] (مثال: [BOOK_APPOINTMENT: 2026-07-25T15:00:00]).
+  * إذا كان الحجز لشخص آخر، استخدم الصيغة: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss | patient_name | patient_phone].
+- **شروط إلغاء أو معرفة المواعيد:**
+  * عندما يطلب العميل معرفة مواعيده أو إلغاءها، استخدم الوسم: [FIND_MY_APPOINTMENTS] للبحث أولاً.
+  * بعد استلام النتائج، لإلغاء موعد محدد بناءً على طلب العميل، استخدم الوسم: [CANCEL_APPOINTMENT: appointment_id].`
           }
         }
       } catch (calErr) {
@@ -758,14 +772,15 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           timeStyle: 'short'
         })
 
-        followUpContext = `\n\n**معلومات المتابعة التلقائية (AI Follow-up):**
-تاريخ ووقت اليوم الحالي هو: ${currentDayTime} (تنسيق ISO: ${new Date().toISOString()}).
-إذا أبدى العميل رغبة في التفكير أو تأجيل اتخاذ القرار أو الموعد أو الشراء لوقت لاحق (مثال: "بفكر وأرد عليك بكرة"، "تواصل معي بعد يومين"، "بكلمك الأسبوع الجاي"، "سأعود لكم لاحقاً")، يجب عليك جدولة متابعة بإضافة التاج التالي بدقة متناهية في نهاية ردك:
-[SCHEDULE_FOLLOW_UP: السبب | الوقت النسبي | YYYY-MM-DD]
-حيث:
-- السبب: وصف مختصر جداً لسبب المتابعة باللغة العربية (مثال: أراد التفكير بعرض السعر).
-- الوقت النسبي: الوصف النسبي الذي ذكره العميل (مثال: غداً، بعد يومين، الأسبوع القادم).
-- YYYY-MM-DD: هو التاريخ الفعلي المحسوب للمتابعة بناءً على تاريخ ووقت اليوم الموضح أعلاه.`
+        followUpContext = `
+
+**تعليمات تقنية لجدولة التذكيرات والمتابعة (Technical Follow-up Instructions - Business-Neutral):**
+- الوقت والتاريخ الحالي هو: ${currentDayTime}
+- تتوفر لديك أداة لجدولة تذكيرات لمتابعة العملاء لاحقاً.
+- **شروط استدعاء الأداة:**
+  * استخدم هذه الأداة **فقط** إذا طلب العميل صراحة تذكيره أو الاتصال به لاحقاً (مثال: "ذكرني بعد ساعة", "تواصل معي غداً", "سأفكر وأرد عليكم لاحقاً").
+  * **يُمنع تماماً** جدولة متابعات للمشتريات العادية أو الاستفسارات العامة ما لم يطلب العميل تذكيراً صريحاً.
+  * لجدولة تذكير، أدرج الوسم التالي بدقة في نهاية ردك: [SCHEDULE_FOLLOW_UP: السبب | الوقت النسبي | YYYY-MM-DDTHH:mm] (مثال: [SCHEDULE_FOLLOW_UP: تذكير بموعد الحجز | بعد ساعتين | ${new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().substring(0, 16)}]).`
       } catch (acctErr) {
         console.error('[automations] Failed to load account context for follow-up:', acctErr)
       }
@@ -775,9 +790,18 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         aiConfig.system_prompt ||
         'You are a helpful customer assistant.'
 
+      const generalTechnicalInstructions = `
+
+**توجيهات تشغيلية حاسمة (General Operational Directives - Mandatory):**
+1. **الالتزام المطلق بالهوية:** نطاق عملك وهويتك يتم تحديدها **حصرياً** بواسطة رسالة النظام (System Prompt) المكتوبة أعلاه من قبل المستخدم. لا تفترض أي تخصص آخر (مثل حجز المواعيد أو الخدمات الطبية) ما لم تطلب رسالة النظام ذلك صراحة.
+2. **منع الاختلاق وتأكيد المعلومات (No Hallucinations):** لا تفترض أو تخترع أي تفاصيل لم يذكرها العميل صراحة (مثل طريقة الدفع، تكلفة الشحن، المقاس، اللون، الكمية، أو العناوين). إذا كانت هناك تفاصيل ضرورية ناقصة لإتمام الطلب، اسأل العميل عنها بلباقة بدلاً من افتراض قيم افتراضية أو اختلاقها.
+3. **عدم تأكيد إجراءات غير منفذة:** لا تؤكد للعميل إتمام أي إجراء يتطلب استدعاء أداة (مثل حجز موعد أو جدولة تذكير) ما لم تقم بإرفاق الوسم (Tag) البرمجي المقابل له في ردك.
+4. **الفصل التام بين السياقات:** لا تخلط بين حجز المواعيد (في التقويم) وتأكيد طلبات شراء المنتجات. يُمنع منعاً باتاً استدعاء أدوات الكالندر أو حجز المواعيد عند شراء أو تأكيد طلب منتج مادي.
+`
+
       // Append default brevity instruction to system prompt
       const brevityInstruction = '\n\n**تعليمات هامة لأسلوب الرد / Important reply instructions:**\n- أجب دائماً بإيجاز شديد (جملتين إلى ثلاث جمل كحد أقصى)، بما يكفي لإعطاء العميل المعلومة الكافية دون إطالة أو حشو.\n- Always answer very briefly (maximum 2 to 3 sentences), enough to give the customer sufficient information without lengthiness.'
-      const compiledSystemPrompt = `${systemPrompt}${calendarContext}${followUpContext}${brevityInstruction}`
+      const compiledSystemPrompt = `${systemPrompt}${calendarContext}${followUpContext}${generalTechnicalInstructions}${brevityInstruction}`
 
       const llmMessages = [
         { role: 'system', content: compiledSystemPrompt },
