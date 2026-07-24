@@ -41,30 +41,52 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // If empty, initialize standard 9-5 defaults for Mon-Fri
-    if (!workingHours || workingHours.length === 0) {
-      const defaults = Array.from({ length: 7 }, (_, i) => ({
-        account_id: profile.account_id,
-        staff_id: staffId || null,
-        day_of_week: i,
-        opening_time: '09:00:00',
-        closing_time: '17:00:00',
-        is_active: i !== 0 && i !== 6 // Sunday & Saturday closed by default
-      }))
+    // Deduplicate in memory (in case duplicate default rows exist because of NULL staff_id unique constraint behavior in Postgres)
+    const uniqueHoursMap: Record<number, any> = {}
+    if (workingHours) {
+      for (const wh of workingHours) {
+        if (uniqueHoursMap[wh.day_of_week] === undefined) {
+          uniqueHoursMap[wh.day_of_week] = wh
+        }
+      }
+    }
+    const deduplicatedHours = Object.values(uniqueHoursMap)
 
-      const { data: inserted, error: initErr } = await supabase
-        .from('appointment_working_hours')
-        .insert(defaults)
-        .select()
+    // If empty or incomplete, initialize standard 9-5 defaults for all 7 days
+    if (deduplicatedHours.length < 7) {
+      const existingDays = deduplicatedHours.map(d => d.day_of_week)
+      const defaultsToInsert = []
 
-      if (initErr) {
-        return NextResponse.json({ error: initErr.message }, { status: 500 })
+      for (let i = 0; i < 7; i++) {
+        if (!existingDays.includes(i)) {
+          defaultsToInsert.push({
+            account_id: profile.account_id,
+            staff_id: staffId || null,
+            day_of_week: i,
+            opening_time: '09:00:00',
+            closing_time: '17:00:00',
+            is_active: i !== 0 && i !== 6 // Sunday & Saturday closed by default
+          })
+        }
       }
 
-      return NextResponse.json({ workingHours: inserted })
+      if (defaultsToInsert.length > 0) {
+        const { data: inserted, error: initErr } = await supabase
+          .from('appointment_working_hours')
+          .insert(defaultsToInsert)
+          .select()
+
+        if (initErr) {
+          return NextResponse.json({ error: initErr.message }, { status: 500 })
+        }
+        
+        // Merge and sort
+        const allHours = [...deduplicatedHours, ...inserted].sort((a, b) => a.day_of_week - b.day_of_week)
+        return NextResponse.json({ workingHours: allHours })
+      }
     }
 
-    return NextResponse.json({ workingHours })
+    return NextResponse.json({ workingHours: deduplicatedHours })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
@@ -95,7 +117,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'workingHours array is required' }, { status: 400 })
     }
 
-    const upsertData = workingHours.map(wh => ({
+    // 1. Delete all existing working hours for this account/staff combination to clean up any duplicates
+    let deleteQuery = supabase
+      .from('appointment_working_hours')
+      .delete()
+      .eq('account_id', profile.account_id)
+
+    if (staffId) {
+      deleteQuery = deleteQuery.eq('staff_id', staffId)
+    } else {
+      deleteQuery = deleteQuery.is('staff_id', null)
+    }
+
+    const { error: deleteErr } = await deleteQuery
+    if (deleteErr) {
+      return NextResponse.json({ error: deleteErr.message }, { status: 500 })
+    }
+
+    // 2. Insert fresh clean working hours data
+    const insertData = workingHours.map(wh => ({
       account_id: profile.account_id,
       staff_id: staffId || null,
       day_of_week: wh.day_of_week,
@@ -105,13 +145,13 @@ export async function POST(request: Request) {
       updated_at: new Date().toISOString()
     }))
 
-    const { data: saved, error: upsertErr } = await supabase
+    const { data: saved, error: insertErr } = await supabase
       .from('appointment_working_hours')
-      .upsert(upsertData, { onConflict: 'account_id,staff_id,day_of_week' })
+      .insert(insertData)
       .select()
 
-    if (upsertErr) {
-      return NextResponse.json({ error: upsertErr.message }, { status: 500 })
+    if (insertErr) {
+      return NextResponse.json({ error: insertErr.message }, { status: 500 })
     }
 
     return NextResponse.json({ workingHours: saved })
