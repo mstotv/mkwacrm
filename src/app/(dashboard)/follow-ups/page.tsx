@@ -18,6 +18,7 @@ import {
   Check,
   X,
   Search,
+  Play,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -46,6 +47,8 @@ export default function FollowUpsPage() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed' | 'cancelled'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const [triggeringFollowUps, setTriggeringFollowUps] = useState(false);
+
   useEffect(() => {
     loadFollowUps();
   }, []);
@@ -72,6 +75,31 @@ export default function FollowUpsPage() {
       toast.error(language === 'ar' ? 'فشل تحميل المتابعات' : 'Failed to load follow-ups');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRunCron = async () => {
+    if (triggeringFollowUps) return;
+    try {
+      setTriggeringFollowUps(true);
+      const res = await fetch('/api/follow-ups/cron');
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(
+          language === 'ar'
+            ? `تم تشغيل المعالجة بنجاح. المتابعات المرسلة: ${data.processed}`
+            : `Follow-ups processed successfully. Dispatched: ${data.processed}`
+        );
+        // Reload list to see state update
+        await loadFollowUps();
+      } else {
+        throw new Error(data.error || 'Failed to process');
+      }
+    } catch (err: any) {
+      console.error('Error running manual follow-up cron:', err);
+      toast.error(language === 'ar' ? 'فشل تشغيل المتابعات المستحقة يدوياً' : 'Failed to manually trigger due follow-ups');
+    } finally {
+      setTriggeringFollowUps(false);
     }
   };
 
@@ -194,15 +222,31 @@ export default function FollowUpsPage() {
 
   return (
     <div className="space-y-6" style={{ direction: language === 'ar' ? 'rtl' : 'ltr' }}>
-      <div>
-        <h1 className="text-2xl font-bold text-white">
-          {language === 'ar' ? 'المتابعات المجدولة (Follow-ups)' : 'Scheduled Follow-ups'}
-        </h1>
-        <p className="mt-1 text-sm text-slate-400">
-          {language === 'ar' 
-            ? 'إدارة ومتابعة طلبات العملاء الذين طلبوا العودة لاحقاً أو تأجيل اتخاذ القرار.' 
-            : 'Manage and track customer requests who asked to be contacted later or postponed decisions.'}
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">
+            {language === 'ar' ? 'المتابعات المجدولة (Follow-ups)' : 'Scheduled Follow-ups'}
+          </h1>
+          <p className="mt-1 text-sm text-slate-400">
+            {language === 'ar' 
+              ? 'إدارة ومتابعة طلبات العملاء الذين طلبوا العودة لاحقاً أو تأجيل اتخاذ القرار.' 
+              : 'Manage and track customer requests who asked to be contacted later or postponed decisions.'}
+          </p>
+        </div>
+        {canManage && (
+          <Button
+            onClick={handleRunCron}
+            disabled={triggeringFollowUps}
+            className="bg-violet-600 hover:bg-violet-500 text-white gap-2 text-xs h-9 w-fit"
+          >
+            {triggeringFollowUps ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Play className="size-3.5" />
+            )}
+            {language === 'ar' ? 'تشغيل المتابعات المستحقة الآن' : 'Run Due Follow-ups Now'}
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
