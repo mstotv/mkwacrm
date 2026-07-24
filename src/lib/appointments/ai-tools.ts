@@ -139,7 +139,7 @@ export const APPOINTMENT_AI_TOOLS = [
     }
   },
   {
-    type: 'type',
+    type: 'function',
     function: {
       name: 'deleteAppointment',
       description: 'Permanently delete an appointment record.',
@@ -250,10 +250,25 @@ export async function executeAppointmentTool(
             .maybeSingle()
 
           if (gAcc) {
+            // Get account timezone setting
+            const { data: acctSettings } = await db
+              .from('appointment_settings')
+              .select('timezone')
+              .eq('account_id', accountId)
+              .maybeSingle()
+            const tz = acctSettings?.timezone || gAcc.timezone || 'Asia/Baghdad'
+
             const freshToken = await getFreshTokenForCalendarAccount(accountId)
-            const summary = `${serviceName} with ${staffName}`
-            const description = `Patient: ${patientName}\nPhone: ${patientPhone || contactPhone}\nBooked automatically via WhatsApp AI.`
-            const gEvent = await createCalendarEvent(freshToken, gAcc.calendar_id, summary, description, dateTime, duration)
+            const summary = `${serviceName} — ${patientName}`
+            const description = [
+              `👤 اسم المريض: ${patientName}`,
+              `📱 رقم الهاتف: ${patientPhone || contactPhone || 'غير محدد'}`,
+              `🦷 الخدمة: ${serviceName}`,
+              `👨‍⚕️ الطبيب / الكادر: ${staffName}`,
+              `📍 المصدر: واتساب (ذكاء اصطناعي)`,
+              `✅ الحالة: مؤكد`
+            ].join('\n')
+            const gEvent = await createCalendarEvent(freshToken, gAcc.calendar_id, summary, description, dateTime, duration, tz)
             if (gEvent?.id) {
               calendarEventId = gEvent.id
               htmlLink = gEvent.htmlLink
@@ -469,8 +484,20 @@ export async function executeAppointmentTool(
           .from('appointments')
           .delete()
           .eq('id', appointmentId)
+          .eq('account_id', accountId) // Security: scope deletion to this account only
 
         if (error) throw error
+
+        // Log deletion
+        try {
+          await db.from('appointment_logs').insert({
+            account_id: accountId,
+            appointment_id: appointmentId,
+            operation: 'deleted',
+            description: `Appointment ${appointmentId} permanently deleted via WhatsApp AI.`
+          })
+        } catch (_logErr) {}
+
         return { success: true }
       }
 

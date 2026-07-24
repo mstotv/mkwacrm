@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { checkAvailability } from '@/lib/appointments/booking-engine'
+import { checkAvailability, syncAppointmentToSheets } from '@/lib/appointments/booking-engine'
 import { createCalendarEvent, getFreshTokenForCalendarAccount } from '@/lib/appointments/google-calendar'
+import { notifyAppointmentOnceViaTelegram } from '@/lib/notifications/telegram'
 
 export const dynamic = 'force-dynamic'
 
@@ -164,6 +165,28 @@ export async function POST(request: Request) {
       appointment_id: appointment.id,
       operation: 'created',
       description: `Appointment booked manually for ${patient_name} at ${scheduled_at}.`
+    })
+
+    // 5. Send Telegram notification (non-blocking)
+    try {
+      await notifyAppointmentOnceViaTelegram(
+        profile.account_id,
+        patient_name,          // contactName
+        patient_phone || '',   // contactPhone
+        scheduled_at,
+        `الخدمة: ${serviceName} | الطبيب: ${staffName} | المصدر: لوحة التحكم`,
+        patient_name,
+        patient_phone || '',
+        calendarEventId,
+        undefined
+      )
+    } catch (tErr) {
+      console.error('[Appointments API] Telegram notification failed (non-blocking):', tErr)
+    }
+
+    // 6. Sync to Google Sheets if enabled (non-blocking)
+    syncAppointmentToSheets(profile.account_id, appointment.id).catch((sErr) => {
+      console.error('[Appointments API] Google Sheets sync failed (non-blocking):', sErr)
     })
 
     return NextResponse.json({ appointment })

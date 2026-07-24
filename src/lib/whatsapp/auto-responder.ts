@@ -297,7 +297,20 @@ export async function runAutoResponder(args: AutoResponderArgs) {
 `;
 
       const brevityInstruction = '\n\n**تعليمات أسلوب الرد:**\n- أجب دائماً بإيجاز ولباقة (جملة أو جملتين فقط).';
-      const compiledSystemPrompt = `${basePrompt}${orderContext}${followUpContext}${generalTechnicalInstructions}${brevityInstruction}`;
+
+      // ─── Appointment Tools Context ───────────────────────────────
+      const appointmentContext = `
+
+**تعليمات نظام حجز المواعيد (Appointment Booking Instructions):**
+- لديك أدوات برمجية مباشرة لإدارة المواعيد. استخدمها تلقائياً دون انتظار إذن إضافي من المستخدم.
+- **عند طلب العميل حجز موعد:** استدعِ أداة \`findAvailableSlots\` أو \`checkAvailability\` أولاً للتحقق من التوفر الفعلي، ثم استدعِ \`createAppointment\` لتثبيت الموعد.
+- **عند طلب معرفة الأطباء:** استدعِ \`getDoctors\` فوراً.
+- **عند طلب معرفة الخدمات أو الأسعار:** استدعِ \`getServices\` فوراً.
+- **عند طلب إلغاء أو تغيير موعد:** ابحث أولاً بـ \`getAppointment\` ثم استدعِ \`cancelAppointment\` أو \`rescheduleAppointment\`.
+- **لا تؤكد أي موعد قبل استدعاء \`createAppointment\` بنجاح.** إذا كان الوقت غير متاح، اعرض البدائل المتاحة.
+- **لا تخترع أوقاتاً أو أطباء.** اعتمد فقط على نتائج الأدوات.`;
+
+      const compiledSystemPrompt = `${basePrompt}${orderContext}${followUpContext}${appointmentContext}${generalTechnicalInstructions}${brevityInstruction}`;
 
       // ─── Build LLM messages ──────────────────────────────────────
       const llmMessages: any[] = [

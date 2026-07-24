@@ -251,7 +251,7 @@ export async function DELETE(
     // Log the operation
     await supabase.from('appointment_logs').insert({
       account_id: profile.account_id,
-      operation: 'api_error',
+      operation: 'deleted',
       description: `Appointment ID ${id} deleted permanently from the database.`
     })
 

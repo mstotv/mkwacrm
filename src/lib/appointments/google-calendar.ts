@@ -130,7 +130,8 @@ export async function createCalendarEvent(
   summary: string,
   description: string,
   scheduledAt: string,
-  durationMinutes: number
+  durationMinutes: number,
+  timezone: string = 'Asia/Baghdad'
 ): Promise<GoogleCalendarEvent | null> {
   try {
     const startDateTime = new Date(scheduledAt)
@@ -147,11 +148,11 @@ export async function createCalendarEvent(
         description,
         start: {
           dateTime: startDateTime.toISOString(),
-          timeZone: 'Asia/Baghdad'
+          timeZone: timezone
         },
         end: {
           dateTime: endDateTime.toISOString(),
-          timeZone: 'Asia/Baghdad'
+          timeZone: timezone
         }
       })
     })
@@ -180,7 +181,8 @@ export async function updateCalendarEvent(
   summary: string,
   description: string,
   scheduledAt: string,
-  durationMinutes: number
+  durationMinutes: number,
+  timezone: string = 'Asia/Baghdad'
 ): Promise<GoogleCalendarEvent | null> {
   try {
     const startDateTime = new Date(scheduledAt)
@@ -197,11 +199,11 @@ export async function updateCalendarEvent(
         description,
         start: {
           dateTime: startDateTime.toISOString(),
-          timeZone: 'Asia/Baghdad'
+          timeZone: timezone
         },
         end: {
           dateTime: endDateTime.toISOString(),
-          timeZone: 'Asia/Baghdad'
+          timeZone: timezone
         }
       })
     })

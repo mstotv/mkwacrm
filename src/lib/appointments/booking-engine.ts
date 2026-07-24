@@ -254,16 +254,47 @@ export async function findAvailableSlots(
 
   if (!workingHour) return []
 
+  // Pre-fetch Google Calendar busy slots ONCE for the whole day (performance optimization)
+  let googleBusySlots: { start: string; end: string }[] = []
+  try {
+    const { data: gAcc } = await db
+      .from('appointment_google_accounts')
+      .select('*')
+      .eq('account_id', accountId)
+      .maybeSingle()
+
+    if (gAcc) {
+      const freshToken = await getFreshTokenForCalendarAccount(accountId)
+      const timeMin = `${dateStr}T00:00:00Z`
+      const timeMax = `${dateStr}T23:59:59Z`
+      googleBusySlots = await fetchCalendarBusySlots(freshToken, gAcc.calendar_id, timeMin, timeMax)
+    }
+  } catch (gErr) {
+    console.error('[Booking Engine] Could not pre-fetch Google busy slots for findAvailableSlots:', gErr)
+  }
+
   const openMinutes = timeToMinutes(workingHour.opening_time)
   const closeMinutes = timeToMinutes(workingHour.closing_time)
   const availableSlots: string[] = []
+
+  // Get service duration once
+  let slotDuration = interval
+  if (serviceId) {
+    const { data: srv } = await db
+      .from('appointment_services')
+      .select('duration_minutes')
+      .eq('id', serviceId)
+      .maybeSingle()
+    if (srv?.duration_minutes) slotDuration = srv.duration_minutes
+  }
 
   for (let min = openMinutes; min < closeMinutes; min += interval) {
     const hh = String(Math.floor(min / 60)).padStart(2, '0')
     const mm = String(min % 60).padStart(2, '0')
     const targetISO = `${dateStr}T${hh}:${mm}:00`
 
-    const status = await checkAvailability(accountId, targetISO, serviceId, staffId)
+    // Pass pre-fetched busy slots to avoid repeated Google API calls
+    const status = await checkAvailabilityWithBusySlots(accountId, targetISO, serviceId, staffId, googleBusySlots, slotDuration)
     if (status.available) {
       availableSlots.push(targetISO)
     }
@@ -272,8 +303,96 @@ export async function findAvailableSlots(
   return availableSlots
 }
 
-// 11. Google Sheets Optional Sync
-export async function syncAppointmentToSheets(accountId: string, appointmentId: string) {
+// Internal helper: checkAvailability with pre-fetched Google busy slots
+async function checkAvailabilityWithBusySlots(
+  accountId: string,
+  dateTimeStr: string,
+  serviceId?: string | null,
+  staffId?: string | null,
+  googleBusySlots?: { start: string; end: string }[],
+  durationOverride?: number
+): Promise<SlotAvailability> {
+  const db = supabaseAdmin()
+  const requestedDate = new Date(dateTimeStr)
+  const requestedTimeMs = requestedDate.getTime()
+
+  const { data: settings } = await db
+    .from('appointment_settings')
+    .select('*')
+    .eq('account_id', accountId)
+    .maybeSingle()
+
+  const now = new Date()
+  const minBookingNoticeHours = settings?.min_booking_notice_hours ?? 2
+  const noticeMinTime = now.getTime() + minBookingNoticeHours * 60 * 60 * 1000
+  if (requestedTimeMs < noticeMinTime) return { available: false, reason: 'Too close to current time.' }
+
+  const localDateStr = requestedDate.toISOString().substring(0, 10)
+  const dayOfWeek = requestedDate.getDay()
+  const requestedMinutes = requestedDate.getHours() * 60 + requestedDate.getMinutes()
+
+  const { data: holiday } = await db
+    .from('appointment_holidays')
+    .select('id')
+    .eq('account_id', accountId)
+    .eq('holiday_date', localDateStr)
+    .maybeSingle()
+  if (holiday) return { available: false, reason: 'Holiday.' }
+
+  const { data: workingHour } = await db
+    .from('appointment_working_hours')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('day_of_week', dayOfWeek)
+    .eq('is_active', true)
+    .maybeSingle()
+  if (!workingHour) return { available: false, reason: 'Closed this day.' }
+
+  const openMinutes = timeToMinutes(workingHour.opening_time)
+  const closeMinutes = timeToMinutes(workingHour.closing_time)
+  if (requestedMinutes < openMinutes || requestedMinutes >= closeMinutes) {
+    return { available: false, reason: 'Outside working hours.' }
+  }
+
+  const durationMinutes = durationOverride ?? settings?.booking_interval_minutes ?? 30
+  const slotStart = requestedTimeMs
+  const slotEnd = slotStart + durationMinutes * 60 * 1000
+
+  // Check pre-fetched Google busy slots
+  if (googleBusySlots && googleBusySlots.length > 0) {
+    for (const slot of googleBusySlots) {
+      const busyStart = new Date(slot.start).getTime()
+      const busyEnd = new Date(slot.end).getTime()
+      if (slotStart < busyEnd && slotEnd > busyStart) {
+        return { available: false, reason: 'Conflict with Google Calendar event.' }
+      }
+    }
+  }
+
+  // Check existing DB appointments
+  const { data: conflicts } = await db
+    .from('appointments')
+    .select('id, scheduled_at, service:appointment_services(duration_minutes)')
+    .eq('account_id', accountId)
+    .eq('status', 'confirmed')
+    .or(staffId ? `staff_id.eq.${staffId},staff_id.is.null` : 'staff_id.is.null')
+
+  if (conflicts) {
+    for (const c of conflicts) {
+      const cStart = new Date(c.scheduled_at).getTime()
+      const cDuration = (c.service as any)?.duration_minutes || durationMinutes
+      const cEnd = cStart + cDuration * 60 * 1000
+      if (slotStart < cEnd && slotEnd > cStart) {
+        return { available: false, reason: 'Conflict with existing appointment.' }
+      }
+    }
+  }
+
+  return { available: true }
+}
+
+// 11. Google Sheets Production Sync
+export async function syncAppointmentToSheets(accountId: string, appointmentId: string): Promise<void> {
   const db = supabaseAdmin()
   try {
     const { data: settings } = await db
@@ -282,7 +401,7 @@ export async function syncAppointmentToSheets(accountId: string, appointmentId: 
       .eq('account_id', accountId)
       .maybeSingle()
 
-    if (!settings || !settings.sheets_sync_enabled) return
+    if (!settings?.sheets_sync_enabled) return
 
     const { data: appt } = await db
       .from('appointments')
@@ -292,18 +411,97 @@ export async function syncAppointmentToSheets(accountId: string, appointmentId: 
 
     if (!appt) return
 
-    // Get connection from google sheets configs
+    // Get Google Sheets connection (reuse existing google_sheets_config)
     const { data: sheetsConfig } = await db
       .from('google_sheets_config')
       .select('linked_accounts, linked_spreadsheets')
       .eq('account_id', accountId)
       .maybeSingle()
 
-    if (!sheetsConfig?.linked_accounts || sheetsConfig.linked_accounts.length === 0) return
-    
-    // Auto-sync logic code
-    console.log('[Sheets Sync] Uploading appointment row for:', appt.patient_name)
+    if (!sheetsConfig?.linked_accounts || !sheetsConfig?.linked_spreadsheets) {
+      console.warn('[Sheets Sync] No Google Sheets config found for account', accountId)
+      return
+    }
+
+    let accounts: any[] = []
+    let sheets: any[] = []
+    try {
+      accounts = Array.isArray(sheetsConfig.linked_accounts)
+        ? sheetsConfig.linked_accounts
+        : JSON.parse(sheetsConfig.linked_accounts as any)
+      sheets = Array.isArray(sheetsConfig.linked_spreadsheets)
+        ? sheetsConfig.linked_spreadsheets
+        : JSON.parse(sheetsConfig.linked_spreadsheets as any)
+    } catch (parseErr) {
+      console.error('[Sheets Sync] Failed to parse linked accounts/sheets:', parseErr)
+      return
+    }
+
+    if (accounts.length === 0 || sheets.length === 0) return
+
+    const linkedSheet = sheets[0]
+    const googleAccountId = linkedSheet.google_account_id || accounts[0].id
+
+    // Import getFreshTokenForAccount to get valid access token
+    const { getFreshTokenForAccount } = await import('@/lib/whatsapp/google-sheets')
+    const token = await getFreshTokenForAccount(accountId, googleAccountId)
+
+    // Format appointment date/time
+    const scheduledAt = new Date(appt.scheduled_at)
+    const dateStr = scheduledAt.toLocaleDateString('ar-SA', { timeZone: 'Asia/Baghdad', year: 'numeric', month: '2-digit', day: '2-digit' })
+    const timeStr = scheduledAt.toLocaleTimeString('ar-SA', { timeZone: 'Asia/Baghdad', hour: '2-digit', minute: '2-digit' })
+    const createdAt = new Date(appt.created_at || new Date()).toLocaleString('ar-SA', { timeZone: 'Asia/Baghdad' })
+
+    const rowValues = [
+      appt.patient_name || '',
+      appt.patient_phone || '',
+      dateStr,
+      timeStr,
+      (appt.staff as any)?.name || '',
+      (appt.service as any)?.name || '',
+      appt.status || 'confirmed',
+      appt.calendar_event_id || '',
+      createdAt,
+      appt.booking_source || 'dashboard'
+    ]
+
+    const sheetName = settings.sheets_worksheet_name || 'Appointments'
+    const spreadsheetId = linkedSheet.spreadsheet_id || settings.sheets_spreadsheet_id
+
+    if (!spreadsheetId) {
+      console.warn('[Sheets Sync] No spreadsheet ID configured.')
+      return
+    }
+
+    const appendRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}!A:J:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ values: [rowValues] }),
+      }
+    )
+
+    if (appendRes.ok) {
+      console.log('[Sheets Sync] Successfully appended appointment row for:', appt.patient_name)
+      // Log success
+      try {
+        await db.from('appointment_logs').insert({
+          account_id: accountId,
+          appointment_id: appointmentId,
+          operation: 'sheets_synced',
+          description: `Appointment synced to Google Sheets (${sheetName}) for ${appt.patient_name}.`
+        })
+      } catch (_logErr) {}
+    } else {
+      const errBody = await appendRes.text()
+      console.error('[Sheets Sync] Google Sheets append failed:', errBody)
+    }
   } catch (err: any) {
-    console.error('[Sheets Sync] Failed to sync appointment:', err.message)
+    console.error('[Sheets Sync] Failed to sync appointment to sheets:', err.message)
   }
 }
+
