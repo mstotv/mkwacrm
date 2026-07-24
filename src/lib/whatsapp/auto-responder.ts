@@ -481,6 +481,8 @@ ${busySlotsText}
           let patientName = parts[1] || '';
           let patientPhone = parts[2] || '';
 
+          let bookingErrorDetail = '';
+
           try {
             let contactName = 'عميل واتساب';
             let contactPhone = '';
@@ -497,6 +499,16 @@ ${busySlotsText}
             if (!patientName) patientName = contactName;
             if (!patientPhone) patientPhone = contactPhone;
 
+            // Freshly resolve Google Account token and Calendar ID to guarantee valid credentials
+            const { accounts } = await getGoogleSheetsConfig(accountId);
+            if (!accounts || accounts.length === 0) {
+              throw new Error('حساب Google Calendar غير مرتبط بالمنصة في الإعدادات.');
+            }
+
+            const freshGoogleAccountId = accounts[0].id;
+            const freshToken = await getFreshTokenForAccount(accountId, freshGoogleAccountId);
+            const freshCalendarId = accounts[0].calendar_id || 'primary';
+
             const summary = `موعد مع: ${patientName}`;
             let description = `تم الحجز تلقائياً عبر واتساب.`;
             if (patientName !== contactName || patientPhone !== contactPhone) {
@@ -505,11 +517,11 @@ ${busySlotsText}
               description += `\nالاسم: ${contactName}\nالهاتف: ${contactPhone}`;
             }
 
-            console.log('[AutoResponder Calendar] Booking event at:', appointmentTime);
+            console.log('[AutoResponder Calendar] Booking event at:', appointmentTime, 'using calendar:', freshCalendarId);
             const eventResult = await createCalendarEvent(
               accountId,
-              googleToken,
-              calendarId,
+              freshToken,
+              freshCalendarId,
               summary,
               description,
               appointmentTime,
@@ -524,7 +536,7 @@ ${busySlotsText}
             
             if (eventId) {
               appointmentBookedSuccessfully = true;
-              console.log('[AutoResponder Calendar] Booked event successfully. ID:', eventId);
+              console.log('[AutoResponder Calendar] Booked event successfully in Google Calendar. ID:', eventId);
 
               // Construct Baghdad local confirmation message
               let formattedTime = '';
@@ -540,11 +552,10 @@ ${busySlotsText}
                 formattedTime = dateObj.toLocaleTimeString('ar-SA', { timeZone: 'Asia/Baghdad', hour: '2-digit', minute: '2-digit', hour12: true });
                 formattedDate = dateObj.toLocaleDateString('ar-SA', { timeZone: 'Asia/Baghdad', year: 'numeric', month: 'long', day: 'numeric' });
               }
-              replyText = `تم تسجيل موعدك بنجاح في تقويم العيادة:\nالتاريخ: ${formattedDate}\nالوقت: ${formattedTime} 👍`;
+              replyText = `تم تسجيل وحجز موعدك بنجاح في تقويم العمل (Google Calendar):\nالتاريخ: ${formattedDate}\nالوقت: ${formattedTime} 👍`;
 
               // Send Telegram notification
               try {
-                const { notifyAccountViaTelegram, formatAppointmentNotification } = require('@/lib/notifications/telegram');
                 await notifyAccountViaTelegram(
                   accountId,
                   formatAppointmentNotification(contactName, contactPhone, appointmentTime, description, patientName, patientPhone, eventId, htmlLink)
@@ -552,12 +563,21 @@ ${busySlotsText}
               } catch (telErr) {
                 console.error('[AutoResponder Calendar] Telegram notification failed:', telErr);
               }
+            } else {
+              bookingErrorDetail = 'لم يتم الحصول على معرف الموعد من Google API.';
             }
           } catch (bookErr: any) {
             console.error('[AutoResponder Calendar] Auto booking failed:', bookErr.message);
+            bookingErrorDetail = bookErr.message;
           }
 
-          replyText = replyText.replace(/\[BOOK_APPOINTMENT:\s*[^\]]+\]/, '').trim();
+          // STRICT CALENDAR PROTECTION: If event creation in Google Calendar failed, OVERRIDE replyText completely!
+          if (!appointmentBookedSuccessfully) {
+            console.warn('[AutoResponder Calendar] Booking failed. OVERRIDING replyText so customer is not misled.');
+            replyText = `عذراً، لم نتمكن من تثبيت وحجز هذا الموعد في التقويم حالياً (${bookingErrorDetail || 'خطأ في النظام'}). يرجى اختيار موعد آخر أو التواصل مع مركز الخدمة لتأكيده 👍`;
+          } else {
+            replyText = replyText.replace(/\[BOOK_APPOINTMENT:\s*[^\]]+\]/, '').trim();
+          }
         }
 
         break;
@@ -672,7 +692,7 @@ ${busySlotsText}
         }
 
         // ─── Strict Calendar Protection: Intercept fake/hallucinated confirmations ───
-        const mentionsAppointmentConfirmation = /تم تسجيل موعدك|تم تأكيد موعدك|تم حجز موعدك/i.test(replyText);
+        const mentionsAppointmentConfirmation = /تم (حجز|تسجيل|تأكيد|تحديد|تثبيت|إضافة|ضبط)|حجزنا|سجلنا|تثبت موعدك|موعدك (مؤكد|جاهز|محجوز|تم)/i.test(replyText);
         if (mentionsAppointmentConfirmation && (!hasBookTag || !appointmentBookedSuccessfully)) {
           console.warn('[AutoResponder] Strict Calendar Protection triggered: AI hallucinated appointment confirmation.');
           replyText = 'عذراً، لم نتمكن من حجز هذا الموعد في التقويم حالياً (قد يكون الوقت غير متاح أو محجوزاً مسبقاً). يرجى مراجعة الأوقات المتاحة واختيار موعد آخر مناسب 👍';

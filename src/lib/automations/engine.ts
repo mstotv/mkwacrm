@@ -1901,12 +1901,12 @@ export async function createCalendarEvent(
 
     if (match) {
       const [_, y, m, d, h, min] = match;
-      startStr = `${y}-${m}-${d}T${h}:${min}:00`;
+      startStr = `${y}-${m}-${d}T${h}:${min}:00+03:00`;
       
       const startDate = new Date(Number(y), Number(m) - 1, Number(d), Number(h), Number(min));
       const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // 1 hour duration
       const pad = (n: number) => String(n).padStart(2, '0');
-      endStr = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:00`;
+      endStr = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:00+03:00`;
     } else {
       const start = new Date(startTimeIso);
       const end = new Date(start.getTime() + 60 * 60 * 1000);
@@ -1928,12 +1928,14 @@ export async function createCalendarEvent(
         const hour = parts.find(p => p.type === 'hour')?.value;
         const minute = parts.find(p => p.type === 'minute')?.value;
         const second = parts.find(p => p.type === 'second')?.value;
-        return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+        return `${year}-${month}-${day}T${hour}:${minute}:${second}+03:00`;
       };
 
       startStr = formatToBaghdadISO(start);
       endStr = formatToBaghdadISO(end);
     }
+
+    console.log('[Calendar API] Sending event to Google Calendar:', { calendarId, startStr, endStr, summary });
 
     const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`, {
       method: 'POST',
@@ -1957,6 +1959,7 @@ export async function createCalendarEvent(
 
     const data = await res.json()
     if (!res.ok) {
+      console.error('[Google Calendar API Error] HTTP', res.status, data);
       throw new Error(data.error?.message || JSON.stringify(data))
     }
 
