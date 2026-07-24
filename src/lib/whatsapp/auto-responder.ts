@@ -7,12 +7,123 @@ import { startFollowUpBackgroundWorker } from '@/lib/follow-ups/runner';
 import { getGoogleSheetsConfig, getFreshTokenForAccount } from '@/lib/whatsapp/google-sheets';
 import { fetchCalendarBusySlots, createCalendarEvent, deleteCalendarEvent } from '@/lib/automations/engine';
 import { getBaghdadParts, createDateFromBaghdadParts, parseLocalTimeString } from './timezone-utils';
+import { notifyAccountViaTelegram, formatOrderNotification, formatAppointmentNotification } from '@/lib/notifications/telegram';
 
 // Admin client to safely read configurations and update messages
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+export interface SaveOrderData {
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  customer_address?: string | null;
+  product_name?: string | null;
+  product_color?: string | null;
+  product_size?: string | null;
+  quantity?: string | number | null;
+  unit_price?: string | number | null;
+  shipping_cost?: string | number | null;
+  total_price?: string | number | null;
+  payment_method?: string | null;
+  notes?: string | null;
+}
+
+export async function saveOrderAndNotifyTelegram(
+  accountId: string,
+  contactId: string,
+  orderData: SaveOrderData
+) {
+  try {
+    let contactName = orderData.customer_name || 'عميل واتساب';
+    let contactPhone = orderData.customer_phone || '';
+
+    // Load contact info if missing
+    if (contactId) {
+      const { data: contact } = await adminSupabase
+        .from('contacts')
+        .select('name, phone, address')
+        .eq('id', contactId)
+        .maybeSingle();
+      if (contact) {
+        if (!contactName || contactName === 'عميل واتساب') contactName = contact.name || 'عميل واتساب';
+        if (!contactPhone) contactPhone = contact.phone || '';
+      }
+    }
+
+    const formattedOrderFields: Record<string, string> = {};
+    if (orderData.product_name) formattedOrderFields['المنتج / الخدمة'] = String(orderData.product_name);
+    if (orderData.customer_address) formattedOrderFields['العنوان'] = String(orderData.customer_address);
+    if (orderData.product_color) formattedOrderFields['اللون'] = String(orderData.product_color);
+    if (orderData.product_size) formattedOrderFields['المقاس'] = String(orderData.product_size);
+    if (orderData.quantity) formattedOrderFields['الكمية'] = String(orderData.quantity);
+    if (orderData.unit_price) formattedOrderFields['سعر الوحدة'] = String(orderData.unit_price);
+    if (orderData.total_price) formattedOrderFields['المبلغ الإجمالي'] = String(orderData.total_price);
+    if (orderData.payment_method) formattedOrderFields['طريقة الدفع'] = String(orderData.payment_method);
+    if (orderData.notes) formattedOrderFields['ملاحظات'] = String(orderData.notes);
+
+    // 1. Send Telegram Notification for the Order ALWAYS
+    try {
+      await notifyAccountViaTelegram(
+        accountId,
+        formatOrderNotification(contactName, contactPhone, formattedOrderFields)
+      );
+      console.log('[AutoResponder Order] Telegram order notification sent successfully');
+    } catch (tgErr: any) {
+      console.error('[AutoResponder Order] Telegram order notification error:', tgErr.message);
+    }
+
+    // 2. Append to Google Sheets if connected
+    try {
+      const { accounts, sheets } = await getGoogleSheetsConfig(accountId);
+      if (sheets && sheets.length > 0 && accounts && accounts.length > 0) {
+        const linkedSheet = sheets[0];
+        const googleAccountId = linkedSheet.google_account_id || accounts[0].id;
+        const token = await getFreshTokenForAccount(accountId, googleAccountId);
+
+        const nowStr = new Date().toLocaleString('ar-SA', { timeZone: 'Asia/Baghdad' });
+        const rowValues = [
+          nowStr,
+          contactName,
+          contactPhone,
+          orderData.customer_address || '',
+          orderData.product_name || '',
+          orderData.product_color || orderData.product_size || '',
+          String(orderData.quantity || 1),
+          String(orderData.total_price || orderData.unit_price || ''),
+          orderData.notes || 'طلب منفذ عبر الذكاء الاصطناعي'
+        ];
+
+        const sheetName = 'Sheet1';
+        const appendRes = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${linkedSheet.spreadsheet_id}/values/${encodeURIComponent(sheetName)}:append?valueInputOption=USER_ENTERED`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              values: [rowValues],
+            }),
+          }
+        );
+
+        if (appendRes.ok) {
+          console.log('[AutoResponder Order] Successfully appended order row to Google Sheet:', linkedSheet.title);
+        } else {
+          const errBody = await appendRes.text();
+          console.warn('[AutoResponder Order] Google Sheet append error:', errBody);
+        }
+      }
+    } catch (sheetErr: any) {
+      console.error('[AutoResponder Order] Sheet append error (non-blocking):', sheetErr.message);
+    }
+  } catch (err: any) {
+    console.error('[AutoResponder Order] Unexpected error in saveOrderAndNotifyTelegram:', err.message);
+  }
+}
 
 interface AutoResponderArgs {
   accountId: string;
@@ -159,11 +270,19 @@ ${busySlotsText}
 - تتوفر لديك أداة لجدولة تذكيرات لمتابعة العملاء لاحقاً.
 - **شروط استدعاء الأداة:**
   * استخدم هذه الأداة **فقط** إذا طلب العميل صراحة تذكيره أو الاتصال به لاحقاً (مثال: "ذكرني بعد ساعة", "تواصل معي غداً", "سأفكر وأرد عليكم لاحقاً").
-  * **يُمنع تماماً** جدولة متابعات للمشتريات العادية أو الاستفسارات العامة ما لم يطلب العميل تذكيراً صريحاً.
   * لجدولة تذكير، أدرج الوسم التالي بدقة في نهاية ردك: [SCHEDULE_FOLLOW_UP: السبب | الوقت النسبي | YYYY-MM-DDTHH:mm] (مثال: [SCHEDULE_FOLLOW_UP: تذكير بموعد الحجز | بعد ساعتين | ${new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().substring(0, 16)}]).`;
       } catch (acctErr) {
         console.error('[AutoResponder] Failed to load account context for follow-up:', acctErr);
       }
+
+      // ─── Build order context ─────────
+      const orderContext = `
+
+**تعليمات تقنية لإدارة وتأكيد طلبات الشراء (Technical Order Instructions):**
+- أنت قادر على استقبال وتأكيد طلبات الشراء والخدمات من العملاء.
+- عند اتفاقك مع العميل على شراء منتج/خدمة وتوفر بياناته الحقيقية (كالاسم، العنوان، السعر أو الكمية)، أدرج الوسم البرمجي التالي فوراً في نهاية ردك:
+[CREATE_ORDER: اسم المنتج | السعر الإجمالي | العنوان | ملاحظات ومواصفات]
+(مثال: [CREATE_ORDER: حذاء ركض أنيق | 35000 | بغداد - الكرادة | المقاس 42 أسود]).`;
 
       // ─── Build system prompt ─────────────────────────────────────
       const basePrompt = aiConfig.system_prompt || 'أنت مساعد ذكي لخدمة العملاء. أجب على الأسئلة بدقة ولباقة باللغة العربية.';
@@ -171,14 +290,13 @@ ${busySlotsText}
       const generalTechnicalInstructions = `
 
 **توجيهات تشغيلية حاسمة (General Operational Directives - Mandatory):**
-1. **الالتزام المطلق بالهوية:** نطاق عملك وهويتك يتم تحديدها **حصرياً** بواسطة رسالة النظام (System Prompt) المكتوبة أعلاه من قبل المستخدم. لا تفترض أي تخصص آخر (مثل حجز المواعيد أو الخدمات الطبية) ما لم تطلب رسالة النظام ذلك صراحة.
-2. **منع الاختلاق وتأكيد المعلومات (No Hallucinations):** لا تفترض أو تخترع أي تفاصيل لم يذكرها العميل صراحة (مثل طريقة الدفع، تكلفة الشحن، المقاس، اللون، الكمية، أو العناوين). إذا كانت هناك تفاصيل ضرورية ناقصة لإتمام الطلب، اسأل العميل عنها بلباقة بدلاً من افتراض قيم افتراضية أو اختلاقها.
-3. **عدم تأكيد إجراءات غير منفذة:** لا تؤكد للعميل إتمام أي إجراء يتطلب استدعاء أداة (مثل حجز موعد أو جدولة تذكير) ما لم تقم بإرفاق الوسم (Tag) البرمجي المقابل له في ردك.
-4. **الفصل التام بين السياقات:** لا تخلط بين حجز المواعيد (في التقويم) وتأكيد طلبات شراء المنتجات. يُمنع منعاً باتاً استدعاء أدوات الكالندر أو حجز المواعيد عند شراء أو تأكيد طلب منتج مادي.
+1. **المساعد المتكامل الشامل:** يمكنك في نفس المحادثة أخذ طلبات الشراء، وحجز المواعيد في الكالندر، وجدولة المتابعات والتذكيرات. أجب بحرية ولباقة على كل طلب من العميل دون تعارض أو رفض.
+2. **منع الاختلاق وتأكيد المعلومات (No Hallucinations):** لا تفترض تفاصيل ناقصة لم يذكرها العميل صراحة (مثل طريقة الدفع، تكلفة الشحن، المقاس، اللون، الكمية، أو العناوين). إذا كانت هناك تفاصيل ضرورية ناقصة لإتمام الطلب أو الموعد، اسأل العميل عنها بلباقة بدلاً من اختلاقها.
+3. **عدم تأكيد إجراءات غير منفذة:** لا تؤكد للعميل إتمام أي إجراء يتطلب استدعاء أداة (مثل حجز موعد، أو تسجيل طلب، أو جدولة تذكير) ما لم تقم بإرفاق الوسم (Tag) البرمجي المقابل له في ردك.
 `;
 
       const brevityInstruction = '\n\n**تعليمات أسلوب الرد:**\n- أجب دائماً بإيجاز ولباقة (جملة أو جملتين فقط).';
-      const compiledSystemPrompt = `${basePrompt}${calendarContext}${followUpContext}${generalTechnicalInstructions}${brevityInstruction}`;
+      const compiledSystemPrompt = `${basePrompt}${calendarContext}${orderContext}${followUpContext}${generalTechnicalInstructions}${brevityInstruction}`;
 
       // ─── Build LLM messages ──────────────────────────────────────
       const llmMessages: { role: string; content: string }[] = [
@@ -201,6 +319,7 @@ ${busySlotsText}
       const aiConfigUpdatedMessages = [...llmMessages];
       let appointmentBookedSuccessfully = false;
       let hasBookTag = false;
+      let hasOrderTag = false;
 
       while (loopCount < maxLoops) {
         replyText = '';
@@ -248,6 +367,28 @@ ${busySlotsText}
         }
 
         if (!replyText) break;
+
+        // --- 0. Intercept CREATE_ORDER tag ---
+        const orderMatch = replyText.match(/\[CREATE_ORDER:\s*([^\]]+)\]/);
+        if (orderMatch) {
+          hasOrderTag = true;
+          const parts = orderMatch[1].split('|').map(p => p.trim());
+          const productName = parts[0] || '';
+          const totalPrice = parts[1] || '';
+          const address = parts[2] || '';
+          const notes = parts[3] || '';
+
+          console.log('[AutoResponder Order] Intercepted CREATE_ORDER tag:', { productName, totalPrice, address, notes });
+
+          await saveOrderAndNotifyTelegram(accountId, contactId, {
+            product_name: productName,
+            total_price: totalPrice,
+            customer_address: address,
+            notes: notes
+          });
+
+          replyText = replyText.replace(/\[CREATE_ORDER:\s*([^\]]+)\]/, '').trim();
+        }
 
         // --- 1. Intercept FIND_MY_APPOINTMENTS tag ---
         if (replyText.includes('[FIND_MY_APPOINTMENTS]')) {
@@ -631,6 +772,12 @@ IMPORTANT: Only extract values explicitly mentioned in the conversation. Do NOT 
                 } else {
                   console.log('[AutoResponder] Updated contact record:', Object.keys(contactUpdate).join(', '));
                 }
+              }
+
+              // Save order to Google Sheets & send Telegram notification if not already handled by CREATE_ORDER tag
+              if (!hasOrderTag && (extractedJson.product_name || extractedJson.total_price || extractedJson.customer_address)) {
+                console.log('[AutoResponder Order] Triggering fallback order save & Telegram notification');
+                await saveOrderAndNotifyTelegram(accountId, contactId, extractedJson);
               }
             }
           }
