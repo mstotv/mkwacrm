@@ -258,23 +258,25 @@ export async function runAutoResponder(args: AutoResponderArgs) {
           googleToken = await getFreshTokenForAccount(accountId, googleAccountId);
           calendarId = accounts[0].calendar_id || 'primary';
           const busySlotsText = await fetchCalendarBusySlots(accountId, googleToken, calendarId);
-          if (busySlotsText) {
-            calendarContext = `
+          const nowInstant = new Date();
+          const todayBaghdad = getBaghdadParts(nowInstant);
+          const todayStr = `${todayBaghdad.year}-${String(todayBaghdad.month).padStart(2, '0')}-${String(todayBaghdad.day).padStart(2, '0')}`;
+          const busyInfo = busySlotsText || '(لا توجد مواعيد محجوزة مسبقاً في التقويم حالياً)';
+
+          calendarContext = `
 
 **تعليمات تقنية لإدارة وحجز المواعيد (Technical Calendar API Instructions - Business-Neutral):**
-- تاريخ اليوم الحالي هو: ${new Date().toISOString().split('T')[0]}
-- تتوفر لديك أداة للتحقق من المواعيد وحجزها في تقويم عيادة/مركز العمل.
-- **الأوقات المزدحمة المحجوزة حالياً (يُمنع الحجز فيها):**
-${busySlotsText}
+- تاريخ اليوم الحالي بتوقيت العيادة/العمل هو: ${todayStr}
+- تتوفر لديك أداة للتحقق من المواعيد وحجزها في تقويم جوجل (Google Calendar).
+- **الأوقات المزدحمة المحجوزة حالياً في التقويم (يُمنع الحجز فيها):**
+${busyInfo}
 - **شروط حجز موعد جديد:**
   * استخدم أداة الحجز فقط إذا طلب العميل **صراحة** حجز موعد أو موعد زيارة أو تحديد وقت محدد للقاء.
-  * **يُمنع منعاً باتاً** استخدام وسوم المواعيد أو إرفاقها لطلبات الشراء العادية، أو حجز المنتجات المادية (مثل الأحذية أو الملابس)، أو طلبات التوصيل/الطعام.
-  * لحجز موعد متفق عليه، أدرج الوسم التالي بدقة في نهاية ردك: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss] (مثال: [BOOK_APPOINTMENT: 2026-07-25T15:00:00]).
+  * لحجز موعد متفق عليه، أدرج الوسم التالي بدقة في نهاية ردك: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss] (مثال: [BOOK_APPOINTMENT: ${todayStr}T15:00:00]).
   * إذا كان الحجز لشخص آخر، استخدم الصيغة: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss | patient_name | patient_phone].
 - **شروط إلغاء أو معرفة المواعيد:**
   * عندما يطلب العميل معرفة مواعيده أو إلغاءها، استخدم الوسم: [FIND_MY_APPOINTMENTS] للبحث أولاً.
   * بعد استلام النتائج، لإلغاء موعد محدد بناءً على طلب العميل، استخدم الوسم: [CANCEL_APPOINTMENT: appointment_id].`;
-          }
         }
       } catch (calErr) {
         console.error('[AutoResponder] Failed to load calendar context:', calErr);
@@ -625,6 +627,105 @@ ${busySlotsText}
         }
 
         break;
+      }
+
+      // ─── Code Fallback for Appointment Booking if AI omitted tag ───
+      if (!appointmentBookedSuccessfully && !hasBookTag && /تم (حجز|تسجيل|تأكيد|تثبيت) (موعدك|الموعد)|حجز موعدك|موعدك.*الساعة/i.test(replyText)) {
+        try {
+          console.log('[AutoResponder Calendar Fallback] AI confirmed appointment without tag. Executing fallback booking parser...');
+
+          let contactName = 'عميل واتساب';
+          let contactPhone = senderPhone || '';
+          if (contactId) {
+            const { data: contactData } = await adminSupabase
+              .from('contacts')
+              .select('name, phone')
+              .eq('id', contactId)
+              .maybeSingle();
+            if (contactData) {
+              contactName = contactData.name || contactName;
+              contactPhone = contactData.phone || contactPhone;
+            }
+          }
+
+          const fullText = `${messageText} ${replyText}`;
+          let targetHour = 17;
+          let targetMinute = 0;
+
+          const timeMatch = fullText.match(/الساعة\s*(\d{1,2})(?::(\d{2}))?/i) || fullText.match(/(\d{1,2}):(\d{2})/);
+          if (timeMatch) {
+            let h = parseInt(timeMatch[1], 10);
+            const m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+            if (/مساء|عصر|م/i.test(fullText) && h < 12) h += 12;
+            targetHour = h;
+            targetMinute = m;
+          }
+
+          const nowInstant = new Date();
+          let targetDate = new Date(nowInstant.getTime() + 24 * 60 * 60 * 1000);
+          if (/اليوم/i.test(fullText) && !/غد|بكر/i.test(fullText)) {
+            targetDate = nowInstant;
+          }
+
+          const baghdadParts = getBaghdadParts(targetDate);
+          const scheduledDate = createDateFromBaghdadParts(
+            baghdadParts.year,
+            baghdadParts.month,
+            baghdadParts.day,
+            targetHour,
+            targetMinute,
+            0
+          );
+
+          const appointmentISO = scheduledDate.toISOString().substring(0, 19);
+
+          const { accounts } = await getGoogleSheetsConfig(accountId);
+          if (accounts && accounts.length > 0) {
+            const freshGoogleAccountId = accounts[0].id;
+            const freshToken = await getFreshTokenForAccount(accountId, freshGoogleAccountId);
+            const freshCalendarId = accounts[0].calendar_id || 'primary';
+
+            const summary = `موعد مع: ${contactName}`;
+            const description = `تم التثبيت والحجز عبر واتساب.\nالاسم: ${contactName}\nالهاتف: ${contactPhone}`;
+
+            const eventResult = await createCalendarEvent(
+              accountId,
+              freshToken,
+              freshCalendarId,
+              summary,
+              description,
+              appointmentISO,
+              conversationId,
+              contactId,
+              contactName,
+              contactPhone
+            );
+
+            const eventId = eventResult?.id;
+            const htmlLink = eventResult?.htmlLink;
+
+            if (eventId) {
+              appointmentBookedSuccessfully = true;
+              console.log('[AutoResponder Calendar Fallback] Successfully booked appointment via code fallback! Event ID:', eventId);
+
+              const apptHash = `${accountId}_${contactId}_${appointmentISO}`;
+              if (!isAlreadyNotified(recentAppointmentNotificationsMap, apptHash)) {
+                markAsNotified(recentAppointmentNotificationsMap, apptHash);
+                try {
+                  await notifyAccountViaTelegram(
+                    accountId,
+                    formatAppointmentNotification(contactName, contactPhone, appointmentISO, description, contactName, contactPhone, eventId, htmlLink)
+                  );
+                  console.log('[AutoResponder Calendar Fallback] Telegram appointment notification sent successfully (Once)');
+                } catch (telErr) {
+                  console.error('[AutoResponder Calendar Fallback] Telegram notification error:', telErr);
+                }
+              }
+            }
+          }
+        } catch (fbErr: any) {
+          console.error('[AutoResponder Calendar Fallback] Error in fallback appointment booking:', fbErr.message);
+        }
       }
 
       // ─── Process SCHEDULE_FOLLOW_UP tag & Intent Fallback ───────
