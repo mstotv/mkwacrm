@@ -15,7 +15,8 @@
     "profile": "الملف الشخصي",
     "lightMode": "الوضع الفاتح",
     "darkMode": "الوضع الداكن",
-    "follow-ups": "المتابعات"
+    "follow-ups": "المتابعات",
+    "appointments": "المواعيد"
   },
   "common": {
     "save": "حفظ",

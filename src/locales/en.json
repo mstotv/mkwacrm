@@ -15,7 +15,8 @@
     "profile": "Profile",
     "lightMode": "Light Mode",
     "darkMode": "Dark Mode",
-    "follow-ups": "Follow-ups"
+    "follow-ups": "Follow-ups",
+    "appointments": "Appointments"
   },
   "common": {
     "save": "Save",

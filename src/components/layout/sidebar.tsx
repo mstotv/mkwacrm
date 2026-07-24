@@ -29,6 +29,7 @@ import {
   Zap,
   LifeBuoy,
   Clock,
+  CalendarDays,
 } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
 import type { AccountRole } from "@/lib/auth/roles";
@@ -101,6 +102,7 @@ const navItems: NavItem[] = [
   { href: "/pipelines", label: "Pipelines", icon: GitBranch },
   { href: "/broadcasts", label: "Broadcasts", icon: Radio },
   { href: "/automations", label: "Automations", icon: Zap },
+  { href: "/appointments", label: "Appointments", icon: CalendarDays },
   { href: "/flows", label: "Flows", icon: Workflow, beta: true },
   { href: "/follow-ups", label: "Follow-ups", icon: Clock },
 ];

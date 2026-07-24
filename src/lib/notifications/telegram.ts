@@ -299,3 +299,54 @@ export async function notifyOrderOnceViaTelegram(
   const message = formatOrderNotification(contactName, contactPhone, cleanFields);
   await notifyAccountViaTelegram(accountId, message);
 }
+
+// Global in-memory deduplication cache for appointments
+const globalAppointmentDeduplicationCache = new Map<string, number>();
+
+/**
+ * Send an appointment booking notification via Telegram Bot API exactly once.
+ * Prevents double alerts on simultaneous triggers.
+ */
+export async function notifyAppointmentOnceViaTelegram(
+  accountId: string,
+  contactName: string,
+  contactPhone: string,
+  dateTime: string,
+  notes?: string,
+  patientName?: string,
+  patientPhone?: string,
+  googleEventId?: string,
+  htmlLink?: string
+): Promise<void> {
+  const dateStr = String(dateTime).trim();
+  const phone = (patientPhone || contactPhone || '').trim();
+  const dedupeKey = `${accountId}_${phone}_${dateStr}`;
+  const now = Date.now();
+  const lastSent = globalAppointmentDeduplicationCache.get(dedupeKey);
+
+  if (lastSent && (now - lastSent < 10 * 60 * 1000)) {
+    console.log('[Telegram] Skipping duplicate appointment notification for key:', dedupeKey);
+    return;
+  }
+
+  globalAppointmentDeduplicationCache.set(dedupeKey, now);
+
+  // Periodic cleanup
+  if (globalAppointmentDeduplicationCache.size > 500) {
+    for (const [k, ts] of globalAppointmentDeduplicationCache.entries()) {
+      if (now - ts > 10 * 60 * 1000) globalAppointmentDeduplicationCache.delete(k);
+    }
+  }
+
+  const message = formatAppointmentNotification(
+    contactName,
+    contactPhone,
+    dateTime,
+    notes,
+    patientName,
+    patientPhone,
+    googleEventId,
+    htmlLink
+  );
+  await notifyAccountViaTelegram(accountId, message);
+}

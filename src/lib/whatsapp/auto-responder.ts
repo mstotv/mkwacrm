@@ -5,9 +5,9 @@ import { sendEvolutionTextMessage } from './evolution-api';
 import { hasFeatureAccess } from '@/lib/auth/features';
 import { startFollowUpBackgroundWorker } from '@/lib/follow-ups/runner';
 import { getGoogleSheetsConfig, getFreshTokenForAccount } from '@/lib/whatsapp/google-sheets';
-import { fetchCalendarBusySlots, createCalendarEvent, deleteCalendarEvent } from '@/lib/automations/engine';
 import { getBaghdadParts, createDateFromBaghdadParts, parseLocalTimeString } from './timezone-utils';
-import { notifyAccountViaTelegram, notifyOrderOnceViaTelegram, formatOrderNotification, formatAppointmentNotification } from '@/lib/notifications/telegram';
+import { notifyAccountViaTelegram, notifyOrderOnceViaTelegram, formatOrderNotification } from '@/lib/notifications/telegram';
+import { APPOINTMENT_AI_TOOLS, executeAppointmentTool } from '@/lib/appointments/ai-tools';
 
 // Admin client to safely read configurations and update messages
 const adminSupabase = createClient(
@@ -30,9 +30,8 @@ export interface SaveOrderData {
   notes?: string | null;
 }
 
-// Memory cache to guarantee Telegram notifications & Sheet appends run ONCE per order/appointment (TTL: 12h)
+// Memory cache to guarantee Telegram notifications & Sheet appends run ONCE per order (TTL: 12h)
 const recentOrderNotificationsMap = new Map<string, number>();
-const recentAppointmentNotificationsMap = new Map<string, number>();
 
 function isAlreadyNotified(cacheMap: Map<string, number>, key: string): boolean {
   const now = Date.now();
@@ -246,42 +245,6 @@ export async function runAutoResponder(args: AutoResponderArgs) {
       // ─── Build conversation history ──────────────────────────────
       const history = await buildConversationHistory(conversationId);
 
-      // ─── Fetch calendar busy slots if a Google Account is connected ──────
-      let calendarContext = '';
-      let googleToken = '';
-      let googleAccountId = '';
-      let calendarId = 'primary';
-      try {
-        const { accounts } = await getGoogleSheetsConfig(accountId);
-        if (accounts && accounts.length > 0) {
-          googleAccountId = accounts[0].id;
-          googleToken = await getFreshTokenForAccount(accountId, googleAccountId);
-          calendarId = accounts[0].calendar_id || 'primary';
-          const busySlotsText = await fetchCalendarBusySlots(accountId, googleToken, calendarId);
-          const nowInstant = new Date();
-          const todayBaghdad = getBaghdadParts(nowInstant);
-          const todayStr = `${todayBaghdad.year}-${String(todayBaghdad.month).padStart(2, '0')}-${String(todayBaghdad.day).padStart(2, '0')}`;
-          const busyInfo = busySlotsText || '(لا توجد مواعيد محجوزة مسبقاً في التقويم حالياً)';
-
-          calendarContext = `
-
-**تعليمات تقنية لإدارة وحجز المواعيد (Technical Calendar API Instructions - Business-Neutral):**
-- تاريخ اليوم الحالي بتوقيت العيادة/العمل هو: ${todayStr}
-- تتوفر لديك أداة للتحقق من المواعيد وحجزها في تقويم جوجل (Google Calendar).
-- **الأوقات المزدحمة المحجوزة حالياً في التقويم (يُمنع الحجز فيها):**
-${busyInfo}
-- **شروط حجز موعد جديد:**
-  * استخدم أداة الحجز فقط إذا طلب العميل **صراحة** حجز موعد أو موعد زيارة أو تحديد وقت محدد للقاء.
-  * لحجز موعد متفق عليه، أدرج الوسم التالي بدقة في نهاية ردك: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss] (مثال: [BOOK_APPOINTMENT: ${todayStr}T15:00:00]).
-  * إذا كان الحجز لشخص آخر، استخدم الصيغة: [BOOK_APPOINTMENT: YYYY-MM-DDTHH:mm:ss | patient_name | patient_phone].
-- **شروط إلغاء أو معرفة المواعيد:**
-  * عندما يطلب العميل معرفة مواعيده أو إلغاءها، استخدم الوسم: [FIND_MY_APPOINTMENTS] للبحث أولاً.
-  * بعد استلام النتائج، لإلغاء موعد محدد بناءً على طلب العميل، استخدم الوسم: [CANCEL_APPOINTMENT: appointment_id].`;
-        }
-      } catch (calErr) {
-        console.error('[AutoResponder] Failed to load calendar context:', calErr);
-      }
-
       // ─── Build follow-up context with current date/time ─────────
       let followUpContext = '';
       let accountData: any = null;
@@ -307,7 +270,7 @@ ${busyInfo}
 - تتوفر لديك أداة لجدولة تذكيرات لمتابعة العملاء لاحقاً.
 - **شروط استدعاء الأداة:**
   * استخدم هذه الأداة **فقط** إذا طلب العميل صراحة تذكيره أو الاتصال به لاحقاً (مثال: "ذكرني بعد ساعة", "تواصل معي غداً", "سأفكر وأرد عليكم لاحقاً").
-  * لجدولة تذكير، أدرج الوسم التالي بدقة في نهاية ردك: [SCHEDULE_FOLLOW_UP: السبب | الوقت النسبي | YYYY-MM-DDTHH:mm] (مثال: [SCHEDULE_FOLLOW_UP: تذكير بموعد الحجز | بعد ساعتين | ${new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().substring(0, 16)}]).`;
+  * لجدولة تذكير، أدرج الوسم التالي بدقة في نهاية ردك: [SCHEDULE_FOLLOW_UP: السبب | الوقت النسبي | YYYY-MM-DDTHH:mm] (مثال: [SCHEDULE_FOLLOW_UP: تذكير بالطلب | بعد ساعتين | ${new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().substring(0, 16)}]).`;
       } catch (acctErr) {
         console.error('[AutoResponder] Failed to load account context for follow-up:', acctErr);
       }
@@ -327,18 +290,17 @@ ${busyInfo}
       const generalTechnicalInstructions = `
 
 **توجيهات تشغيلية حاسمة (General Operational Directives - Mandatory):**
-1. **الفصل التام والواضح بين الخدمات:**
-   - **لطلبات الشراء والمنتجات والتوصيل:** استخدم فقط نظام الطلبات [CREATE_ORDER]. يُمنع منعاً باتاً استدعاء وسوم المواعيد أو التحدث عن حجز تقويم لطلبات الشراء.
-   - **لحجز المواعيد والزيارات والاستشارات:** استخدم فقط وسوم المواعيد [BOOK_APPOINTMENT].
-2. **منع الاختلاق وتأكيد المعلومات (No Hallucinations):** لا تفترض تفاصيل ناقصة لم يذكرها العميل صراحة (مثل طريقة الدفع، تكلفة الشحن، المقاس، اللون، الكمية، أو العناوين). إذا كانت هناك تفاصيل ضرورية ناقصة لإتمام الطلب أو الموعد، اسأل العميل عنها بلباقة بدلاً من اختلاقها.
-3. **عدم تأكيد إجراءات غير منفذة:** لا تؤكد للعميل إتمام أي إجراء يتطلب استدعاء أداة (مثل حجز موعد، أو تسجيل طلب، أو جدولة تذكير) ما لم تقم بإرفاق الوسم (Tag) البرمجي المقابل له في ردك.
+1. **التركيز التام على خدمة العملاء وطلبات الشراء:**
+   - **لطلبات الشراء والمنتجات والتوصيل:** استخدم فقط نظام الطلبات [CREATE_ORDER].
+2. **منع الاختلاق وتأكيد المعلومات (No Hallucinations):** لا تفترض تفاصيل ناقصة لم يذكرها العميل صراحة (مثل طريقة الدفع، تكلفة الشحن، المقاس، اللون، الكمية، أو العناوين). إذا كانت هناك تفاصيل ضرورية ناقصة لإتمام الطلب، اسأل العميل عنها بلباقة بدلاً من اختلاقها.
+3. **عدم تأكيد إجراءات غير منفذة:** لا تؤكد للعميل إتمام أي إجراء يتطلب استدعاء أداة (مثل تسجيل طلب، أو جدولة تذكير) ما لم تقم بإرفاق الوسم (Tag) البرمجي المقابل له في ردك.
 `;
 
       const brevityInstruction = '\n\n**تعليمات أسلوب الرد:**\n- أجب دائماً بإيجاز ولباقة (جملة أو جملتين فقط).';
-      const compiledSystemPrompt = `${basePrompt}${calendarContext}${orderContext}${followUpContext}${generalTechnicalInstructions}${brevityInstruction}`;
+      const compiledSystemPrompt = `${basePrompt}${orderContext}${followUpContext}${generalTechnicalInstructions}${brevityInstruction}`;
 
       // ─── Build LLM messages ──────────────────────────────────────
-      const llmMessages: { role: string; content: string }[] = [
+      const llmMessages: any[] = [
         { role: 'system', content: compiledSystemPrompt },
         ...history,
       ];
@@ -351,17 +313,27 @@ ${busyInfo}
         llmMessages.push({ role: 'user', content: messageText });
       }
 
-      // ─── Query AI model ──────────────────────────────────────────
       let replyText = '';
       let loopCount = 0;
-      const maxLoops = 3;
+      const maxLoops = 5;
       const aiConfigUpdatedMessages = [...llmMessages];
-      let appointmentBookedSuccessfully = false;
-      let hasBookTag = false;
       let hasOrderTag = false;
 
+      // Fetch contact name for notifications if needed
+      let contactName = 'عميل واتساب';
+      try {
+        const { data: contact } = await adminSupabase
+          .from('contacts')
+          .select('name')
+          .eq('id', contactId)
+          .maybeSingle();
+        if (contact?.name) contactName = contact.name;
+      } catch (_) {}
+
       while (loopCount < maxLoops) {
-        replyText = '';
+        let assistantMessage: any = null;
+        let ok = false;
+        let errorData: any = null;
 
         if (aiConfig.provider === 'openai') {
           const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -373,15 +345,19 @@ ${busyInfo}
             body: JSON.stringify({
               model: 'gpt-4o-mini',
               messages: aiConfigUpdatedMessages,
+              tools: APPOINTMENT_AI_TOOLS,
+              tool_choice: 'auto',
               max_tokens: 500,
             }),
           });
 
           const resData = await response.json();
-          if (response.ok && resData.choices?.[0]?.message?.content) {
-            replyText = resData.choices[0].message.content.trim();
+          if (response.ok && resData.choices?.[0]?.message) {
+            assistantMessage = resData.choices[0].message;
+            ok = true;
           } else {
-            console.error('[AutoResponder] OpenAI API error:', resData.error || resData);
+            errorData = resData.error || resData;
+            console.error('[AutoResponder] OpenAI API error:', errorData);
           }
         } else if (aiConfig.provider === 'deepseek') {
           const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -393,21 +369,64 @@ ${busyInfo}
             body: JSON.stringify({
               model: 'deepseek-chat',
               messages: aiConfigUpdatedMessages,
+              tools: APPOINTMENT_AI_TOOLS,
+              tool_choice: 'auto',
               max_tokens: 500,
             }),
           });
 
           const resData = await response.json();
-          if (response.ok && resData.choices?.[0]?.message?.content) {
-            replyText = resData.choices[0].message.content.trim();
+          if (response.ok && resData.choices?.[0]?.message) {
+            assistantMessage = resData.choices[0].message;
+            ok = true;
           } else {
-            console.error('[AutoResponder] DeepSeek API error:', resData.error || resData);
+            errorData = resData.error || resData;
+            console.error('[AutoResponder] DeepSeek API error:', errorData);
           }
         }
 
-        if (!replyText) break;
+        if (!ok || !assistantMessage) break;
 
-        // --- 0. Intercept CREATE_ORDER tag ---
+        // Push assistant response to context
+        aiConfigUpdatedMessages.push(assistantMessage);
+
+        // Check if tool calls were requested
+        if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+          console.log(`[AutoResponder] AI requested ${assistantMessage.tool_calls.length} tool call(s).`);
+          
+          for (const toolCall of assistantMessage.tool_calls) {
+            const funcName = toolCall.function.name;
+            const args = JSON.parse(toolCall.function.arguments || '{}');
+            
+            // Execute the specific appointment tool
+            const toolResult = await executeAppointmentTool(
+              accountId,
+              contactId,
+              conversationId,
+              contactName,
+              senderPhone,
+              funcName,
+              args
+            );
+
+            aiConfigUpdatedMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: funcName,
+              content: JSON.stringify(toolResult)
+            });
+          }
+
+          loopCount++;
+        } else {
+          // No tool calls requested - this is the final text reply!
+          replyText = (assistantMessage.content || '').trim();
+          break;
+        }
+      }
+
+      // --- Intercept legacy CREATE_ORDER bracket tag if present in final text response ---
+      if (replyText) {
         const orderMatch = replyText.match(/\[CREATE_ORDER:\s*([^\]]+)\]/);
         if (orderMatch) {
           hasOrderTag = true;
@@ -427,304 +446,6 @@ ${busyInfo}
           });
 
           replyText = replyText.replace(/\[CREATE_ORDER:\s*([^\]]+)\]/, '').trim();
-        }
-
-        // --- 1. Intercept FIND_MY_APPOINTMENTS tag ---
-        if (replyText.includes('[FIND_MY_APPOINTMENTS]')) {
-          console.log('[AutoResponder] Tag Intercepted: FIND_MY_APPOINTMENTS');
-          const { data: appts } = await adminSupabase
-            .from('appointments')
-            .select('id, patient_name, patient_phone, scheduled_at')
-            .eq('contact_id', contactId)
-            .eq('status', 'confirmed')
-            .order('scheduled_at', { ascending: true });
-
-          let apptText = '';
-          if (!appts || appts.length === 0) {
-            apptText = 'لا توجد مواعيد مؤكدة حالياً لهذه المحادثة.';
-          } else {
-            apptText = 'النتائج الفعلية للمواعيد المؤكدة المرتبطة بك في قاعدة البيانات:\n' + appts.map((ap, idx) => {
-              const d = new Date(ap.scheduled_at);
-              const formatted = d.toLocaleString('ar-SA', { timeZone: 'Asia/Baghdad', dateStyle: 'full', timeStyle: 'short' });
-              return `- [رقم الموعد: ${ap.id}] صاحب الموعد: ${ap.patient_name} (${ap.patient_phone || 'بدون هاتف'}) | الوقت: ${formatted}`;
-            }).join('\n');
-          }
-
-          aiConfigUpdatedMessages.push({ role: 'assistant', content: replyText });
-          aiConfigUpdatedMessages.push({ 
-            role: 'user', 
-            content: `[FIND_MY_APPOINTMENTS_RESULT]\n${apptText}\n\nالرجاء صياغة رد للعميل بناءً على هذه المواعيد الحقيقية فقط وسؤاله أي موعد يقصد إن وجد أكثر من موعد، أو تأكيد رغبته في الإلغاء إن كان هناك موعد واحد.` 
-          });
-
-          loopCount++;
-          continue;
-        }
-
-        // --- 2. Intercept CANCEL_APPOINTMENT tag ---
-        const cancelMatch = replyText.match(/\[CANCEL_APPOINTMENT:\s*([^\]]+)\]/);
-        if (cancelMatch) {
-          const appointmentId = cancelMatch[1].trim();
-          console.log('[AutoResponder] Tag Intercepted: CANCEL_APPOINTMENT for ID:', appointmentId);
-          let cancelResultText = '';
-          
-          try {
-            const { data: appt } = await adminSupabase
-              .from('appointments')
-              .select('*')
-              .eq('id', appointmentId)
-              .maybeSingle();
-
-            if (appt) {
-              const { accounts } = await getGoogleSheetsConfig(accountId);
-              if (accounts && accounts.length > 0) {
-                const googleAccountId = accounts[0].id;
-                const token = await getFreshTokenForAccount(accountId, googleAccountId);
-                const calendarId = accounts[0].calendar_id || 'primary';
-
-                const deleted = await deleteCalendarEvent(accountId, token, calendarId, appt.calendar_event_id);
-                if (deleted) {
-                  await adminSupabase
-                    .from('appointments')
-                    .update({ status: 'cancelled' })
-                    .eq('id', appointmentId);
-                  cancelResultText = 'تم إلغاء الموعد بنجاح من تقويم Google Calendar وقاعدة البيانات.';
-                } else {
-                  cancelResultText = 'فشل إلغاء الموعد من Google Calendar.';
-                }
-              } else {
-                cancelResultText = 'فشل الإلغاء لعدم وجود حساب Google مرتبط بالمنصة.';
-              }
-            } else {
-              cancelResultText = 'لم يتم العثور على الموعد المحدد في قاعدة البيانات (قد يكون ملغياً بالفعل).';
-            }
-          } catch (err: any) {
-            cancelResultText = `خطأ أثناء معالجة الإلغاء: ${err.message}`;
-          }
-
-          aiConfigUpdatedMessages.push({ role: 'assistant', content: replyText });
-          aiConfigUpdatedMessages.push({ 
-            role: 'user', 
-            content: `[CANCEL_APPOINTMENT_RESULT]\nالنتيجة: ${cancelResultText}\n\nأبلغ العميل بنتيجة الإلغاء بلباقة واختصار.` 
-          });
-
-          loopCount++;
-          continue;
-        }
-
-        // --- 3. Intercept BOOK_APPOINTMENT tag ---
-        const bookMatch = replyText.match(/\[BOOK_APPOINTMENT:\s*([^\]]+)\]/);
-        if (bookMatch) {
-          hasBookTag = true;
-          const parts = bookMatch[1].split('|').map(p => p.trim());
-          const appointmentTime = parts[0];
-          let patientName = parts[1] || '';
-          let patientPhone = parts[2] || '';
-
-          let bookingErrorDetail = '';
-
-          try {
-            let contactName = 'عميل واتساب';
-            let contactPhone = '';
-            const { data: contactData } = await adminSupabase
-               .from('contacts')
-               .select('name, phone')
-               .eq('id', contactId)
-               .maybeSingle();
-            if (contactData) {
-              contactName = contactData.name || contactName;
-              contactPhone = contactData.phone || '';
-            }
-
-            if (!patientName) patientName = contactName;
-            if (!patientPhone) patientPhone = contactPhone;
-
-            // Freshly resolve Google Account token and Calendar ID to guarantee valid credentials
-            const { accounts } = await getGoogleSheetsConfig(accountId);
-            if (!accounts || accounts.length === 0) {
-              throw new Error('حساب Google Calendar غير مرتبط بالمنصة في الإعدادات.');
-            }
-
-            const freshGoogleAccountId = accounts[0].id;
-            const freshToken = await getFreshTokenForAccount(accountId, freshGoogleAccountId);
-            const freshCalendarId = accounts[0].calendar_id || 'primary';
-
-            const summary = `موعد مع: ${patientName}`;
-            let description = `تم الحجز تلقائياً عبر واتساب.`;
-            if (patientName !== contactName || patientPhone !== contactPhone) {
-              description += `\nالحجز عبر واتساب رقم: ${contactPhone} (${contactName})\nلصاحب الموعد الفعلي: ${patientName} | رقم هاتف صاحب الموعد: ${patientPhone}`;
-            } else {
-              description += `\nالاسم: ${contactName}\nالهاتف: ${contactPhone}`;
-            }
-
-            console.log('[AutoResponder Calendar] Booking event at:', appointmentTime, 'using calendar:', freshCalendarId);
-            const eventResult = await createCalendarEvent(
-              accountId,
-              freshToken,
-              freshCalendarId,
-              summary,
-              description,
-              appointmentTime,
-              conversationId,
-              contactId,
-              patientName,
-              patientPhone
-            );
-            
-            const eventId = eventResult?.id;
-            const htmlLink = eventResult?.htmlLink;
-            
-            if (eventId) {
-              appointmentBookedSuccessfully = true;
-              console.log('[AutoResponder Calendar] Booked event successfully in Google Calendar. ID:', eventId);
-
-              // Construct Baghdad local confirmation message
-              let formattedTime = '';
-              let formattedDate = '';
-              const partsMatch = appointmentTime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-              if (partsMatch) {
-                const [_, y, m, d, h, min] = partsMatch;
-                const dateObj = new Date(Number(y), Number(m) - 1, Number(d), Number(h), Number(min));
-                formattedTime = dateObj.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: true });
-                formattedDate = dateObj.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' });
-              } else {
-                const dateObj = new Date(appointmentTime);
-                formattedTime = dateObj.toLocaleTimeString('ar-SA', { timeZone: 'Asia/Baghdad', hour: '2-digit', minute: '2-digit', hour12: true });
-                formattedDate = dateObj.toLocaleDateString('ar-SA', { timeZone: 'Asia/Baghdad', year: 'numeric', month: 'long', day: 'numeric' });
-              }
-              replyText = `تم تسجيل وحجز موعدك بنجاح في تقويم العمل (Google Calendar):\nالتاريخ: ${formattedDate}\nالوقت: ${formattedTime} 👍`;
-
-              // Send Telegram notification ONCE per confirmed appointment
-              const apptHash = `${accountId}_${contactId}_${appointmentTime}`;
-              if (!isAlreadyNotified(recentAppointmentNotificationsMap, apptHash)) {
-                markAsNotified(recentAppointmentNotificationsMap, apptHash);
-                try {
-                  await notifyAccountViaTelegram(
-                    accountId,
-                    formatAppointmentNotification(contactName, contactPhone, appointmentTime, description, patientName, patientPhone, eventId, htmlLink)
-                  );
-                  console.log('[AutoResponder Calendar] Telegram appointment notification sent successfully (Once)');
-                } catch (telErr) {
-                  console.error('[AutoResponder Calendar] Telegram notification failed:', telErr);
-                }
-              } else {
-                console.log('[AutoResponder Calendar] Telegram notification skipped: already sent once for this appointment.');
-              }
-            } else {
-              bookingErrorDetail = 'لم يتم الحصول على معرف الموعد من Google API.';
-            }
-          } catch (bookErr: any) {
-            console.error('[AutoResponder Calendar] Auto booking failed:', bookErr.message);
-            bookingErrorDetail = bookErr.message;
-          }
-
-          // STRICT CALENDAR PROTECTION: If event creation in Google Calendar failed, OVERRIDE replyText completely!
-          if (!appointmentBookedSuccessfully) {
-            console.warn('[AutoResponder Calendar] Booking failed. OVERRIDING replyText so customer is not misled.');
-            replyText = `عذراً، لم نتمكن من تثبيت وحجز هذا الموعد في التقويم حالياً (${bookingErrorDetail || 'خطأ في النظام'}). يرجى اختيار موعد آخر أو التواصل مع مركز الخدمة لتأكيده 👍`;
-          } else {
-            replyText = replyText.replace(/\[BOOK_APPOINTMENT:\s*[^\]]+\]/, '').trim();
-          }
-        }
-
-        break;
-      }
-
-      // ─── Code Fallback for Appointment Booking if AI omitted tag ───
-      if (!appointmentBookedSuccessfully && !hasBookTag && /تم (حجز|تسجيل|تأكيد|تثبيت) (موعدك|الموعد)|حجز موعدك|موعدك.*الساعة/i.test(replyText)) {
-        try {
-          console.log('[AutoResponder Calendar Fallback] AI confirmed appointment without tag. Executing fallback booking parser...');
-
-          let contactName = 'عميل واتساب';
-          let contactPhone = senderPhone || '';
-          if (contactId) {
-            const { data: contactData } = await adminSupabase
-              .from('contacts')
-              .select('name, phone')
-              .eq('id', contactId)
-              .maybeSingle();
-            if (contactData) {
-              contactName = contactData.name || contactName;
-              contactPhone = contactData.phone || contactPhone;
-            }
-          }
-
-          const fullText = `${messageText} ${replyText}`;
-          let targetHour = 17;
-          let targetMinute = 0;
-
-          const timeMatch = fullText.match(/الساعة\s*(\d{1,2})(?::(\d{2}))?/i) || fullText.match(/(\d{1,2}):(\d{2})/);
-          if (timeMatch) {
-            let h = parseInt(timeMatch[1], 10);
-            const m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
-            if (/مساء|عصر|م/i.test(fullText) && h < 12) h += 12;
-            targetHour = h;
-            targetMinute = m;
-          }
-
-          const nowInstant = new Date();
-          let targetDate = new Date(nowInstant.getTime() + 24 * 60 * 60 * 1000);
-          if (/اليوم/i.test(fullText) && !/غد|بكر/i.test(fullText)) {
-            targetDate = nowInstant;
-          }
-
-          const baghdadParts = getBaghdadParts(targetDate);
-          const scheduledDate = createDateFromBaghdadParts(
-            baghdadParts.year,
-            baghdadParts.month,
-            baghdadParts.day,
-            targetHour,
-            targetMinute,
-            0
-          );
-
-          const appointmentISO = scheduledDate.toISOString().substring(0, 19);
-
-          const { accounts } = await getGoogleSheetsConfig(accountId);
-          if (accounts && accounts.length > 0) {
-            const freshGoogleAccountId = accounts[0].id;
-            const freshToken = await getFreshTokenForAccount(accountId, freshGoogleAccountId);
-            const freshCalendarId = accounts[0].calendar_id || 'primary';
-
-            const summary = `موعد مع: ${contactName}`;
-            const description = `تم التثبيت والحجز عبر واتساب.\nالاسم: ${contactName}\nالهاتف: ${contactPhone}`;
-
-            const eventResult = await createCalendarEvent(
-              accountId,
-              freshToken,
-              freshCalendarId,
-              summary,
-              description,
-              appointmentISO,
-              conversationId,
-              contactId,
-              contactName,
-              contactPhone
-            );
-
-            const eventId = eventResult?.id;
-            const htmlLink = eventResult?.htmlLink;
-
-            if (eventId) {
-              appointmentBookedSuccessfully = true;
-              console.log('[AutoResponder Calendar Fallback] Successfully booked appointment via code fallback! Event ID:', eventId);
-
-              const apptHash = `${accountId}_${contactId}_${appointmentISO}`;
-              if (!isAlreadyNotified(recentAppointmentNotificationsMap, apptHash)) {
-                markAsNotified(recentAppointmentNotificationsMap, apptHash);
-                try {
-                  await notifyAccountViaTelegram(
-                    accountId,
-                    formatAppointmentNotification(contactName, contactPhone, appointmentISO, description, contactName, contactPhone, eventId, htmlLink)
-                  );
-                  console.log('[AutoResponder Calendar Fallback] Telegram appointment notification sent successfully (Once)');
-                } catch (telErr) {
-                  console.error('[AutoResponder Calendar Fallback] Telegram notification error:', telErr);
-                }
-              }
-            }
-          }
-        } catch (fbErr: any) {
-          console.error('[AutoResponder Calendar Fallback] Error in fallback appointment booking:', fbErr.message);
         }
       }
 
@@ -836,18 +557,6 @@ ${busyInfo}
           }
         }
 
-        // ─── Strict Calendar Protection: Intercept fake/hallucinated appointment confirmations ───
-        // Only trigger if the reply specifically pertains to calendar appointments / visits AND does NOT pertain to product orders / delivery.
-        const isAppointmentContext = /(موعد|الموعد|حجز موعد|تأكيد الموعد|تسجيل الموعد|تثبيت الموعد|حجزنا لك موعد|موعدك مؤكد|موعدك جاهز|موعدك محجوز|زيارتك)/i.test(replyText);
-        const isOrderContext = /(طلب|طلبك|طلبات|الطلب|شراء|المنتج|المنتجات|التوصيل|الشحن|عنوانك|سعر الوحدة)/i.test(replyText);
-
-        const mentionsAppointmentConfirmation = isAppointmentContext && !isOrderContext && /تم (حجز|تسجيل|تأكيد|تحديد|تثبيت|إضافة|ضبط)|حجزنا|سجلنا|تثبت موعدك|موعدك/i.test(replyText);
-
-        if (mentionsAppointmentConfirmation && (!hasBookTag || !appointmentBookedSuccessfully)) {
-          console.warn('[AutoResponder] Strict Calendar Protection triggered: AI hallucinated appointment confirmation.');
-          replyText = 'عذراً، لم نتمكن من حجز هذا الموعد في التقويم حالياً (قد يكون الوقت غير متاح أو محجوزاً مسبقاً). يرجى مراجعة الأوقات المتاحة واختيار موعد آخر مناسب 👍';
-        }
-
         // ─── Smart Order Data Extraction from Full Conversation ─────
         // Extract structured order/customer data from the conversation and update contact record
         try {
@@ -944,8 +653,8 @@ IMPORTANT: Only extract values explicitly mentioned in the conversation. Do NOT 
                 }
               }
 
-              // Save order to Google Sheets & send Telegram notification if not already handled by CREATE_ORDER tag or appointment booking
-              if (!hasOrderTag && !hasBookTag && !appointmentBookedSuccessfully && (extractedJson.product_name || (extractedJson.total_price && extractedJson.customer_address))) {
+              // Save order to Google Sheets & send Telegram notification if not already handled by CREATE_ORDER tag
+              if (!hasOrderTag && (extractedJson.product_name || (extractedJson.total_price && extractedJson.customer_address))) {
                 console.log('[AutoResponder Order] Triggering fallback order save & Telegram notification');
                 await saveOrderAndNotifyTelegram(accountId, contactId, extractedJson);
               }

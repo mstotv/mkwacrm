@@ -585,3 +585,154 @@ export interface AutomationLog {
   created_at: string;
   contact?: Contact;
 }
+
+// ============================================================
+// Appointment module entities
+// ============================================================
+
+export interface GoogleCalendarAccount {
+  id: string;
+  account_id: string;
+  email: string;
+  access_token: string;
+  refresh_token: string;
+  calendar_id: string;
+  timezone: string;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppointmentStaff {
+  id: string;
+  account_id: string;
+  name: string;
+  photo_url?: string | null;
+  email?: string | null;
+  google_calendar_id?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppointmentService {
+  id: string;
+  account_id: string;
+  name: string;
+  duration_minutes: number;
+  description?: string | null;
+  price?: number | null;
+  color: string;
+  max_daily_capacity?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppointmentStaffService {
+  staff_id: string;
+  service_id: string;
+}
+
+export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'rescheduled';
+
+export interface Appointment {
+  id: string;
+  account_id: string;
+  contact_id?: string | null;
+  conversation_id?: string | null;
+  staff_id?: string | null;
+  service_id?: string | null;
+  patient_name: string;
+  patient_phone?: string | null;
+  scheduled_at: string;
+  status: AppointmentStatus;
+  calendar_event_id?: string | null;
+  booking_source: 'whatsapp' | 'dashboard';
+  created_by_ai: boolean;
+  created_at: string;
+  updated_at: string;
+  staff?: AppointmentStaff | null;
+  service?: AppointmentService | null;
+}
+
+export interface AppointmentWorkingHours {
+  id: string;
+  account_id: string;
+  staff_id?: string | null;
+  day_of_week: number; // 0-6
+  opening_time: string; // HH:MM:SS
+  closing_time: string; // HH:MM:SS
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppointmentBreak {
+  id: string;
+  account_id: string;
+  staff_id?: string | null;
+  day_of_week?: number | null;
+  specific_date?: string | null;
+  start_time: string;
+  end_time: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppointmentHoliday {
+  id: string;
+  account_id: string;
+  staff_id?: string | null;
+  holiday_date: string; // YYYY-MM-DD
+  name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppointmentSettings {
+  id: string;
+  account_id: string;
+  timezone: string;
+  max_daily_appointments?: number | null;
+  max_hourly_appointments?: number | null;
+  min_booking_notice_hours: number;
+  max_future_booking_days: number;
+  booking_interval_minutes: number;
+  sheets_sync_enabled: boolean;
+  sheets_spreadsheet_id?: string | null;
+  sheets_worksheet_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppointmentNotification {
+  id: string;
+  account_id: string;
+  appointment_id?: string | null;
+  type: 'whatsapp' | 'email';
+  recipient: string;
+  status: 'pending' | 'sent' | 'failed';
+  sent_at?: string | null;
+  error_message?: string | null;
+  created_at: string;
+}
+
+export interface AppointmentReminder {
+  id: string;
+  account_id: string;
+  appointment_id: string;
+  reminder_time: string;
+  reminder_type: '24h' | '3h' | '30m';
+  status: 'pending' | 'sent' | 'failed';
+  created_at: string;
+}
+
+export interface AppointmentLog {
+  id: string;
+  account_id: string;
+  appointment_id?: string | null;
+  operation: 'created' | 'updated' | 'cancelled' | 'rescheduled' | 'reminder_sent' | 'google_sync' | 'ai_action' | 'api_error';
+  description: string;
+  metadata?: any;
+  created_at: string;
+}
