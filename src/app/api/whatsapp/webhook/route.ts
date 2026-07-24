@@ -95,7 +95,21 @@ export async function GET(request: Request) {
       )
     }
 
-    // Fetch all whatsapp configs to check verify tokens
+    // 1. Check environment variables as a direct match / fallback option
+    const envVerifyToken =
+      process.env.WHATSAPP_VERIFY_TOKEN ||
+      process.env.META_VERIFY_TOKEN ||
+      process.env.WEBHOOK_VERIFY_TOKEN ||
+      process.env.VERIFY_TOKEN
+
+    if (envVerifyToken && envVerifyToken === verifyToken) {
+      return new Response(challenge, {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' },
+      })
+    }
+
+    // 2. Fetch all whatsapp configs to check encrypted verify tokens in DB
     const { data: configs, error: configError } = await supabaseAdmin()
       .from('whatsapp_config')
       .select('id, verify_token')
