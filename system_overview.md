@@ -259,6 +259,10 @@ wacrm/
    - **تحديث جهة الاتصال ومتغيرات الوركفلو:** كتابة الاسم، العنوان، واللون مباشرة في سجل جدول `contacts` لضمان قراءة حقول `contact.name` و `contact.address` و `contact.color` في Google Sheets بنجاح، إضافة إلى تخزين المتغيرات بصيغة `vars.order_*` و `vars.order_summary`.
    - **إثراء إشعارات تليجرام:** دمج كافة البيانات المستخرجة في نص إشعار التلغرام لردود الأتمتة وجوجل شيت لضمان إخطار صاحب المتجر ببيانات الطلب الكاملة فوراً.
 
+### ص. إصلاح ودعم التحقق من الويب هوك (Meta WhatsApp Webhook Verification & Env Fallback):
+1. **فحص التوكن المتعدد (Database & Env Support):** تم تطوير مسار التحقق من الويب هوك [route.ts](file:///c:/Users/Mustafa/Desktop/wacrm/src/app/api/whatsapp/webhook/route.ts) ليدعم الفحص الفوري المباشر مقابل المتغيرات البيئية (`WHATSAPP_VERIFY_TOKEN` / `META_VERIFY_TOKEN` / `WEBHOOK_VERIFY_TOKEN` / `VERIFY_TOKEN`) كخيار احتياطي (Fallback) قبل الانتقال إلى قراءة وفك تشفير جدول `whatsapp_config` في قاعدة البيانات Supabase.
+2. **حل مشكلة "Verification token mismatch":** معالجة الخلل الناجم عن عدم استرجاع التوكن من قاعدة البيانات أو اختلاف مفاتيح التشفير `ENCRYPTION_KEY` بين البيئات المختلفة، مما يضمن نجاح توثيق الويب هوك مع Meta Cloud API فورياً عند استخدام التوكن المعرف في ملف البيئة `.env.local` أو لوحة التحكم.
+
 ---
 
 ## 9. تكاملات ونقاط الربط (Integration Endpoints)
