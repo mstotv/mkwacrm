@@ -13,11 +13,16 @@ let _isProcessing = false; // Mutex: prevent concurrent runs
 export function startFollowUpBackgroundWorker() {
   // Guard: only run in Node.js server context (not browser or edge)
   if (typeof window !== 'undefined') return;
-  if (_intervalStarted) {
-    console.log('[Follow-up Worker] Already running, skipping duplicate start.')
+
+  // Use global object to prevent duplicate intervals during Next.js Hot Reloads
+  const globalRef = global as any;
+  if (globalRef.followUpWorkerStarted) {
+    console.log('[Follow-up Worker] Already running (persisted in global), skipping duplicate start.')
     return;
   }
+  globalRef.followUpWorkerStarted = true;
   _intervalStarted = true;
+
   console.log('[Follow-up Worker] ✅ Starting background worker (checking every 60s)...');
 
   // Run immediately once on startup
