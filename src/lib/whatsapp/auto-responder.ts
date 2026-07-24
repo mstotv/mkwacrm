@@ -30,12 +30,44 @@ export interface SaveOrderData {
   notes?: string | null;
 }
 
+// Memory cache to guarantee Telegram notifications & Sheet appends run ONCE per order/appointment (TTL: 12h)
+const recentOrderNotificationsMap = new Map<string, number>();
+const recentAppointmentNotificationsMap = new Map<string, number>();
+
+function isAlreadyNotified(cacheMap: Map<string, number>, key: string): boolean {
+  const now = Date.now();
+  const ttl = 12 * 60 * 60 * 1000; // 12 hours
+  const timestamp = cacheMap.get(key);
+  if (timestamp && (now - timestamp < ttl)) {
+    return true;
+  }
+  return false;
+}
+
+function markAsNotified(cacheMap: Map<string, number>, key: string) {
+  cacheMap.set(key, Date.now());
+  if (cacheMap.size > 500) {
+    const now = Date.now();
+    const ttl = 12 * 60 * 60 * 1000;
+    for (const [k, ts] of cacheMap.entries()) {
+      if (now - ts > ttl) cacheMap.delete(k);
+    }
+  }
+}
+
 export async function saveOrderAndNotifyTelegram(
   accountId: string,
   contactId: string,
   orderData: SaveOrderData
 ) {
   try {
+    const orderHash = `${accountId}_${contactId}_${String(orderData.product_name || '').trim()}_${String(orderData.total_price || '').trim()}`;
+    if (isAlreadyNotified(recentOrderNotificationsMap, orderHash)) {
+      console.log('[AutoResponder Order] Notification skipped: already sent once for this order.');
+      return;
+    }
+    markAsNotified(recentOrderNotificationsMap, orderHash);
+
     let contactName = orderData.customer_name || 'عميل واتساب';
     let contactPhone = orderData.customer_phone || '';
 
@@ -290,7 +322,9 @@ ${busySlotsText}
       const generalTechnicalInstructions = `
 
 **توجيهات تشغيلية حاسمة (General Operational Directives - Mandatory):**
-1. **المساعد المتكامل الشامل:** يمكنك في نفس المحادثة أخذ طلبات الشراء، وحجز المواعيد في الكالندر، وجدولة المتابعات والتذكيرات. أجب بحرية ولباقة على كل طلب من العميل دون تعارض أو رفض.
+1. **الفصل التام والواضح بين الخدمات:**
+   - **لطلبات الشراء والمنتجات والتوصيل:** استخدم فقط نظام الطلبات [CREATE_ORDER]. يُمنع منعاً باتاً استدعاء وسوم المواعيد أو التحدث عن حجز تقويم لطلبات الشراء.
+   - **لحجز المواعيد والزيارات والاستشارات:** استخدم فقط وسوم المواعيد [BOOK_APPOINTMENT].
 2. **منع الاختلاق وتأكيد المعلومات (No Hallucinations):** لا تفترض تفاصيل ناقصة لم يذكرها العميل صراحة (مثل طريقة الدفع، تكلفة الشحن، المقاس، اللون، الكمية، أو العناوين). إذا كانت هناك تفاصيل ضرورية ناقصة لإتمام الطلب أو الموعد، اسأل العميل عنها بلباقة بدلاً من اختلاقها.
 3. **عدم تأكيد إجراءات غير منفذة:** لا تؤكد للعميل إتمام أي إجراء يتطلب استدعاء أداة (مثل حجز موعد، أو تسجيل طلب، أو جدولة تذكير) ما لم تقم بإرفاق الوسم (Tag) البرمجي المقابل له في ردك.
 `;
@@ -554,14 +588,21 @@ ${busySlotsText}
               }
               replyText = `تم تسجيل وحجز موعدك بنجاح في تقويم العمل (Google Calendar):\nالتاريخ: ${formattedDate}\nالوقت: ${formattedTime} 👍`;
 
-              // Send Telegram notification
-              try {
-                await notifyAccountViaTelegram(
-                  accountId,
-                  formatAppointmentNotification(contactName, contactPhone, appointmentTime, description, patientName, patientPhone, eventId, htmlLink)
-                );
-              } catch (telErr) {
-                console.error('[AutoResponder Calendar] Telegram notification failed:', telErr);
+              // Send Telegram notification ONCE per confirmed appointment
+              const apptHash = `${accountId}_${contactId}_${appointmentTime}`;
+              if (!isAlreadyNotified(recentAppointmentNotificationsMap, apptHash)) {
+                markAsNotified(recentAppointmentNotificationsMap, apptHash);
+                try {
+                  await notifyAccountViaTelegram(
+                    accountId,
+                    formatAppointmentNotification(contactName, contactPhone, appointmentTime, description, patientName, patientPhone, eventId, htmlLink)
+                  );
+                  console.log('[AutoResponder Calendar] Telegram appointment notification sent successfully (Once)');
+                } catch (telErr) {
+                  console.error('[AutoResponder Calendar] Telegram notification failed:', telErr);
+                }
+              } else {
+                console.log('[AutoResponder Calendar] Telegram notification skipped: already sent once for this appointment.');
               }
             } else {
               bookingErrorDetail = 'لم يتم الحصول على معرف الموعد من Google API.';
@@ -691,8 +732,13 @@ ${busySlotsText}
           }
         }
 
-        // ─── Strict Calendar Protection: Intercept fake/hallucinated confirmations ───
-        const mentionsAppointmentConfirmation = /تم (حجز|تسجيل|تأكيد|تحديد|تثبيت|إضافة|ضبط)|حجزنا|سجلنا|تثبت موعدك|موعدك (مؤكد|جاهز|محجوز|تم)/i.test(replyText);
+        // ─── Strict Calendar Protection: Intercept fake/hallucinated appointment confirmations ───
+        // Only trigger if the reply specifically pertains to calendar appointments / visits AND does NOT pertain to product orders / delivery.
+        const isAppointmentContext = /(موعد|الموعد|حجز موعد|تأكيد الموعد|تسجيل الموعد|تثبيت الموعد|حجزنا لك موعد|موعدك مؤكد|موعدك جاهز|موعدك محجوز|زيارتك)/i.test(replyText);
+        const isOrderContext = /(طلب|طلبك|طلبات|الطلب|شراء|المنتج|المنتجات|التوصيل|الشحن|عنوانك|سعر الوحدة)/i.test(replyText);
+
+        const mentionsAppointmentConfirmation = isAppointmentContext && !isOrderContext && /تم (حجز|تسجيل|تأكيد|تحديد|تثبيت|إضافة|ضبط)|حجزنا|سجلنا|تثبت موعدك|موعدك/i.test(replyText);
+
         if (mentionsAppointmentConfirmation && (!hasBookTag || !appointmentBookedSuccessfully)) {
           console.warn('[AutoResponder] Strict Calendar Protection triggered: AI hallucinated appointment confirmation.');
           replyText = 'عذراً، لم نتمكن من حجز هذا الموعد في التقويم حالياً (قد يكون الوقت غير متاح أو محجوزاً مسبقاً). يرجى مراجعة الأوقات المتاحة واختيار موعد آخر مناسب 👍';
@@ -794,8 +840,8 @@ IMPORTANT: Only extract values explicitly mentioned in the conversation. Do NOT 
                 }
               }
 
-              // Save order to Google Sheets & send Telegram notification if not already handled by CREATE_ORDER tag
-              if (!hasOrderTag && (extractedJson.product_name || extractedJson.total_price || extractedJson.customer_address)) {
+              // Save order to Google Sheets & send Telegram notification if not already handled by CREATE_ORDER tag or appointment booking
+              if (!hasOrderTag && !hasBookTag && !appointmentBookedSuccessfully && (extractedJson.product_name || (extractedJson.total_price && extractedJson.customer_address))) {
                 console.log('[AutoResponder Order] Triggering fallback order save & Telegram notification');
                 await saveOrderAndNotifyTelegram(accountId, contactId, extractedJson);
               }

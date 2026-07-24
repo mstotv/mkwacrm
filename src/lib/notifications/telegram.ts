@@ -149,7 +149,7 @@ function esc(s: string): string {
 }
 
 /**
- * Format a rich appointment-booking notification.
+ * Format a rich appointment-booking notification with complete patient & calendar details.
  */
 export function formatAppointmentNotification(
   contactName: string,
@@ -179,33 +179,32 @@ export function formatAppointmentNotification(
     console.error('[Telegram] Date formatting failed:', e)
   }
 
-  let msg = `📅 <b>حجز موعد جديد</b>\n`
+  const finalPatientName = patientName || contactName || 'غير محدد';
+  const finalPatientPhone = patientPhone || contactPhone || 'غير محدد';
+
+  let msg = `📅 <b>إشعار تأكيد موعد جديد</b>\n`
   msg += `━━━━━━━━━━━━━━━━━━━━\n`
-  
-  if (patientName && (patientName !== contactName || (patientPhone && patientPhone !== contactPhone))) {
-    msg += `👤 <b>صاحب الموعد:</b> ${esc(patientName)}\n`
-    if (patientPhone) {
-      msg += `📱 <b>هاتف صاحب الموعد:</b> <code>${esc(patientPhone)}</code>\n`
-    }
-    msg += `💬 <b>الحجز عبر واتساب رقم:</b> <code>${esc(contactPhone)}</code> | <b>لصاحب الموعد:</b> ${esc(patientName)} - ${esc(patientPhone || '')}\n`
-  } else {
-    msg += `👤 <b>العميل:</b> ${esc(contactName)}\n`
-    msg += `📱 <b>الهاتف:</b> <code>${esc(contactPhone)}</code>\n`
+  msg += `👤 <b>اسم المريض / صاحب الموعد:</b> ${esc(finalPatientName)}\n`
+  msg += `📱 <b>رقم هاتف المريض:</b> <code>${esc(finalPatientPhone)}</code>\n`
+
+  if (contactPhone && (contactPhone !== finalPatientPhone || contactName !== finalPatientName)) {
+    msg += `💬 <b>حساب الواتساب المرسل:</b> <code>${esc(contactPhone)}</code> (${esc(contactName)})\n`
   }
 
-  msg += `🕐 <b>التاريخ والوقت:</b> ${esc(formattedDate)}\n`
+  msg += `🕐 <b>موعد الزيارة / التاريخ والوقت:</b> ${esc(formattedDate)}\n`
   
   if (notes) {
-    msg += `📝 <b>ملاحظات:</b> ${esc(notes)}\n`
+    msg += `📝 <b>التفاصيل والملاحظات:</b> ${esc(notes)}\n`
   }
+
   if (htmlLink) {
-    msg += `🔗 <b>رابط الحدث:</b> <a href="${esc(htmlLink)}">Google Calendar</a>\n`
+    msg += `🔗 <b>رابط التقويم:</b> <a href="${esc(htmlLink)}">عرض في Google Calendar</a>\n`
   } else {
-    msg += `✅ <b>تأكيد الإضافة:</b> تم إضافة الحدث بنجاح إلى Google Calendar\n`
+    msg += `✅ <b>تأكيد الإضافة:</b> تم حفظ وتثبيت الموعد بنجاح في Google Calendar\n`
   }
   
   msg += `━━━━━━━━━━━━━━━━━━━━\n`
-  msg += `🔔 <i>إشعار تلقائي من MKWhats</i>`
+  msg += `🔔 <i>إشعار تلقائي مؤكد من MKWhats</i>`
 
   return msg
 }
@@ -218,26 +217,28 @@ export function formatOrderNotification(
   contactPhone: string,
   fields: Record<string, unknown>
 ): string {
-  let msg = `🛒 <b>طلب جديد / بيانات مستلمة</b>\n`
+  let msg = `🛒 <b>إشعار تأكيد طلب شراء جديد</b>\n`
   msg += `━━━━━━━━━━━━━━━━━━━━\n`
-  msg += `👤 <b>العميل:</b> ${esc(contactName)}\n`
-  msg += `📱 <b>الهاتف:</b> <code>${esc(contactPhone)}</code>\n`
+  msg += `👤 <b>اسم العميل:</b> ${esc(contactName)}\n`
+  msg += `📱 <b>رقم الهاتف:</b> <code>${esc(contactPhone)}</code>\n`
   msg += `━━━━━━━━━━━━━━━━━━━━\n`
-  msg += `📋 <b>البيانات المجمعة بالكامل:</b>\n\n`
+  msg += `📋 <b>تفاصيل الطلب المؤكد:</b>\n\n`
 
   const entries = Object.entries(fields)
   if (entries.length > 0) {
     for (const [key, value] of entries) {
-      const label = esc(String(key))
-      const val = esc(String(value ?? ''))
-      msg += `  • <b>${label}:</b> ${val}\n`
+      if (value) {
+        const label = esc(String(key))
+        const val = esc(String(value))
+        msg += `  • <b>${label}:</b> ${val}\n`
+      }
     }
   } else {
-    msg += `  <i>(لا توجد حقول إضافية)</i>\n`
+    msg += `  <i>(لا توجد تفاصيل إضافية)</i>\n`
   }
 
   msg += `\n━━━━━━━━━━━━━━━━━━━━\n`
-  msg += `🔔 <i>إشعار تلقائي من MKWhats</i>`
+  msg += `🔔 <i>إشعار تلقائي مؤكد من MKWhats</i>`
 
   return msg
 }

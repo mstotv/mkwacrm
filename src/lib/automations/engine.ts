@@ -30,6 +30,17 @@ import {
   formatOrderNotification,
 } from '@/lib/notifications/telegram'
 
+// Memory cache for automation appointment notification deduplication (12h TTL)
+const engineApptNotificationsMap = new Map<string, number>();
+
+function isEngineApptNotified(key: string): boolean {
+  const now = Date.now();
+  const ts = engineApptNotificationsMap.get(key);
+  if (ts && now - ts < 12 * 60 * 60 * 1000) return true;
+  engineApptNotificationsMap.set(key, now);
+  return false;
+}
+
 // ------------------------------------------------------------
 // Public API
 // ------------------------------------------------------------
@@ -1008,20 +1019,23 @@ ${busySlotsText}
               appointmentBookedSuccessfully = true
               console.log('[Calendar] Booked event successfully. Event ID:', eventId)
 
-              // Send Telegram notification
-              notifyAccountViaTelegram(
-                args.automation.account_id,
-                formatAppointmentNotification(
-                  contactName,
-                  contactPhone,
-                  appointmentTime,
-                  description,
-                  patientName,
-                  patientPhone,
-                  eventId,
-                  htmlLink
-                )
-              ).catch(err => console.error('[Telegram] Appointment notification failed:', err))
+              // Send Telegram notification ONCE
+              const apptHash = `${args.automation.account_id}_${args.contactId}_${appointmentTime}`
+              if (!isEngineApptNotified(apptHash)) {
+                notifyAccountViaTelegram(
+                  args.automation.account_id,
+                  formatAppointmentNotification(
+                    contactName,
+                    contactPhone,
+                    appointmentTime,
+                    description,
+                    patientName,
+                    patientPhone,
+                    eventId,
+                    htmlLink
+                  )
+                ).catch(err => console.error('[Telegram] Appointment notification failed:', err))
+              }
             }
           } catch (bookErr: any) {
             console.error('[Calendar] Auto booking failed:', bookErr)
