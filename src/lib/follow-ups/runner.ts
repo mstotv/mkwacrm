@@ -2,40 +2,12 @@ import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { engineSendText } from '@/lib/automations/meta-send'
 import { notifyAccountViaTelegram } from '@/lib/notifications/telegram'
 
-let _intervalStarted = false;
 let _isProcessing = false; // Mutex: prevent concurrent runs
 
-/**
- * Ensures an in-memory timer runs every 60 seconds to check for due follow-ups.
- * Safe to call multiple times — only initializes once per process.
- * Started from src/instrumentation.ts on server boot.
- */
 export function startFollowUpBackgroundWorker() {
-  // Guard: only run in Node.js server context (not browser or edge)
-  if (typeof window !== 'undefined') return;
-
-  // Use global object to prevent duplicate intervals during Next.js Hot Reloads
-  const globalRef = global as any;
-  if (globalRef.followUpWorkerStarted) {
-    console.log('[Follow-up Worker] Already running (persisted in global), skipping duplicate start.')
-    return;
-  }
-  globalRef.followUpWorkerStarted = true;
-  _intervalStarted = true;
-
-  console.log('[Follow-up Worker] ✅ Starting background worker (checking every 60s)...');
-
-  // Run immediately once on startup
-  processDueFollowUps().catch(err =>
-    console.error('[Follow-up Worker] Initial run error:', err.message)
-  );
-
-  // Then run every 60 seconds (reduced from 30s to avoid hammering DB)
-  setInterval(() => {
-    processDueFollowUps().catch(err =>
-      console.error('[Follow-up Worker] Interval run error:', err.message)
-    );
-  }, 60_000);
+  // Obsolete: Replaced by dedicated Cron API endpoint.
+  // /api/cron/follow-ups
+  console.log('[Follow-up Worker] startFollowUpBackgroundWorker is deprecated. Relying on Cron API.');
 }
 
 /**
@@ -121,12 +93,70 @@ export async function processDueFollowUps(): Promise<number> {
 
         // ── Step 1: Send WhatsApp auto-reminder ─────────────────────
         if (followUp.action_type === 'auto_reminder' || followUp.action_type === 'both') {
-          const template = account.follow_up_reminder_template
-            || 'مرحباً {name}، تواصلنا معك سابقاً بخصوص {reason}، هل ما زلت مهتماً؟'
-
-          const customMessage = template
+          let customMessage = account.follow_up_reminder_template
+            || 'مرحباً {name}، تواصلنا معك سابقاً بخصوص {reason}، هل ما زلت مهتماً؟';
+          customMessage = customMessage
             .replace(/{name}/g, contactName)
-            .replace(/{reason}/g, followUp.reason || 'متابعة')
+            .replace(/{reason}/g, followUp.reason || 'متابعة');
+
+          // Try to generate AI message if AI is active
+          try {
+            const { data: aiConfig } = await db
+              .from('ai_config')
+              .select('provider, api_key, system_prompt')
+              .eq('account_id', followUp.account_id)
+              .eq('is_active', true)
+              .maybeSingle();
+
+            if (aiConfig && aiConfig.api_key) {
+              // Get last messages for context
+              const { data: history } = await db
+                .from('messages')
+                .select('sender_type, content_text')
+                .eq('conversation_id', followUp.conversation_id)
+                .order('created_at', { ascending: false })
+                .limit(5);
+
+              let contextStr = '';
+              if (history && history.length > 0) {
+                const reversed = history.reverse();
+                contextStr = reversed.map(m => `${m.sender_type === 'customer' ? 'العميل' : 'نحن'}: ${m.content_text}`).join('\n');
+              }
+
+              const aiPrompt = `أنت مساعد ذكي للمبيعات وخدمة العملاء.
+الهدف: اكتب رسالة متابعة (Follow-up) قصيرة جداً وودية باللغة العربية بخصوص "${followUp.reason}".
+اسم العميل: ${contactName}
+سياق المحادثة الأخيرة إن وجد:
+${contextStr}
+تعليمات: لا تزد عن سطرين. كن لبقاً.`;
+
+              const apiUrl = aiConfig.provider === 'deepseek' ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+              const model = aiConfig.provider === 'deepseek' ? 'deepseek-chat' : 'gpt-4o-mini';
+
+              const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${aiConfig.api_key}`,
+                },
+                body: JSON.stringify({
+                  model: model,
+                  messages: [{ role: 'user', content: aiPrompt }],
+                  max_tokens: 150,
+                }),
+              });
+
+              if (response.ok) {
+                const resData = await response.json();
+                if (resData.choices?.[0]?.message?.content) {
+                  customMessage = resData.choices[0].message.content.trim();
+                  console.log(`[Follow-up Runner] Successfully generated dynamic AI message for ${contactName}`);
+                }
+              }
+            }
+          } catch (aiErr: any) {
+            console.error('[Follow-up Runner] AI generation failed, falling back to static template:', aiErr.message);
+          }
 
           console.log(`[Follow-up Runner] Sending WhatsApp reminder to ${contactPhone}`)
 
