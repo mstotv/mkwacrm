@@ -211,6 +211,7 @@ export function formatAppointmentNotification(
 
 /**
  * Format a rich new-order notification with all collected fields.
+ * Cleans out raw Google Sheet column keys (A, B, C, D).
  */
 export function formatOrderNotification(
   contactName: string,
@@ -225,20 +226,76 @@ export function formatOrderNotification(
   msg += `📋 <b>تفاصيل الطلب المؤكد:</b>\n\n`
 
   const entries = Object.entries(fields)
+  let count = 0
   if (entries.length > 0) {
     for (const [key, value] of entries) {
-      if (value) {
-        const label = esc(String(key))
-        const val = esc(String(value))
-        msg += `  • <b>${label}:</b> ${val}\n`
-      }
+      if (!value) continue
+      const keyTrim = String(key).trim()
+      // Skip raw sheet column letter keys (A, B, C, D...) or pure numbers (0, 1, 2...)
+      if (/^[A-Z]{1,2}$|^\d+$/.test(keyTrim)) continue
+
+      const label = esc(keyTrim)
+      const val = esc(String(value))
+      msg += `  • <b>${label}:</b> ${val}\n`
+      count++
     }
-  } else {
-    msg += `  <i>(لا توجد تفاصيل إضافية)</i>\n`
+  }
+
+  if (count === 0) {
+    msg += `  <i>(تم تسجيل وتثبيت طلب الشراء بنجاح)</i>\n`
   }
 
   msg += `\n━━━━━━━━━━━━━━━━━━━━\n`
   msg += `🔔 <i>إشعار تلقائي مؤكد من MKWhats</i>`
 
   return msg
+}
+
+// Global in-memory deduplication cache for orders (Key: accountId_contactPhone_orderHash, Value: timestamp)
+const globalOrderDeduplicationCache = new Map<string, number>();
+
+/**
+ * Send an order notification via Telegram EXACTLY ONCE per confirmed order.
+ * Automatically cleans raw sheet column letters (A, B, C, D) and prevents duplicate dispatches.
+ */
+export async function notifyOrderOnceViaTelegram(
+  accountId: string,
+  contactId: string | null | undefined,
+  contactName: string,
+  contactPhone: string,
+  fields: Record<string, unknown>
+): Promise<void> {
+  const cleanFields: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(fields)) {
+    if (!v) continue;
+    const keyTrim = String(k).trim();
+    if (/^[A-Z]{1,2}$|^\d+$/.test(keyTrim)) continue;
+    cleanFields[keyTrim] = v;
+  }
+
+  const product = String(cleanFields['المنتج / الخدمة'] || cleanFields['المنتج'] || cleanFields['product_name'] || '').trim();
+  const price = String(cleanFields['المبلغ الإجمالي'] || cleanFields['السعر'] || cleanFields['total_price'] || '').trim();
+  const phone = (contactPhone || '').trim();
+
+  const dedupeKey = `${accountId}_${phone}_${product}_${price}`;
+  const now = Date.now();
+  const lastSent = globalOrderDeduplicationCache.get(dedupeKey);
+
+  // If sent within last 10 minutes for this account + contact + order, skip duplicate dispatch!
+  if (lastSent && (now - lastSent < 10 * 60 * 1000)) {
+    console.log('[Telegram] Skipping duplicate order notification for key:', dedupeKey);
+    return;
+  }
+
+  globalOrderDeduplicationCache.set(dedupeKey, now);
+
+  // Periodic cleanup
+  if (globalOrderDeduplicationCache.size > 500) {
+    for (const [k, ts] of globalOrderDeduplicationCache.entries()) {
+      if (now - ts > 10 * 60 * 1000) globalOrderDeduplicationCache.delete(k);
+    }
+  }
+
+  const message = formatOrderNotification(contactName, contactPhone, cleanFields);
+  await notifyAccountViaTelegram(accountId, message);
 }

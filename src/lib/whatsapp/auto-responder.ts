@@ -7,7 +7,7 @@ import { startFollowUpBackgroundWorker } from '@/lib/follow-ups/runner';
 import { getGoogleSheetsConfig, getFreshTokenForAccount } from '@/lib/whatsapp/google-sheets';
 import { fetchCalendarBusySlots, createCalendarEvent, deleteCalendarEvent } from '@/lib/automations/engine';
 import { getBaghdadParts, createDateFromBaghdadParts, parseLocalTimeString } from './timezone-utils';
-import { notifyAccountViaTelegram, formatOrderNotification, formatAppointmentNotification } from '@/lib/notifications/telegram';
+import { notifyAccountViaTelegram, notifyOrderOnceViaTelegram, formatOrderNotification, formatAppointmentNotification } from '@/lib/notifications/telegram';
 
 // Admin client to safely read configurations and update messages
 const adminSupabase = createClient(
@@ -95,13 +95,16 @@ export async function saveOrderAndNotifyTelegram(
     if (orderData.payment_method) formattedOrderFields['طريقة الدفع'] = String(orderData.payment_method);
     if (orderData.notes) formattedOrderFields['ملاحظات'] = String(orderData.notes);
 
-    // 1. Send Telegram Notification for the Order ALWAYS
+    // 1. Send Telegram Notification for the Order ONCE
     try {
-      await notifyAccountViaTelegram(
+      await notifyOrderOnceViaTelegram(
         accountId,
-        formatOrderNotification(contactName, contactPhone, formattedOrderFields)
+        contactId,
+        contactName,
+        contactPhone,
+        formattedOrderFields
       );
-      console.log('[AutoResponder Order] Telegram order notification sent successfully');
+      console.log('[AutoResponder Order] Telegram order notification dispatched via unified once-service');
     } catch (tgErr: any) {
       console.error('[AutoResponder Order] Telegram order notification error:', tgErr.message);
     }

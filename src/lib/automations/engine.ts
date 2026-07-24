@@ -26,6 +26,7 @@ import { parseRelativeTime } from '@/lib/whatsapp/auto-responder'
 import { getBaghdadParts, createDateFromBaghdadParts, parseLocalTimeString } from '@/lib/whatsapp/timezone-utils'
 import {
   notifyAccountViaTelegram,
+  notifyOrderOnceViaTelegram,
   formatAppointmentNotification,
   formatOrderNotification,
 } from '@/lib/notifications/telegram'
@@ -1661,9 +1662,12 @@ Only extract values that are explicitly provided in the text. If a value is not 
           }
         }
 
-        await notifyAccountViaTelegram(
+        await notifyOrderOnceViaTelegram(
           args.automation.account_id,
-          formatOrderNotification(contactName, contactPhone, enrichedFields)
+          args.contactId,
+          contactName,
+          contactPhone,
+          enrichedFields
         )
       } catch (tgErr) {
         console.error('[Telegram] Failed to send Sheet row notification:', tgErr)
@@ -2159,9 +2163,12 @@ export async function handleQnaSessionResponse(
             qnaContactPhone = cData.phone || ''
           }
         }
-        notifyAccountViaTelegram(
+        notifyOrderOnceViaTelegram(
           session.account_id,
-          formatOrderNotification(qnaContactName, qnaContactPhone, mergedVars)
+          session.contact_id,
+          qnaContactName,
+          qnaContactPhone,
+          mergedVars
         ).catch(err => console.error('[Telegram] Order notification failed:', err))
       } catch (tgErr) {
         console.error('[Telegram] Failed to prepare order notification:', tgErr)
